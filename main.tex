@@ -1,0 +1,286 @@
+\documentclass[journal]{IEEEtran}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{float}
+
+\usepackage[dvipsnames]{xcolor}
+
+\newcommand\todo[1]{\textcolor{red}{#1}}
+\newcommand\draft[1]{\textcolor{RedOrange}{#1}}
+
+\begin{document}
+
+\title{Random-Walk Key Relaying in QKD Networks}
+
+\author{Kri\v{s}j\=anis Petru\v{c}e\c{n}a, Sergejs Kozlovi\v{c}s}
+
+\maketitle
+
+\begin{abstract}
+Quantum key distribution networks face operational constraints. Centralized controllers simplify adaptive routing and congestion control but introduce single points of failure and an always-reachable IP dependency. This paper studies decentralized, topology-oblivious key relaying using random-walk dissemination. Proposed random walk variations and their overheads are evaluated on various deployment topologies.
+\draft{We find that similiar security guarantees to multi-path routing can be achieved on small networks without knowing the full topology.}
+\end{abstract}
+
+% \begin{IEEEkeywords}
+% Quantum key distribution, key relay, decentralized control, routing.
+% \end{IEEEkeywords}
+
+\section{Brainstorming}
+
+Paredzama sekojošošā struktūra (\textit{outline draft})
+\begin{enumerate}
+    \item Introduction
+    \begin{itemize}
+        \item ITS garantijas no QKD
+        \item terrestrial attāluma ierobežojums
+        \item centralizēti SDN kontrolieri
+    \end{itemize}
+    \item XOR key relaying (konteksts)
+    \item Multi path routing (konteksts)
+    \item Random walks
+    \begin{itemize}
+        \item Pastaigu varianti (NB, LRV)
+        \item Key fragmentation (sūtam pa blokam, kurš $\approx 1$ MB)
+        \item Privacy amplification (ar \textit{max entropy} pierāda)
+        \item Error correction
+    \end{itemize}
+    \item Eksperimentālie 
+    \begin{itemize}
+        \item Cik daudz atslēgas vajag?
+        
+    \end{itemize}
+    
+\end{enumerate}
+
+Laikam varam te mest visas idejas.
+
+
+\begin{itemize}
+    \item \textbf{Formāls overhead}. Kādu caurlaides scenāriju nepieciešams simulēt un kādus rādītājus ievākt, lai formāli novērtēt nejaušās pastaigas virsizmaksas.
+    \item \textbf{Proaktīvā pārraide}. Latentumu var samazināt, izmantojot proaktīvo pārraides režīmu, kur nav norādīts gala adresāts. Kad pārraides mezgls saņem atslēgu un tam buferī pret attiecīgo sākuma mezglu ir brīva vieta, mezgls patur šo atslēgu un nepārraida tālāk. 
+    
+    Kā garantēt, ka ļaunprātīgā node nepārraidīs tālāk atslēgu, ko viņa saņēma? Izskatās, ka nestrādā atslēgas fragmentācija, ja nav zināms gala adresāts.
+    \item \textbf{Atslēgas fragmentācija}. Sadalam atslēgu vairākos fragmentos; katrs fragments veic nejaušu pastaigu pa grafu; mezglam ir jāsavāc visi fragmenti, lai rekonstruēt atslēgu. Nepieciešams veikt \textit{privacy amplification}. Kas notiek, ja ļaunais mezgls nevis mēģina noklausīties, bet sakropļot gala atslēgu.
+    \item \textbf{Privacy amplification}? Kādu privacy amplification izmanto QKD, lai claimot ITS? Zināms, ka arī QKD ir varbūtīska sistēma, bet, protams, varbūtība ir ļoti zema.
+    \item \textbf{Threat model}. Vai varam pieņemt, ka būs tikai $1$ kompromitēta node? Kā sistēma tiktu galā ar divām? Kas notiek, ja ļaunā node pārvirza atslēgu ne-nejauši. Kas notiek, ja ļaunā node sakropļo atslēgu?
+    \item \textbf{ACK+ECC layer}. Slānis virs atslēgu pārraidi, kas garantē, ka atslēga nonāca līdz galapunktam?
+    \item \textbf{Markov chains}. Vai ir skaists veids, kā matemātiski noskaidrot varbūtību atslēgai nonākt konkrētā virsotnē kaut cik patvaļīgam grafam?
+\end{itemize}
+
+
+Novērtējot drošību varam pieņm
+
+Varam pieņemt, ka \textit{mutual} autentifikācijai starp pārraides mezgliem nav jābūt ITS, jo nav pakļauts \textit{harvest-now, decrypt later} uzbrukumam.
+
+Kurus grafus būtu labi apskatīt?
+
+\begin{itemize}
+    \item 2002 DARPA QKD
+    \item 2004 EU SEOCQC
+    \item 2010 JAPAN UQCC
+    \item 2014 China
+    \item Korea?
+    \item EuroQCI?
+\end{itemize}
+
+\section{Mathematical notation}
+
+\draft{Melnraksts ar noderīgiem matemātiskiem formulējumiem.}
+
+Let QKD network be an undirected graph $G=(V,E)$. A \textit{transmission} between endpoints $s,t \in V$ produces a block of independent $n\times \ell_K$-bit keys $K_1, K_2, \ldots K_n$
+
+$$B=\left\{K_i\right\}^n_{i=1}, \quad K_i \in \left\{0,1\right\}^{\ell_K}$$
+
+For each final key $K_i$, let $X_i \in \left\{0,1\right\}^{\ell_\text{raw}}$ denote the \textit{raw} transmitted key from which $K_i$ is derived after error correction and \textit{privacy amplification}. Notice, $\ell_\text{raw} > \ell_K$.
+
+Each $X_i$ is split / partitioned  into $f$ fragments:
+
+$$X_i = X_i^{(1)}\Vert X_i^{(2)}\Vert \cdots \Vert X_i^{(f)},\quad |X_i^{(j)}|=\ell_{\mathrm{frag}}$$
+
+Fix $s\neq t\in V$. For a \textbf{generic fragment}, let the sampled random walk be
+$$
+W_{s\to t}=(v_0=s, v_1,\ldots,v_H=t),
+$$
+where $H$ is the (random) hop count of this walk. We omit fragment/key indices since all fragments are routed identically; dependence on $(s,t)$ is implicit in the distribution of $W_{s\to t}$. Expectations and probabilities are taken over the randomness of $W_{s\to t}$, and we write $\mathbb{E}_{s,t}[\cdot]$, $\Pr_{s,t}[\cdot]$ when clarity is needed.
+
+Using indicator brackets $[\cdot]\in\{0,1\}$, the \textbf{edge-visit count} for an undirected edge $e\in E$ is
+$$
+N_e \;:=\; \sum_{k=1}^{H} \big[\{v_{k-1},v_k\}=e\big],
+$$
+and the \textbf{node-visit count} for $v\in V$ (excluding endpoints) is
+$$
+N_v \;:=\; \sum_{k=1}^{H-1} [v_k=v].
+$$
+
+It is useful to distinguish:
+\begin{itemize}
+    \item \textbf{Multiplicity}: how many times a given edge or node is traversed along the random walk. This quantity---captured by $N_e$ and $N_v$---determines resource use such as key consumption and link congestion on edges and nodes.
+    \item \textbf{Hitting}: whether a given edge or node is traversed at least once during the random walk. Hitting probabilities---e.g., $q_A(s, t)$ for nodes, or the analogous quantity for edges---govern the security exposure to potential eavesdroppers or attackers who can observe all traffic at certain nodes or edges.
+\end{itemize}
+
+Multiplicity determines how much key material is spent (per edge or node), while hitting determines the probability that an attacker located at a subset of edges or nodes sees at least part of the key material.
+
+
+Define the corresponding expected multiplicities
+$$
+n_e(s,t):=\mathbb{E}_{s,t}[N_e],\qquad n_v(s,t):=\mathbb{E}_{s,t}[N_v],
+$$
+and the expected hop count $h_{s,t}:=\mathbb{E}_{s,t}[H]$. Then $\sum_{e\in E} n_e(s,t)=h_{s,t}$.
+
+For exposure against compromised \textbf{nodes} $A\subseteq V$, define the node-hitting probability
+$$
+q_A(s,t)\;:=\;\Pr_{s,t}\!\left[\sum_{k=1}^{H-1}[v_k\in A]\ge 1\right].
+$$
+For a single node $v$, write $q_v(s,t):=q_{\{v\}}(s,t)$. These are related to multiplicities by the standard bound
+$$
+q_A(s,t)
+\le
+\mathbb{E}_{s,t}\!\left[\sum_{v\in A}N_v\right]
+=
+\sum_{v\in A} n_v(s,t),
+$$
+(and in particular $q_v(s,t)\le n_v(s,t)$).
+
+\subsection*{Key consumption and overhead}
+
+Forwarding $\ell_\text{frag}$ bits across one \textit{link} consumes $\ell_\text{frag}$ bits of QKD-derived \textit{key material} on that link. The total consumed key material to deliver a single final key $K_i$ (consisting of $f$ fragments) is
+$$
+C_{s,t}(K_i) := \sum_{j=1}^f \ell_\text{frag} H^{(j)},
+$$
+where $H^{(j)}$ denotes the hop count for the $j$-th fragment's walk.
+Taking expected value and using $\ell_\text{frag}=\ell_\text{raw}/f$,
+$$
+\mathbb{E}[C_{s,t}(K_i)]
+=\sum_{j=1}^{f}\ell_{\mathrm{frag}}\,h_{s,t}
+=\ell_{\mathrm{raw}}\cdot h_{s,t}.
+$$
+
+A natural \textit{overhead} metric is QKD-consumed bits per delivered end-to-end secret bit:
+$$
+\rho_{s,t}:=\frac{\mathbb{E}[C_{s,t}(K_i)]}{\ell_K}
+=\frac{\ell_{\mathrm{raw}}}{\ell_K}h_{s,t}
+=\frac{1}{\eta}h_{s,t},
+$$
+where $\eta=\ell_K/\ell_\text{raw} \in (0,1]$ is the privacy-amp yield.
+
+When comparing to \textit{multi-path} key relay or other baseline, let $d_{s,t}$ be the hop count of a reference route (e.g.\ sum of two shortest maximally non-overlapping routes); we can define the relative and absolute excess consumption:
+$$
+\sigma_{s,t}:=h_{s,t}/d_{s,t},\quad \Delta C_{s,t}:=\ell_\text{raw}(h_{s,t}-d_{s,t}).
+$$
+
+The expected QKD bits consumed on edge $e$ to deliver one final key $K_i$ is
+$$
+\mathbb{E}[C_e(K_i)]
+= f \cdot \ell_{\mathrm{frag}}\,n_e(s,t)
+= \ell_{\mathrm{raw}} \cdot n_e(s,t).
+$$
+
+\subsection*{Fragment security threshold}
+
+If each of the $f$ true fragments is routed using an independent walk (one walk per fragment),
+then the probability that an attacker controlling $A$ observes \textbf{all} fragments of one raw key $X_i$ is
+$$
+\Pr[\text{all }f\text{ fragments hit }A]
+\;=\;
+\big(q_A(s,t)\big)^f.
+$$
+Thus, to keep this below $\varepsilon\in(0,1)$, it suffices that
+$$
+f
+\;\ge\;
+\frac{\ln \varepsilon}{\ln q_A(s,t)}
+\qquad(\ln q_A(s,t)<0).
+$$
+This matches your earlier experiment once $q_A(s,t)$ is estimated.
+
+\subsection*{Multi-user demand and congestion via utilization}
+
+Congestion should be defined under a traffic model, not via the degenerate maximum
+$\max_{s,t}n_e(s,t)$.
+Fix an epoch duration $T$ seconds and let $D_{s,t}$ denote the
+\textbf{delivered secret-bit demand} from $s$ to $t$ in that epoch.
+Parameterize
+$$
+D_{s,t} = B\,W_{s,t},
+\qquad
+W_{s,s}=0,
+\qquad
+\sum_{s\neq t} W_{s,t}=1,
+$$
+where $W$ is a dimensionless ``shape'' matrix
+(uniform all-pairs, sampled and normalized, gravity model, etc.)
+and $B$ is the total delivered secret bits per epoch.
+
+With privacy-amplification yield $\eta=\ell_K/\ell_{\mathrm{raw}}$,
+the required raw-forwarded bits are $D_{s,t}/\eta$.
+Using the expected edge multiplicities $n_e(s,t)$, the expected QKD key bits
+consumed on edge $e$ over the epoch (authentication ignored) are
+$$
+X_e
+\;:=\;
+\sum_{s\neq t} \frac{D_{s,t}}{\eta}\,n_e(s,t)
+\;=\;
+\frac{B}{\eta}\sum_{s\neq t} W_{s,t}\,n_e(s,t).
+$$
+Let $g_e$ be the link's key-generation rate (bits/s), so the epoch budget is $g_eT$.
+Define \textbf{utilization}
+$$
+u_e
+\;:=\;
+\frac{X_e}{g_eT}
+\;=\;
+\frac{B}{\eta\,T}\cdot
+\frac{1}{g_e}\sum_{s\neq t} W_{s,t}\,n_e(s,t),
+\qquad
+u_{\max}:=\max_{e\in E}u_e.
+$$
+The onset of expected starvation/oversubscription is $u_{\max}\ge 1$.
+This gives a clean simulation procedure: fix $(G,g_e,W)$, vary $B$, and compare
+routing schemes by the largest $B$ for which $u_{\max}<1$.
+
+\subsection*{Entropy as a load-spread metric}
+
+To quantify how concentrated the load is, normalize utilizations into a distribution over edges
+$$
+p_e
+:=
+\frac{u_e}{\sum_{e'\in E} u_{e'}}.
+$$
+Define the \textbf{utilization entropy}
+$$
+\mathcal{H}_U
+:=
+-\sum_{e\in E} p_e \log p_e,
+\qquad
+\mathcal{H}_U^{\mathrm{norm}}
+:=
+\frac{\mathcal{H}_U}{\log|E|}
+\in[0,1].
+$$
+Low $\mathcal{H}_U$ indicates hotspotting (load concentrated on few links),
+while high $\mathcal{H}_U$ indicates more even spreading.
+An equivalent ``effective number of edges used'' is
+$$
+N_{\mathrm{eff}}=\exp(\mathcal{H}_U).
+$$
+
+This completes the link between
+(i) random-walk structure via $n_e(s,t)$,
+(ii) multi-user congestion via $u_e$ and $u_{\max}$, and
+(iii) exposure against compromised relays via node-hitting probabilities
+$q_A(s,t)$ and fragment count $f$.
+
+
+% \section{Conclusions}
+
+% \bibliographystyle{IEEEtran}
+% \bibliography{refs}
+
+\end{document}
