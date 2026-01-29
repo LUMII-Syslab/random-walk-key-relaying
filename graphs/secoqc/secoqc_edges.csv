@@ -1,0 +1,9 @@
+Source,Target,Weight,LinkType
+SIE,ERD,16,Entangled (BBM92)
+ERD,FRM,0.08,Free-space (BB84 decoy)
+ERD,GUD,6,Continuous-variable
+SIE,BRE,32,Toshiba WCP decoy BB84
+STP,BRE,86,Coherent-One-Way
+BRE,ERD,25,idQuantique-1 (Cerberis)
+SIE,GUD,22,idQuantique-2 (Cerberis)
+BRE,GUD,19,idQuantique-3 (Cerberis)
