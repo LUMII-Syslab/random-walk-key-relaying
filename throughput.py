@@ -14,28 +14,27 @@ import random
 from heapq import heappush as push, heappop as pop
 import sys
 import csv
-from collections import defaultdict, deque
+from collections import defaultdict
 from random import choice
 import analysis
-import visualize
 
-random.seed(42)
+random.seed(2026)
 
 # RANDOM WALK SIMULATION PARAMETERS
-KEY_SIZE = 12  # bits per delivered key (toy)
-NODE_BUFF_KEYS = 10000  # buffer capacity in *keys* (not bits)
-LINK_BUFF_BITS = 10000  # reservable key material on a link (bits)
+KEY_SIZE = 256  # bits per delivered key
+NODE_BUFF_KEYS = 100000  # buffer capacity in *keys* (not bits)
+LINK_BUFF_BITS = 100000  # reservable key material on a link (bits)
 LINKS_EMPTY_AT_START = True
-QKD_SKR = 6  # secure key generation rate on each link (bits/s)
-LATENCY = 0  # seconds
-SIM_DURATION = 10000.0  # seconds
+QKD_SKR = 1000  # secure key generation rate on each link (bits/s)
+LATENCY = 0.05  # seconds 
+SIM_DURATION = 1000.0  # seconds
 
 # VISUALIZATION AND ANALYSIS PARAMETERS
 TICK_INTERVAL = 10  # seconds between throughput measurements (sliding window)
-WINDOW_SIZE = 20.0  # seconds for sliding window throughput
-HIST_BIN_WIDTH = 0.05  # bits/s bins for histogram (non-overlapping samples)
+WINDOW_SIZE = 5.0  # seconds for sliding window throughput
+HIST_BIN_WIDTH = 100.0  # bits/s bins for histogram (non-overlapping samples)
 MIN_KEYS_IN_WINDOW = 1  # min keys in window before recording sliding throughput
-BURN_IN = 5 * WINDOW_SIZE  # ignore early transient in stats
+BURN_IN = 0 * WINDOW_SIZE  # ignore early transient in stats
 
 class Node:
     def __init__(self, name: str):
@@ -81,20 +80,19 @@ class Link:
 
 
 
-def main(
+def simulate_single_pair(
     adj_list: defaultdict[str, list[str]],
     S: str,
     T: str,
     nodes: dict[str, Node],
     edges: dict[tuple[str, str], Link],
-):
+    sim_duration: float,
+) -> list[float]:
     def get_edge(src: str, tgt: str) -> Link:
         return edges[(min(src, tgt), max(src, tgt))]
 
     events = []
 
-    # Inject an initial flood to saturate (your original behavior).
-    # This creates a transient; we drop BURN_IN in stats.
     for _ in range(NODE_BUFF_KEYS):
         neighbour = choice(adj_list[S])
         waiting_time = get_edge(S, neighbour).reserve(0.0, KEY_SIZE)
@@ -102,19 +100,18 @@ def main(
         push(events, (0.0 + waiting_time, ("link_ready", S, neighbour)))
 
     # Arrival timestamps at destination
-    arrival_timestamps = deque()  # for sliding window
-    all_arrival_times = []  # for non-overlapping window binning
+    all_arrival_times = []
 
     while events:
         time, e = pop(events)
-        if time > SIM_DURATION:
+        if time > sim_duration:
             break
 
-        et = e[0]
+        et = e[0] # event type
 
-        if et == "rcv_ready":
+        if et == "rcv_ready": # key material is reserved on link
             src, me = e[1], e[2]
-            if nodes[me].buffer_space > 0:
+            if nodes[me].buffer_space > 0: # buffer has space for key
                 nodes[me].buffer_space -= 1
                 push(events, (time + LATENCY, ("rcv_can_send", me, src)))
             else:
@@ -138,7 +135,6 @@ def main(
         elif et == "rcv_key":
             src, tgt = e[1], e[2]
             if tgt == T:
-                arrival_timestamps.append(time)
                 all_arrival_times.append(time)
                 nodes[T].buffer_space += 1
                 if nodes[T].waiting:
@@ -155,42 +151,37 @@ def main(
             me, neighbour = e[1], e[2]
             push(events, (time + LATENCY, ("rcv_ready", me, neighbour)))
 
-    config = {
-        "KEY_SIZE": KEY_SIZE,
-        "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
-        "LINK_BUFF_BITS": LINK_BUFF_BITS,
-        "LINKS_EMPTY_AT_START": LINKS_EMPTY_AT_START,
-        "QKD_SKR": QKD_SKR,
-        "LATENCY": LATENCY,
-        "TICK_INTERVAL": TICK_INTERVAL,
-        "WINDOW_SIZE": WINDOW_SIZE,
-        "SIM_DURATION": SIM_DURATION,
-        "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
-        "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
-        "BURN_IN": BURN_IN,
-        "S": S,
-        "T": T,
-        "nodes_count": len(nodes),
-        "edges_count": len(edges),
-    }
-    summary = analysis.compute_summary(all_arrival_times, config)
-    arrival = analysis.compute_arrival_metrics(all_arrival_times, summary, config)
-    non_overlapping = analysis.compute_non_overlapping_throughput(
-        all_arrival_times, config
-    )
-    sliding = analysis.compute_sliding_window_metrics(all_arrival_times, config)
-    log_domain = analysis.compute_log_domain_metrics(non_overlapping["thr_bins"])
+    return all_arrival_times
 
-    analysis.print_summary(
-        config, summary, arrival, non_overlapping, sliding, log_domain
+
+def main(
+    adj_list: defaultdict[str, list[str]],
+    S: str,
+    T: str,
+    nodes: dict[str, Node],
+    edges: dict[tuple[str, str], Link],
+    config: dict[str, object],
+):
+    arrival_times = simulate_single_pair(
+        adj_list, S, T, nodes, edges, config["SIM_DURATION"]
     )
-    visualize.draw_plots(
-        config,
+    print(f"# of arrivals: {len(arrival_times)}")
+    print("Simulation complete")
+
+    analyzer = analysis.Analyzer(config)
+    summary = analyzer.compute_summary(arrival_times)
+    arrival = analyzer.compute_arrival_metrics(arrival_times, summary)
+    non_overlapping = analyzer.compute_non_overlapping_throughput(arrival_times)
+    sliding = analyzer.compute_sliding_window_metrics(arrival_times)
+    log_domain = analyzer.compute_log_domain_metrics(non_overlapping.thr_bins)
+
+    analyzer.print_summary(summary, arrival, non_overlapping, sliding, log_domain)
+    analysis.plot_all(
         summary,
         sliding,
         non_overlapping,
-        log_domain,
-        output_path="throughput.png",
+        config,
+        output_path=None,
         show=True,
     )
 
@@ -220,11 +211,25 @@ if __name__ == "__main__":
             if src < tgt:
                 edges[(src, tgt)] = Link(src, tgt, QKD_SKR, LATENCY)
 
-    sorted_nodes = sorted(node_id_set)
-    if len(sorted_nodes) < 2:
-        print("Need at least 2 nodes")
-        sys.exit(1)
-
-    S, T = sorted_nodes[0], sorted_nodes[-1]
+    S, T = "BOU", "PIT"
     print(f"S: {S}, T: {T}")
-    main(adj_list, S, T, nodes, edges)
+
+    config = {
+        "KEY_SIZE": KEY_SIZE,
+        "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
+        "LINK_BUFF_BITS": LINK_BUFF_BITS,
+        "LINKS_EMPTY_AT_START": LINKS_EMPTY_AT_START,
+        "QKD_SKR": QKD_SKR,
+        "LATENCY": LATENCY,
+        "TICK_INTERVAL": TICK_INTERVAL,
+        "WINDOW_SIZE": WINDOW_SIZE,
+        "SIM_DURATION": SIM_DURATION,
+        "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
+        "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
+        "BURN_IN": BURN_IN,
+        "S": S,
+        "T": T,
+        "nodes_count": len(nodes),
+        "edges_count": len(edges),
+    }
+    main(adj_list, S, T, nodes, edges, config)
