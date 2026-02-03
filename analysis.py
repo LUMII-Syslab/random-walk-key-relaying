@@ -321,89 +321,103 @@ class Analyzer:
         non_overlapping: NonOverlappingThroughput,
         sliding: SlidingWindowSeries,
         log_domain: LogDomainMetrics,
+        summary_path: str | None = None,
     ) -> None:
         config = self.config
 
-        print("\n=== Summary ===")
-        print("\n--- Configuration ---")
-        print(f"KEY_SIZE: {config['KEY_SIZE']} bits")
-        print(f"NODE_BUFF_KEYS: {config['NODE_BUFF_KEYS']}")
-        print(f"LINK_BUFF_BITS: {config['LINK_BUFF_BITS']} bits")
-        print(f"LINKS_EMPTY_AT_START: {config['LINKS_EMPTY_AT_START']}")
-        print(f"QKD_SKR: {config['QKD_SKR']} bits/s")
-        print(f"LATENCY: {config['LATENCY']} s")
-        print(f"TICK_INTERVAL: {config['TICK_INTERVAL']} s")
-        print(f"WINDOW_SIZE: {config['WINDOW_SIZE']} s")
-        print(f"SIM_DURATION: {config['SIM_DURATION']} s")
-        print(f"HIST_BIN_WIDTH: {config['HIST_BIN_WIDTH']} bits/s")
-        print(f"MIN_KEYS_IN_WINDOW: {config['MIN_KEYS_IN_WINDOW']}")
-        print(f"BURN_IN: {config['BURN_IN']} s")
-        print(f"S: {config['S']} | T: {config['T']}")
-        print(f"Nodes: {config['nodes_count']} | Edges: {config['edges_count']}")
-        print(
+        output = None
+        if summary_path:
+            os.makedirs(os.path.dirname(summary_path) or ".", exist_ok=True)
+            output = open(summary_path, "w", encoding="utf-8")
+
+        def _p(text: str = "") -> None:
+            print(text, file=output)
+
+        _p("\n=== Summary ===")
+        _p("\n--- Configuration ---")
+        _p(f"KEY_SIZE: {config['KEY_SIZE']} bits")
+        _p(f"NODE_BUFF_KEYS: {config['NODE_BUFF_KEYS']}")
+        _p(f"LINK_BUFF_BITS: {config['LINK_BUFF_BITS']} bits")
+        _p(f"LINKS_EMPTY_AT_START: {config['LINKS_EMPTY_AT_START']}")
+        _p(f"QKD_SKR: {config['QKD_SKR']} bits/s")
+        _p(f"LATENCY: {config['LATENCY']} s")
+        _p(f"TICK_INTERVAL: {config['TICK_INTERVAL']} s")
+        _p(f"WINDOW_SIZE: {config['WINDOW_SIZE']} s")
+        _p(f"SIM_DURATION: {config['SIM_DURATION']} s")
+        _p(f"HIST_BIN_WIDTH: {config['HIST_BIN_WIDTH']} bits/s")
+        _p(f"MIN_KEYS_IN_WINDOW: {config['MIN_KEYS_IN_WINDOW']}")
+        _p(f"BURN_IN: {config['BURN_IN']} s")
+        _p(f"S: {config['S']} | T: {config['T']}")
+        _p(f"Nodes: {config['nodes_count']} | Edges: {config['edges_count']}")
+        _p(
             f"Delivered keys: {summary.total_keys} | Delivered bits: {summary.total_bits} | "
             f"Sim duration: {config['SIM_DURATION']}s | Burn-in: {config['BURN_IN']}s"
         )
 
         if not summary.has_enough_arrivals:
-            print("Not enough arrivals for meaningful statistics.")
+            _p("Not enough arrivals for meaningful statistics.")
+            if output:
+                output.close()
             return
 
-        print("\n--- Arrival process ---")
-        print(
+        _p("\n--- Arrival process ---")
+        _p(
             f"Avg delivery rate: {arrival.rate_keys:.6f} keys/s | {arrival.rate_bits:.6f} bits/s"
         )
-        print(
+        _p(
             f"Mean inter-arrival: {arrival.mean_iat:.6f}s | CV(inter-arrival): {arrival.cv_iat:.3f} "
             f"(Poisson would be ~1.0)"
         )
 
-        print("\n--- Non-overlapping window throughput (preferred for distribution) ---")
-        print(
+        _p("\n--- Non-overlapping window throughput (preferred for distribution) ---")
+        _p(
             f"Samples: {len(non_overlapping.thr_bins)} windows of {non_overlapping.bin_w}s "
             f"(post burn-in)"
         )
-        print(
+        _p(
             f"Quantization step: {non_overlapping.thr_step:.6f} bits/s | "
             f"Unique throughput values: {len(non_overlapping.unique_thr)}"
         )
-        print(
+        _p(
             f"Zero-count windows: {non_overlapping.zero_windows}/{len(non_overlapping.thr_bins)} = "
             f"{non_overlapping.frac_zero:.3f} (log() drops these)"
         )
-        print(
+        _p(
             f"Mean:   {non_overlapping.mean_thr:.6f} | Std: {non_overlapping.std_thr:.6f}  "
             f"(std shown for reference)"
         )
-        print(
+        _p(
             f"Median: {non_overlapping.median_thr:.6f} | IQR: {non_overlapping.iqr:.6f} | "
             f"MAD: {non_overlapping.mad:.6f}"
         )
-        print(f"P05:    {non_overlapping.p05:.6f} | P95: {non_overlapping.p95:.6f}")
-        print(
+        _p(f"P05:    {non_overlapping.p05:.6f} | P95: {non_overlapping.p95:.6f}")
+        _p(
             f"Skew:   {non_overlapping.skew_thr:.3f} | Excess kurtosis: "
             f"{non_overlapping.kurt_thr:.3f}"
         )
-        print(
+        _p(
             f"Fano factor on window counts Var/Mean: {non_overlapping.fano:.3f}  "
             f"(Poisson-ish ~1, bursty >1)"
         )
-        print(
+        _p(
             f"JB normality (linear thr): JB={non_overlapping.jb_lin:.3f}, "
             f"p≈{non_overlapping.p_lin:.3g} (small p => not normal)"
         )
-        print(
+        _p(
             f"JB normality (log thr>0): JB={log_domain.jb_log:.3f}, "
             f"p≈{log_domain.p_log:.3g} (small p => not log-normal)"
         )
 
-        print("\n--- Sliding-window throughput series (correlated diagnostics) ---")
+        _p("\n--- Sliding-window throughput series (correlated diagnostics) ---")
         if len(sliding.values):
-            print(f"Recorded points: {len(sliding.values)} (post burn-in)")
-            print(f"Lag-1 autocorr: {sliding.lag1:.3f}  (expect high due to overlap)")
-            print(f"Crude ESS (AR(1) approx): {sliding.ess:.1f}")
+            _p(f"Recorded points: {len(sliding.values)} (post burn-in)")
+            _p(f"Lag-1 autocorr: {sliding.lag1:.3f}  (expect high due to overlap)")
+            _p(f"Crude ESS (AR(1) approx): {sliding.ess:.1f}")
         else:
-            print("No sliding-window points recorded (check MIN_KEYS_IN_WINDOW / burn-in).")
+            _p("No sliding-window points recorded (check MIN_KEYS_IN_WINDOW / burn-in).")
+
+        if output:
+            output.close()
 
 
 def _norm_cdf(x: np.ndarray, mu: float, sigma: float) -> np.ndarray:
@@ -452,7 +466,9 @@ def plot_sliding_window(
     else:
         ax.set_title("Sliding-window Throughput (no samples)")
     ax.set_xlabel("Time [s]")
-    ax.set_ylabel(f"Throughput [kbits/s] ({config['S']} → {config['T']})")
+    ax.set_ylabel(
+        f"Throughput [kbits/s] ({config['S']} → {config['T']}, {config['VARIANT']})"
+    )
     ax.grid(True, alpha=0.3)
     ax.legend(loc="upper right")
     return ax
@@ -508,7 +524,7 @@ def plot_non_overlapping_histogram(
             f"Freq distribution (non-overlapping window - {non_overlapping.bin_w}s)"
         )
         ax.set_xlabel(
-            f"Throughput [kbits/s] ({config['S']} → {config['T']})"
+            f"Throughput [kbits/s] ({config['S']} → {config['T']}, {config['VARIANT']})"
         )
         ax.set_ylabel("Frequency [%]")
         _, ymax = ax.get_ylim()
@@ -558,56 +574,4 @@ def plot_pp(ax, log_domain: LogDomainMetrics):
         ax.set_title("P-P plot (insufficient log samples)")
         ax.set_axis_off()
     return ax
-
-
-def plot_all(
-    summary: Summary,
-    sliding: SlidingWindowSeries,
-    non_overlapping: NonOverlappingThroughput,
-    config: dict[str, Any],
-    output_path: str | None = "throughput.png",
-    output_dir: str = "out",
-    show: bool = True,
-):
-    if not summary.has_enough_arrivals:
-        return None, None
-
-    import matplotlib.pyplot as plt
-
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    plot_sliding_window(axes[0], sliding, config)
-    plot_non_overlapping_histogram(axes[1], non_overlapping, config)
-
-    plt.suptitle(
-        f"Random Walk Key Relay (burn-in={config['BURN_IN']}s, sim={config['SIM_DURATION']}s)",
-        fontsize=12,
-    )
-    plt.tight_layout()
-    if output_path:
-        plt.savefig(output_path, dpi=150)
-    if show:
-        plt.show()
-    if output_path:
-        print(f"\nPlot saved to {output_path}")
-
-    os.makedirs(output_dir, exist_ok=True)
-    _save_single_plot(
-        lambda ax: plot_sliding_window(ax, sliding, config),
-        os.path.join(output_dir, "sliding_window.png"),
-    )
-    _save_single_plot(
-        lambda ax: plot_non_overlapping_histogram(ax, non_overlapping, config),
-        os.path.join(output_dir, "non_overlapping_histogram.png"),
-    )
-    return fig, axes
-
-
-def _save_single_plot(plot_fn, path: str) -> None:
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    plot_fn(ax)
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
 

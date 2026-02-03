@@ -10,13 +10,19 @@ Notes / fixes:
     (2) non-overlapping-window throughput samples (for distribution/statistics)
 """
 
+from dataclasses import dataclass
 import random
+import os
 from heapq import heappush as push, heappop as pop
 import sys
 import csv
 from collections import defaultdict
 from random import choice
+from typing import Literal
 import analysis
+import signal
+
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 random.seed(2026)
 
@@ -78,7 +84,34 @@ class Link:
         self.bit_balance -= necessary_bits
         return waiting_time
 
+@dataclass
+class Packet:
+    history: list[str] # includes source and destination nodes
+    started_at: float
+    finished_at: float | None
 
+    def __lt__(self, other: 'Packet') -> bool:
+        return self.started_at < other.started_at
+
+def choose_next(p: Packet, neighbours: list[str], variant: Literal["random", "nonbacktracking", "lrv"]) -> str:
+    if len(neighbours) == 1: return neighbours[0]
+    assert len(neighbours) > 1
+    if variant == "random": return choice(neighbours)
+    elif variant == "nonbacktracking":
+        assert len(p.history) > 0 # it should always contain the source node
+        other_nodes = [n for n in neighbours if n != p.history[-1]]
+        return choice(other_nodes)
+    elif variant == "lrv":
+        assert len(p.history) > 0 # it should always contain the source node
+        last_idx = {node: i for i, node in enumerate(p.history)}
+        unvisited = [n for n in neighbours if n not in last_idx]
+        if unvisited:
+            return choice(unvisited)
+        min_idx = min(last_idx[n] for n in neighbours)
+        lrv = [n for n in neighbours if last_idx[n] == min_idx]
+        return choice(lrv)
+    else:
+        raise ValueError(f"Invalid variant: {variant}")
 
 def simulate_single_pair(
     adj_list: defaultdict[str, list[str]],
@@ -87,55 +120,67 @@ def simulate_single_pair(
     nodes: dict[str, Node],
     edges: dict[tuple[str, str], Link],
     sim_duration: float,
-) -> list[float]:
+    variant: Literal["random", "nonbacktracking", "lrv"],
+) -> list[Packet]:
     def get_edge(src: str, tgt: str) -> Link:
         return edges[(min(src, tgt), max(src, tgt))]
 
     events = []
 
     for _ in range(NODE_BUFF_KEYS):
-        neighbour = choice(adj_list[S])
-        waiting_time = get_edge(S, neighbour).reserve(0.0, KEY_SIZE)
+        new_packet = Packet(history=[S], started_at=0.0, finished_at=None)
+        chosen_neighbour = choose_next(new_packet, adj_list[S], variant)
+        waiting_time = get_edge(S, chosen_neighbour).reserve(0.0, KEY_SIZE)
         nodes[S].buffer_space -= 1
-        push(events, (0.0 + waiting_time, ("link_ready", S, neighbour)))
+        push(events, (0.0 + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)))
 
-    # Arrival timestamps at destination
-    all_arrival_times = []
+    # packets with arrival times and history
+    arrived_packets: list[Packet] = []
 
-    while events:
+    while events: # non-decreasing time event loop
         time, e = pop(events)
         if time > sim_duration:
             break
 
         et = e[0] # event type
+        p:Packet = e[3] # packet
 
-        if et == "rcv_ready": # key material is reserved on link
+        if et == "link_ready": # self-notification that material is retrieved
+            me, neighbour = e[1], e[2]
+            push(events, (time + LATENCY, ("rcv_ready", me, neighbour, p)))
+        elif et == "rcv_ready": # sender received OTP key material from link
+            # now we have to ensure that buffer has enough space
+            # if not, append to waiting list of this node
             src, me = e[1], e[2]
             if nodes[me].buffer_space > 0: # buffer has space for key
                 nodes[me].buffer_space -= 1
-                push(events, (time + LATENCY, ("rcv_can_send", me, src)))
+                push(events, (time + LATENCY, ("rcv_can_send", me, src, p)))
             else:
-                nodes[me].waiting.append(src)
+                nodes[me].waiting.append((src, p))
 
         elif et == "rcv_can_send":
             me, target = e[2], e[1]
-            push(events, (time + LATENCY, ("rcv_key", me, target)))
+            push(events, (time + LATENCY, ("rcv_key", me, target, p)))
             nodes[me].buffer_space += 1
 
             if nodes[me].waiting:
-                next_waiting = nodes[me].waiting.pop(0)
+                next_waiting, next_packet = nodes[me].waiting.pop(0)
                 nodes[me].buffer_space -= 1
-                push(events, (time + LATENCY, ("rcv_can_send", me, next_waiting)))
+                push(events, (time + LATENCY, ("rcv_can_send", me, next_waiting, next_packet)))
             elif me == S:
-                neighbour = choice(adj_list[S])
+                new_packet = Packet(history=[S], started_at=time, finished_at=None)
+                chosen_neighbour = choose_next(new_packet, adj_list[S], variant)
                 nodes[S].buffer_space -= 1
-                waiting_time = get_edge(S, neighbour).reserve(time, KEY_SIZE)
-                push(events, (time + waiting_time, ("link_ready", S, neighbour)))
+                waiting_time = get_edge(S, chosen_neighbour).reserve(time, KEY_SIZE)
+                push(events, (time + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)))
 
         elif et == "rcv_key":
-            src, tgt = e[1], e[2]
+            src: str = e[1]
+            tgt: str = e[2]
+            p.history.append(tgt)
             if tgt == T:
-                all_arrival_times.append(time)
+                p.finished_at = time
+                arrived_packets.append(p)
                 nodes[T].buffer_space += 1
                 if nodes[T].waiting:
                     next_waiting = nodes[T].waiting.pop(0)
@@ -143,15 +188,11 @@ def simulate_single_pair(
                     push(events, (time + LATENCY, ("rcv_can_send", T, next_waiting)))
             else:
                 me = tgt
-                neighbour = choice(adj_list[me])
-                waiting_time = get_edge(me, neighbour).reserve(time, KEY_SIZE)
-                push(events, (time + waiting_time, ("link_ready", me, neighbour)))
+                chosen_neighbour = choose_next(p, adj_list[me], variant)
+                waiting_time = get_edge(me, chosen_neighbour).reserve(time, KEY_SIZE)
+                push(events, (time + waiting_time, ("link_ready", me, chosen_neighbour, p)))
 
-        elif et == "link_ready":
-            me, neighbour = e[1], e[2]
-            push(events, (time + LATENCY, ("rcv_ready", me, neighbour)))
-
-    return all_arrival_times
+    return arrived_packets
 
 
 def main(
@@ -162,9 +203,11 @@ def main(
     edges: dict[tuple[str, str], Link],
     config: dict[str, object],
 ):
-    arrival_times = simulate_single_pair(
-        adj_list, S, T, nodes, edges, config["SIM_DURATION"]
+    variant = config["VARIANT_LONG"]
+    arrived_packets = simulate_single_pair(
+        adj_list, S, T, nodes, edges, config["SIM_DURATION"], variant=variant
     )
+    arrival_times = [p.finished_at for p in arrived_packets]
     print(f"# of arrivals: {len(arrival_times)}")
     print("Simulation complete")
 
@@ -175,8 +218,15 @@ def main(
     sliding = analyzer.compute_sliding_window_metrics(arrival_times)
     log_domain = analyzer.compute_log_domain_metrics(non_overlapping.thr_bins)
 
-    analyzer.print_summary(summary, arrival, non_overlapping, sliding, log_domain)
-    analysis.plot_all(
+    analyzer.print_summary(
+        summary,
+        arrival,
+        non_overlapping,
+        sliding,
+        log_domain,
+        summary_path="out/summary.txt",
+    )
+    plot_all(
         summary,
         sliding,
         non_overlapping,
@@ -184,6 +234,58 @@ def main(
         output_path=None,
         show=True,
     )
+
+
+def plot_all(
+    summary: analysis.Summary,
+    sliding: analysis.SlidingWindowSeries,
+    non_overlapping: analysis.NonOverlappingThroughput,
+    config: dict[str, object],
+    output_path: str | None = "throughput.png",
+    output_dir: str = "out",
+    show: bool = True,
+):
+    if not summary.has_enough_arrivals:
+        return None, None
+
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    analysis.plot_sliding_window(axes[0], sliding, config)
+    analysis.plot_non_overlapping_histogram(axes[1], non_overlapping, config)
+
+    plt.suptitle(
+        f"Random Walk Key Relay (burn-in={config['BURN_IN']}s, sim={config['SIM_DURATION']}s)",
+        fontsize=12,
+    )
+    plt.tight_layout()
+    if output_path:
+        plt.savefig(output_path, dpi=150)
+    if show:
+        plt.show()
+    if output_path:
+        print(f"\nPlot saved to {output_path}")
+
+    os.makedirs(output_dir, exist_ok=True)
+    _save_single_plot(
+        lambda ax: analysis.plot_sliding_window(ax, sliding, config),
+        os.path.join(output_dir, "sliding_window.png"),
+    )
+    _save_single_plot(
+        lambda ax: analysis.plot_non_overlapping_histogram(ax, non_overlapping, config),
+        os.path.join(output_dir, "non_overlapping_histogram.png"),
+    )
+    return fig, axes
+
+
+def _save_single_plot(plot_fn, path: str) -> None:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+    plot_fn(ax)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
@@ -214,6 +316,7 @@ if __name__ == "__main__":
     S, T = "BOU", "PIT"
     print(f"S: {S}, T: {T}")
 
+    variant = "random"
     config = {
         "KEY_SIZE": KEY_SIZE,
         "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
@@ -229,6 +332,8 @@ if __name__ == "__main__":
         "BURN_IN": BURN_IN,
         "S": S,
         "T": T,
+        "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[variant],
+        "VARIANT_LONG": variant,
         "nodes_count": len(nodes),
         "edges_count": len(edges),
     }
