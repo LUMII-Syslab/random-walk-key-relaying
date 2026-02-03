@@ -14,7 +14,6 @@ from dataclasses import dataclass
 import random
 import os
 from heapq import heappush as push, heappop as pop
-import sys
 import csv
 from collections import defaultdict
 from random import choice
@@ -117,26 +116,89 @@ def choose_next(p: Packet, neighbours: list[str], variant: Literal["random", "no
     else:
         raise ValueError(f"Invalid variant: {variant}")
 
+class RelayNetwork:  # bidirected graph
+    def __init__(
+        self,
+        node_list_csv: str,
+        edge_list_csv: str,
+        skr: float = QKD_SKR,
+        latency: float = LATENCY,
+    ):
+        self.nodes: dict[str, Node] = {}
+        self.adj_list: dict[str, list[str]] = defaultdict(list)
+        self.edges: dict[tuple[str, str], Link] = {}
+        self._node_ids: list[str] = []
+        self._edge_pairs: list[tuple[str, str]] = []
+
+        with open(node_list_csv, "r") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                node_id = row.get("Id") or row.get("ID") or row.get("id")
+                if not node_id:
+                    raise ValueError("Node CSV missing Id column")
+                self.nodes[node_id] = Node(node_id)
+                self._node_ids.append(node_id)
+
+        with open(edge_list_csv, "r") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                src, tgt = row["Source"], row["Target"]
+                if src not in self.nodes:
+                    self.nodes[src] = Node(src)
+                    self._node_ids.append(src)
+                if tgt not in self.nodes:
+                    self.nodes[tgt] = Node(tgt)
+                    self._node_ids.append(tgt)
+                self.adj_list[src].append(tgt)
+                self.adj_list[tgt].append(src)
+                key = (min(src, tgt), max(src, tgt))
+                if key not in self.edges:
+                    self.edges[key] = Link(src, tgt, skr, latency)
+                    self._edge_pairs.append((src, tgt))
+
+    def get_node(self, id: str) -> Node:
+        return self.nodes[id]
+
+    def get_edge(self, src: str, tgt: str) -> Link:
+        return self.edges[(min(src, tgt), max(src, tgt))]
+
+    def get_neighbours(self, id: str) -> list[str]:
+        return self.adj_list[id]
+
+    def node_ids(self) -> list[str]:
+        return list(self._node_ids)
+
+    def reset(self) -> None:
+        self.nodes = {node_id: Node(node_id) for node_id in self._node_ids}
+        self.adj_list = defaultdict(list)
+        self.edges = {}
+        for src, tgt in self._edge_pairs:
+            self.adj_list[src].append(tgt)
+            self.adj_list[tgt].append(src)
+            key = (min(src, tgt), max(src, tgt))
+            if key not in self.edges:
+                self.edges[key] = Link(src, tgt, QKD_SKR, LATENCY)
+
+
 def simulate_single_pair(
-    adj_list: defaultdict[str, list[str]],
+    graph: RelayNetwork,
     S: str,
     T: str,
-    nodes: dict[str, Node],
-    edges: dict[tuple[str, str], Link],
     sim_duration: float,
     variant: Literal["random", "nonbacktracking", "lrv"],
 ) -> list[Packet]:
-    def get_edge(src: str, tgt: str) -> Link:
-        return edges[(min(src, tgt), max(src, tgt))]
-
     events = []
+    nodes = graph.nodes
 
     for _ in range(NODE_BUFF_KEYS):
         new_packet = Packet(history=[S], started_at=0.0, finished_at=None)
-        chosen_neighbour = choose_next(new_packet, adj_list[S], variant)
-        waiting_time = get_edge(S, chosen_neighbour).reserve(0.0, KEY_SIZE)
+        chosen_neighbour = choose_next(new_packet, graph.get_neighbours(S), variant)
+        waiting_time = graph.get_edge(S, chosen_neighbour).reserve(0.0, KEY_SIZE)
         nodes[S].buffer_space -= 1
-        push(events, (0.0 + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)))
+        push(
+            events,
+            (0.0 + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)),
+        )
 
     # packets with arrival times and history
     arrived_packets: list[Packet] = []
@@ -173,10 +235,13 @@ def simulate_single_pair(
                 push(events, (time + LATENCY, ("rcv_can_send", me, next_waiting, next_packet)))
             elif me == S:
                 new_packet = Packet(history=[S], started_at=time, finished_at=None)
-                chosen_neighbour = choose_next(new_packet, adj_list[S], variant)
+                chosen_neighbour = choose_next(new_packet, graph.get_neighbours(S), variant)
                 nodes[S].buffer_space -= 1
-                waiting_time = get_edge(S, chosen_neighbour).reserve(time, KEY_SIZE)
-                push(events, (time + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)))
+                waiting_time = graph.get_edge(S, chosen_neighbour).reserve(time, KEY_SIZE)
+                push(
+                    events,
+                    (time + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)),
+                )
 
         elif et == "rcv_key":
             src: str = e[1]
@@ -192,26 +257,28 @@ def simulate_single_pair(
                     push(events, (time + LATENCY, ("rcv_can_send", T, next_waiting)))
             else:
                 me = tgt
-                chosen_neighbour = choose_next(p, adj_list[me], variant)
-                waiting_time = get_edge(me, chosen_neighbour).reserve(time, KEY_SIZE)
-                push(events, (time + waiting_time, ("link_ready", me, chosen_neighbour, p)))
+                chosen_neighbour = choose_next(p, graph.get_neighbours(me), variant)
+                waiting_time = graph.get_edge(me, chosen_neighbour).reserve(time, KEY_SIZE)
+                push(
+                    events,
+                    (time + waiting_time, ("link_ready", me, chosen_neighbour, p)),
+                )
 
     return arrived_packets
 
 
 def main(
-    adj_list: defaultdict[str, list[str]],
+    graph: RelayNetwork,
     S: str,
     T: str,
-    nodes: dict[str, Node],
-    edges: dict[tuple[str, str], Link],
     config: dict[str, object],
+    output_dir: str = "out",
 ):
     variant = config["VARIANT_LONG"]
     arrived_packets = simulate_single_pair(
-        adj_list, S, T, nodes, edges, config["SIM_DURATION"], variant=variant
+        graph, S, T, config["SIM_DURATION"], variant=variant
     )
-    arrival_times = [p.finished_at for p in arrived_packets]
+    arrival_times = [p.finished_at for p in arrived_packets if p.finished_at is not None]
     print(f"# of arrivals: {len(arrival_times)}")
     print("Simulation complete")
 
@@ -228,15 +295,18 @@ def main(
         non_overlapping,
         sliding,
         log_domain,
-        summary_path="out/summary.txt",
+        summary_path=os.path.join(output_dir, "summary.txt"),
     )
     plot_all(
         summary,
         sliding,
         non_overlapping,
         config,
-        output_path=None,
-        show=True,
+        output_path=os.path.join(
+            output_dir, f"{str(config['VARIANT']).lower()}_throughput.png"
+        ),
+        output_dir=output_dir,
+        show=False,
     )
 
 
@@ -259,7 +329,8 @@ def plot_all(
     analysis.plot_non_overlapping_histogram(axes[1], non_overlapping, config)
 
     plt.suptitle(
-        f"Random Walk Key Relay (burn-in={config['BURN_IN']}s, sim={config['SIM_DURATION']}s)",
+        f"{config['GRAPH']} | {config['VARIANT']} | "
+        f"burn-in={config['BURN_IN']}s, sim={config['SIM_DURATION']}s",
         fontsize=12,
     )
     plt.tight_layout()
@@ -271,13 +342,14 @@ def plot_all(
         print(f"\nPlot saved to {output_path}")
 
     os.makedirs(output_dir, exist_ok=True)
+    prefix = str(config["VARIANT"]).lower()
     _save_single_plot(
         lambda ax: analysis.plot_sliding_window(ax, sliding, config),
-        os.path.join(output_dir, "sliding_window.png"),
+        os.path.join(output_dir, f"{prefix}_throughput_time_series.png"),
     )
     _save_single_plot(
         lambda ax: analysis.plot_non_overlapping_histogram(ax, non_overlapping, config),
-        os.path.join(output_dir, "non_overlapping_histogram.png"),
+        os.path.join(output_dir, f"{prefix}_freq_distribution.png"),
     )
     return fig, axes
 
@@ -293,52 +365,53 @@ def _save_single_plot(plot_fn, path: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: throughput.py <edge_list_csv>")
-        sys.exit(1)
+    graphs = [
+        ("geant", "graphs/geant/geant_nodes.csv", "graphs/geant/geant_edges.csv"),
+        ("nsfnet", "graphs/nsfnet/nsfnet_nodes.csv", "graphs/nsfnet/nsfnet_edges.csv"),
+        ("secoqc", "graphs/secoqc/secoqc_nodes.csv", "graphs/secoqc/secoqc_edges.csv"),
+    ]
 
-    edge_list_csv = sys.argv[1]
-    node_id_set = set()
-    adj_list = defaultdict(list)
-
-    with open(edge_list_csv, "r") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            src, tgt = row["Source"], row["Target"]
-            node_id_set.add(src)
-            node_id_set.add(tgt)
-            adj_list[src].append(tgt)
-            adj_list[tgt].append(src)
-
-    nodes = {node_id: Node(node_id) for node_id in node_id_set}
-    edges = {}
-    for src in node_id_set:
-        for tgt in adj_list[src]:
-            if src < tgt:
-                edges[(src, tgt)] = Link(src, tgt, QKD_SKR, LATENCY)
-
-    S, T = "BOU", "PIT"
-    print(f"S: {S}, T: {T}")
-
-    variant = "lrv"
-    config = {
-        "KEY_SIZE": KEY_SIZE,
-        "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
-        "LINK_BUFF_BITS": LINK_BUFF_BITS,
-        "LINKS_EMPTY_AT_START": LINKS_EMPTY_AT_START,
-        "QKD_SKR": QKD_SKR,
-        "LATENCY": LATENCY,
-        "TICK_INTERVAL": TICK_INTERVAL,
-        "WINDOW_SIZE": WINDOW_SIZE,
-        "SIM_DURATION": SIM_DURATION,
-        "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
-        "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
-        "BURN_IN": BURN_IN,
-        "S": S,
-        "T": T,
-        "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[variant],
-        "VARIANT_LONG": variant,
-        "nodes_count": len(nodes),
-        "edges_count": len(edges),
+    variants = ["random", "nonbacktracking", "lrv"]
+    graph_pairs = {
+        "geant": ("MIL", "COP"),
+        "nsfnet": ("BOU", "PIT"),
+        "secoqc": ("BRE", "SIE"),
     }
-    main(adj_list, S, T, nodes, edges, config)
+
+    for name, nodes_csv, edges_csv in graphs:
+        graph = RelayNetwork(nodes_csv, edges_csv)
+        if name not in graph_pairs:
+            print(f"{name}: missing S/T pair")
+            continue
+        S, T = graph_pairs[name]
+        if S not in graph.nodes or T not in graph.nodes:
+            print(f"{name}: S/T not in node list ({S}, {T})")
+            continue
+        print(f"{name}: S={S}, T={T}")
+        output_dir = os.path.join("out", name)
+        for variant in variants:
+            graph.reset()
+            config = {
+                "KEY_SIZE": KEY_SIZE,
+                "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
+                "LINK_BUFF_BITS": LINK_BUFF_BITS,
+                "LINKS_EMPTY_AT_START": LINKS_EMPTY_AT_START,
+                "QKD_SKR": QKD_SKR,
+                "LATENCY": LATENCY,
+                "TICK_INTERVAL": TICK_INTERVAL,
+                "WINDOW_SIZE": WINDOW_SIZE,
+                "SIM_DURATION": SIM_DURATION,
+                "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
+                "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
+                "BURN_IN": BURN_IN,
+                "S": S,
+                "T": T,
+                "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[
+                    variant
+                ],
+                "VARIANT_LONG": variant,
+            "GRAPH": name,
+                "nodes_count": len(graph.nodes),
+                "edges_count": len(graph.edges),
+            }
+            main(graph, S, T, config, output_dir=output_dir)

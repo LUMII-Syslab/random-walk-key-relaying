@@ -1,0 +1,40 @@
+
+=== Summary ===
+
+--- Configuration ---
+KEY_SIZE: 256 bits
+NODE_BUFF_KEYS: 100000
+LINK_BUFF_BITS: 100000 bits
+LINKS_EMPTY_AT_START: True
+QKD_SKR: 1000 bits/s
+LATENCY: 0.05 s
+TICK_INTERVAL: 10 s
+WINDOW_SIZE: 5.0 s
+SIM_DURATION: 1000.0 s
+HIST_BIN_WIDTH: 100.0 bits/s
+MIN_KEYS_IN_WINDOW: 1
+BURN_IN: 0.0 s
+S: BOU | T: PIT
+Nodes: 14 | Edges: 21
+Delivered keys: 9756 | Delivered bits: 2497536 | Sim duration: 1000.0s | Burn-in: 0.0s
+
+--- Arrival process ---
+Avg delivery rate: 9.756000 keys/s | 2497.536000 bits/s
+Mean inter-arrival: 0.102420s | CV(inter-arrival): 0.868 (Poisson would be ~1.0)
+
+--- Non-overlapping window throughput (preferred for distribution) ---
+Samples: 200 windows of 5.0s (post burn-in)
+Quantization step: 51.200000 bits/s | Unique throughput values: 19
+Zero-count windows: 0/200 = 0.000 (log() drops these)
+Mean:   2497.536000 | Std: 187.783285  (std shown for reference)
+Median: 2508.800000 | IQR: 256.000000 | MAD: 102.400000
+P05:    2201.600000 | P95: 2764.800000
+Skew:   -0.365 | Excess kurtosis: 0.413
+Fano factor on window counts Var/Mean: 0.276  (Poisson-ish ~1, bursty >1)
+JB normality (linear thr): JB=5.875, p≈0.053 (small p => not normal)
+JB normality (log thr>0): JB=25.001, p≈3.72e-06 (small p => not log-normal)
+
+--- Sliding-window throughput series (correlated diagnostics) ---
+Recorded points: 100 (post burn-in)
+Lag-1 autocorr: -0.231  (expect high due to overlap)
+Crude ESS (AR(1) approx): 160.2
