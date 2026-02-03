@@ -98,8 +98,12 @@ def choose_next(p: Packet, neighbours: list[str], variant: Literal["random", "no
     assert len(neighbours) > 1
     if variant == "random": return choice(neighbours)
     elif variant == "nonbacktracking":
-        assert len(p.history) > 0 # it should always contain the source node
-        other_nodes = [n for n in neighbours if n != p.history[-1]]
+        if len(p.history) < 2:
+            return choice(neighbours)
+        prev_node = p.history[-2]
+        other_nodes = [n for n in neighbours if n != prev_node]
+        if not other_nodes:
+            return prev_node
         return choice(other_nodes)
     elif variant == "lrv":
         assert len(p.history) > 0 # it should always contain the source node
@@ -316,7 +320,7 @@ if __name__ == "__main__":
     S, T = "BOU", "PIT"
     print(f"S: {S}, T: {T}")
 
-    variant = "random"
+    variant = "lrv"
     config = {
         "KEY_SIZE": KEY_SIZE,
         "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
