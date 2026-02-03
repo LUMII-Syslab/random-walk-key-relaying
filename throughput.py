@@ -507,7 +507,7 @@ def generate_pairwise_metrics(
             print(f"{throughput_kbps:.2f} kbit/s, {mean_hops:.1f} hops ({len(arrived)} packets)")
     
     # Save CSV
-    csv_path = os.path.join(variant_dir, f"{graph_name}_pairwise.csv")
+    csv_path = os.path.join(variant_dir, "pairwise.csv")
     with open(csv_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=["source", "target", "throughput_kbps", "mean_hops", "packets"])
         writer.writeheader()
@@ -536,7 +536,7 @@ def generate_pairwise_metrics(
         pearson_r = float('nan')
     
     # Save text summary
-    txt_path = os.path.join(variant_dir, f"{graph_name}_pairwise.txt")
+    txt_path = os.path.join(variant_dir, "pairwise.txt")
     with open(txt_path, 'w') as f:
         f.write(f"Pairwise Metrics: {graph_name.upper()}\n")
         f.write(f"Variant: {variant}\n")
@@ -558,7 +558,7 @@ def generate_pairwise_metrics(
         throughput_matrix, selected_nodes, 
         title=f"{graph_name.upper()} throughput heatmap ({variant})",
         cbar_label="Throughput (kbit/s)",
-        output_path=os.path.join(variant_dir, f"{graph_name}_throughput_heatmap.png"),
+        output_path=os.path.join(variant_dir, "throughput_heatmap.png"),
         cmap="magma", fmt=".1f", dpi=dpi
     )
     
@@ -567,7 +567,7 @@ def generate_pairwise_metrics(
         hopcount_matrix, selected_nodes,
         title=f"{graph_name.upper()} hop count heatmap ({variant})",
         cbar_label="Mean hop count",
-        output_path=os.path.join(variant_dir, f"{graph_name}_hopcount_heatmap.png"),
+        output_path=os.path.join(variant_dir, "hopcount_heatmap.png"),
         cmap="viridis", fmt=".1f", dpi=dpi
     )
 
@@ -609,7 +609,7 @@ def _plot_heatmap(
                 val = matrix[i, j]
                 text_color = "white" if val < masked_data.max() * 0.6 else "black"
                 ax.text(j, i, f"{val:{fmt}}", ha="center", va="center", 
-                       color=text_color, fontsize=7)
+                       color=text_color, fontsize=9)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=dpi, facecolor='white', edgecolor='none')
@@ -929,12 +929,52 @@ def generate_hitting_heatmap(
             })
             print(f"{best_node} ({best_prob:.2f})")
     
+    # Compute summary statistics
+    # For each source, find max hitting prob < 1.0
+    max_per_source = {}
+    for r in results:
+        src = r['source']
+        prob = r['max_hitting_prob']
+        if prob < 1.0 and prob > 0:
+            if src not in max_per_source or prob > max_per_source[src]['prob']:
+                max_per_source[src] = {'target': r['target'], 'node': r['max_hitting_node'], 'prob': prob}
+    
+    # Overall max hitting prob < 1.0
+    valid_results = [r for r in results if 0 < r['max_hitting_prob'] < 1.0]
+    if valid_results:
+        overall_max = max(valid_results, key=lambda r: r['max_hitting_prob'])
+    else:
+        overall_max = None
+    
     # Save text summary
-    txt_path = os.path.join(variant_dir, f"{graph_name}_hitting_heatmap.txt")
+    txt_path = os.path.join(variant_dir, "hitting_heatmap.txt")
     with open(txt_path, 'w') as f:
         f.write(f"Max Hitting Node Heatmap: {graph_name.upper()}\n")
         f.write(f"Variant: {variant}\n")
-        f.write(f"{'='*60}\n\n")
+        f.write(f"{'='*70}\n\n")
+        
+        # Overall max
+        f.write("=== OVERALL MAXIMUM (prob < 1.0) ===\n")
+        if overall_max:
+            f.write(f"  Pair: {overall_max['source']} -> {overall_max['target']}\n")
+            f.write(f"  Node: {overall_max['max_hitting_node']}\n")
+            f.write(f"  Probability: {overall_max['max_hitting_prob']:.4f}\n")
+        else:
+            f.write("  No valid pairs found\n")
+        f.write("\n")
+        
+        # Per-source max
+        f.write("=== MAX PER SOURCE (prob < 1.0) ===\n")
+        for src in selected_nodes:
+            if src in max_per_source:
+                m = max_per_source[src]
+                f.write(f"  {src}: -> {m['target']}, node {m['node']}, prob {m['prob']:.4f}\n")
+            else:
+                f.write(f"  {src}: no valid pairs (all probs = 1.0 or 0)\n")
+        f.write("\n")
+        
+        # Full table
+        f.write("=== ALL PAIRS ===\n")
         f.write(f"{'Source':<8} {'Target':<8} {'MaxHitNode':<12} {'Prob':>8} {'Packets':>8}\n")
         f.write(f"{'-'*60}\n")
         for r in results:
@@ -971,10 +1011,10 @@ def generate_hitting_heatmap(
                 prob = max_hitting_prob[i, j]
                 text_color = "white" if prob > 0.5 else "black"
                 ax.text(j, i, f"{max_hitting_node[i][j]}\n{prob:.2f}", 
-                       ha="center", va="center", color=text_color, fontsize=6)
+                       ha="center", va="center", color=text_color, fontsize=9)
     
     plt.tight_layout()
-    png_path = os.path.join(variant_dir, f"{graph_name}_hitting_heatmap.png")
+    png_path = os.path.join(variant_dir, "hitting_heatmap.png")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
     print(f"Heatmap saved to {png_path}")
