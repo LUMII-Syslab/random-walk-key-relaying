@@ -1,6 +1,12 @@
 """
 Measures transmission throughput of random walk key relaying in a QKD network.
 
+Usage:
+    python throughput.py --mode sim       # Run simulations only (PyPy-compatible) -> raw/
+    python throughput.py --mode info      # Derive info from raw data -> info/
+    python throughput.py --mode charts    # Generate visualizations -> charts/
+    python throughput.py --mode all       # Run all phases (default)
+
 Notes / fixes:
 - Throughput over a window is a scaled COUNT of arrivals in that window.
   If arrivals were Poisson, counts ~ Poisson, throughput is scaled Poisson (discrete, skewed if mean small).
@@ -10,22 +16,25 @@ Notes / fixes:
     (2) non-overlapping-window throughput samples (for distribution/statistics)
 """
 
-from dataclasses import dataclass, asdict
 import argparse
 import json
-import random
 import os
-from heapq import heappush as push, heappop as pop
-import csv
-from collections import defaultdict
-from random import choice
-from typing import Literal
-import analysis
 import signal
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-random.seed(2026)
+# Import simulation module (pure Python, PyPy-compatible)
+from simulate import (
+    SimConfig,
+    RelayNetwork,
+    SimulationResult,
+    run_simulation,
+    run_pairwise_simulations,
+    run_hop_analysis,
+    HEATMAP_NODES,
+    HOP_ANALYSIS_SOURCES,
+    GRAPH_PAIRS,
+)
 
 # Runtime settings (set by --quick flag)
 QUICK_MODE = False
@@ -34,15 +43,6 @@ DPI = 150
 HEATMAP_SIM_DURATION = 100.0
 HOP_SIM_DURATION = 100.0
 
-# RANDOM WALK SIMULATION PARAMETERS
-KEY_SIZE = 256  # bits per delivered key
-NODE_BUFF_KEYS = 100000  # buffer capacity in *keys* (not bits)
-LINK_BUFF_BITS = 100000  # reservable key material on a link (bits)
-LINKS_EMPTY_AT_START = True
-QKD_SKR = 1000  # secure key generation rate on each link (bits/s)
-LATENCY = 0.05  # seconds 
-SIM_DURATION = 1000.0  # seconds
-
 # VISUALIZATION AND ANALYSIS PARAMETERS
 TICK_INTERVAL = 10  # seconds between throughput measurements (sliding window)
 WINDOW_SIZE = 5.0  # seconds for sliding window throughput
@@ -50,348 +50,505 @@ HIST_BIN_WIDTH = 100.0  # bits/s bins for histogram (non-overlapping samples)
 MIN_KEYS_IN_WINDOW = 1  # min keys in window before recording sliding throughput
 BURN_IN = 0 * WINDOW_SIZE  # ignore early transient in stats
 
-class Node:
-    def __init__(self, name: str):
-        self.name = name
-        self.waiting = []  # FIFO list of senders waiting for buffer
-        self.buffer_space = NODE_BUFF_KEYS  # capacity in keys
 
-
-class Link:
-    def __init__(self, src: str, tgt: str, skr: float, latency: float):
-        self.src = src
-        self.tgt = tgt
-        self.skr = skr
-        self.latency = latency
-        self.bit_balance = 0.0
-        if not LINKS_EMPTY_AT_START:
-            self.bit_balance = float(LINK_BUFF_BITS)
-        self.last_request = 0.0
-
-    def reserve(self, current_time: float, necessary_bits: int) -> float:
-        """
-        Reserve necessary bits for OTP on this link.
-        Returns waiting time until the reservation will be satisfied.
-        """
-        if current_time < self.last_request:
-            raise ValueError(
-                f"current_time {current_time} < last_request {self.last_request}"
-            )
-        if necessary_bits > LINK_BUFF_BITS:
-            raise ValueError(
-                f"necessary_bits {necessary_bits} > LINK_BUFF_BITS {LINK_BUFF_BITS}"
-            )
-
-        time_delta = current_time - self.last_request
-        self.bit_balance += time_delta * self.skr
-
-        waiting_time = max(0.0, (necessary_bits - self.bit_balance) / self.skr)
-
-        # IMPORTANT: last_request is the time we *issued* the reservation, not when it's fulfilled.
-        self.last_request = current_time
-        self.bit_balance -= necessary_bits
-        return waiting_time
-
-@dataclass
-class Packet:
-    history: list[str] # includes source and destination nodes
-    started_at: float
-    finished_at: float | None
-
-    def __lt__(self, other: 'Packet') -> bool:
-        return self.started_at < other.started_at
-
-def choose_next(p: Packet, neighbours: list[str], variant: Literal["random", "nonbacktracking", "lrv"]) -> str:
-    if len(neighbours) == 1: return neighbours[0]
-    assert len(neighbours) > 1
-    if variant == "random": return choice(neighbours)
-    elif variant == "nonbacktracking":
-        if len(p.history) < 2:
-            return choice(neighbours)
-        prev_node = p.history[-2]
-        other_nodes = [n for n in neighbours if n != prev_node]
-        if not other_nodes:
-            return prev_node
-        return choice(other_nodes)
-    elif variant == "lrv":
-        assert len(p.history) > 0 # it should always contain the source node
-        last_idx = {node: i for i, node in enumerate(p.history)}
-        unvisited = [n for n in neighbours if n not in last_idx]
-        if unvisited:
-            return choice(unvisited)
-        min_idx = min(last_idx[n] for n in neighbours)
-        lrv = [n for n in neighbours if last_idx[n] == min_idx]
-        return choice(lrv)
-    else:
-        raise ValueError(f"Invalid variant: {variant}")
-
-class RelayNetwork:  # bidirected graph
-    def __init__(
-        self,
-        node_list_csv: str,
-        edge_list_csv: str,
-        skr: float = QKD_SKR,
-        latency: float = LATENCY,
-    ):
-        self.nodes: dict[str, Node] = {}
-        self.adj_list: dict[str, list[str]] = defaultdict(list)
-        self.edges: dict[tuple[str, str], Link] = {}
-        self._node_ids: list[str] = []
-        self._edge_pairs: list[tuple[str, str]] = []
-
-        with open(node_list_csv, "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                node_id = row.get("Id") or row.get("ID") or row.get("id")
-                if not node_id:
-                    raise ValueError("Node CSV missing Id column")
-                self.nodes[node_id] = Node(node_id)
-                self._node_ids.append(node_id)
-
-        with open(edge_list_csv, "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                src, tgt = row["Source"], row["Target"]
-                if src not in self.nodes:
-                    self.nodes[src] = Node(src)
-                    self._node_ids.append(src)
-                if tgt not in self.nodes:
-                    self.nodes[tgt] = Node(tgt)
-                    self._node_ids.append(tgt)
-                self.adj_list[src].append(tgt)
-                self.adj_list[tgt].append(src)
-                key = (min(src, tgt), max(src, tgt))
-                if key not in self.edges:
-                    self.edges[key] = Link(src, tgt, skr, latency)
-                    self._edge_pairs.append((src, tgt))
-
-    def get_node(self, id: str) -> Node:
-        return self.nodes[id]
-
-    def get_edge(self, src: str, tgt: str) -> Link:
-        return self.edges[(min(src, tgt), max(src, tgt))]
-
-    def get_neighbours(self, id: str) -> list[str]:
-        return self.adj_list[id]
-
-    def node_ids(self) -> list[str]:
-        return list(self._node_ids)
-
-    def reset(self) -> None:
-        self.nodes = {node_id: Node(node_id) for node_id in self._node_ids}
-        self.adj_list = defaultdict(list)
-        self.edges = {}
-        for src, tgt in self._edge_pairs:
-            self.adj_list[src].append(tgt)
-            self.adj_list[tgt].append(src)
-            key = (min(src, tgt), max(src, tgt))
-            if key not in self.edges:
-                self.edges[key] = Link(src, tgt, QKD_SKR, LATENCY)
-
-
-def simulate_single_pair(
-    graph: RelayNetwork,
-    S: str,
-    T: str,
-    sim_duration: float | None = None,
-    variant: Literal["random", "nonbacktracking", "lrv"] = "random",
-    max_packets: int | None = None,
-) -> list[Packet]:
-    """
-    Simulate packet transmission from S to T.
-    Stop when sim_duration is exceeded OR max_packets are gathered (whichever comes first).
-    At least one of sim_duration or max_packets must be provided.
-    """
-    if sim_duration is None and max_packets is None:
-        raise ValueError("At least one of sim_duration or max_packets must be provided")
+def run_all_simulations(args, graphs, variants, output_base: str, sim_duration: float):
+    """Run all simulations and save results to JSON files."""
+    import random
+    random.seed(2026)
     
-    events = []
-    nodes = graph.nodes
-
-    for _ in range(NODE_BUFF_KEYS):
-        new_packet = Packet(history=[S], started_at=0.0, finished_at=None)
-        chosen_neighbour = choose_next(new_packet, graph.get_neighbours(S), variant)
-        waiting_time = graph.get_edge(S, chosen_neighbour).reserve(0.0, KEY_SIZE)
-        nodes[S].buffer_space -= 1
-        push(
-            events,
-            (0.0 + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)),
-        )
-
-    # packets with arrival times and history
-    arrived_packets: list[Packet] = []
-
-    while events: # non-decreasing time event loop
-        time, e = pop(events)
-        if sim_duration is not None and time > sim_duration:
-            break
-        if max_packets is not None and len(arrived_packets) >= max_packets:
-            break
-
-        et = e[0] # event type
-        p:Packet = e[3] # packet
-
-        if et == "link_ready": # self-notification that material is retrieved
-            me, neighbour = e[1], e[2]
-            push(events, (time + LATENCY, ("rcv_ready", me, neighbour, p)))
-        elif et == "rcv_ready": # sender received OTP key material from link
-            # now we have to ensure that buffer has enough space
-            # if not, append to waiting list of this node
-            src, me = e[1], e[2]
-            if nodes[me].buffer_space > 0: # buffer has space for key
-                nodes[me].buffer_space -= 1
-                push(events, (time + LATENCY, ("rcv_can_send", me, src, p)))
-            else:
-                nodes[me].waiting.append((src, p))
-
-        elif et == "rcv_can_send":
-            me, target = e[2], e[1]
-            push(events, (time + LATENCY, ("rcv_key", me, target, p)))
-            nodes[me].buffer_space += 1
-
-            if nodes[me].waiting:
-                next_waiting, next_packet = nodes[me].waiting.pop(0)
-                nodes[me].buffer_space -= 1
-                push(events, (time + LATENCY, ("rcv_can_send", me, next_waiting, next_packet)))
-            elif me == S:
-                new_packet = Packet(history=[S], started_at=time, finished_at=None)
-                chosen_neighbour = choose_next(new_packet, graph.get_neighbours(S), variant)
-                nodes[S].buffer_space -= 1
-                waiting_time = graph.get_edge(S, chosen_neighbour).reserve(time, KEY_SIZE)
-                push(
-                    events,
-                    (time + waiting_time, ("link_ready", S, chosen_neighbour, new_packet)),
+    for name, nodes_csv, edges_csv in graphs:
+        if name not in GRAPH_PAIRS:
+            print(f"{name}: missing S/T pair")
+            continue
+        S, T = GRAPH_PAIRS[name]
+        
+        output_dir = os.path.join(output_base, name)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        config = SimConfig(sim_duration=sim_duration)
+        graph = RelayNetwork(nodes_csv, edges_csv, config=config)
+        
+        if S not in graph.nodes or T not in graph.nodes:
+            print(f"{name}: S/T not in node list ({S}, {T})")
+            continue
+        
+        print(f"\n{'='*60}")
+        print(f"{name}: S={S}, T={T}")
+        print(f"{'='*60}")
+        
+        # Main throughput simulations for all variants
+        for variant in variants:
+            print(f"\n[{name}/{variant}] Running main throughput simulation...")
+            result, config = run_simulation(graph, S, T, variant, name)
+            
+            variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
+            raw_dir = os.path.join(output_dir, variant_prefix, "raw")
+            os.makedirs(raw_dir, exist_ok=True)
+            
+            # Save config
+            config_path = os.path.join(raw_dir, "config.json")
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+            
+            # Save simulation result (raw data only)
+            result_path = os.path.join(raw_dir, "simulation_result.json")
+            result.save(result_path)
+            print(f"  -> Saved {len(result.arrival_times)} arrivals to {result_path}")
+        
+        # Pairwise metrics (for geant and nsfnet only) - all variants
+        if name in HEATMAP_NODES:
+            heatmap_duration = HEATMAP_SIM_DURATION if not args.quick else 10.0
+            
+            for heatmap_variant in variants:
+                variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[heatmap_variant]
+                print(f"\n[{name}/{variant_prefix}] Running pairwise simulations...")
+                config_heatmap = SimConfig(sim_duration=heatmap_duration)
+                graph_heatmap = RelayNetwork(nodes_csv, edges_csv, config=config_heatmap)
+                
+                pairwise_results = run_pairwise_simulations(
+                    graph_heatmap,
+                    selected_nodes=HEATMAP_NODES[name],
+                    variant=heatmap_variant,
+                    sim_duration=heatmap_duration,
+                    graph_name=name,
+                    parallel=not args.no_parallel,
+                    num_workers=args.workers,
                 )
-
-        elif et == "rcv_key":
-            src: str = e[1]
-            tgt: str = e[2]
-            p.history.append(tgt)
-            if tgt == T:
-                p.finished_at = time
-                arrived_packets.append(p)
-                nodes[T].buffer_space += 1
-                if nodes[T].waiting:
-                    next_waiting = nodes[T].waiting.pop(0)
-                    nodes[T].buffer_space -= 1
-                    push(events, (time + LATENCY, ("rcv_can_send", T, next_waiting)))
-            else:
-                me = tgt
-                chosen_neighbour = choose_next(p, graph.get_neighbours(me), variant)
-                waiting_time = graph.get_edge(me, chosen_neighbour).reserve(time, KEY_SIZE)
-                push(
-                    events,
-                    (time + waiting_time, ("link_ready", me, chosen_neighbour, p)),
+                
+                raw_dir = os.path.join(output_dir, variant_prefix, "raw")
+                os.makedirs(raw_dir, exist_ok=True)
+                
+                pairwise_path = os.path.join(raw_dir, "pairwise_results.json")
+                with open(pairwise_path, "w") as f:
+                    json.dump(pairwise_results, f, indent=2)
+                print(f"  -> Saved pairwise results to {pairwise_path}")
+        
+        # Hop count analysis (all variants)
+        if name in HOP_ANALYSIS_SOURCES:
+            hop_source = HOP_ANALYSIS_SOURCES[name]
+            hop_duration = HOP_SIM_DURATION if not args.quick else 10.0
+            
+            for hop_variant in variants:
+                print(f"\n[{name}/{hop_variant}] Running hop analysis from {hop_source}...")
+                config_hop = SimConfig(sim_duration=hop_duration)
+                graph_hop = RelayNetwork(nodes_csv, edges_csv, config=config_hop)
+                
+                hop_results = run_hop_analysis(
+                    graph_hop,
+                    source=hop_source,
+                    variant=hop_variant,
+                    sim_duration=hop_duration,
+                    parallel=not args.no_parallel,
+                    num_workers=args.workers,
                 )
-
-    return arrived_packets
-
-
-def generate_paths_for_all_pairs(
-    graph: RelayNetwork,
-    variant: Literal["random", "nonbacktracking", "lrv"],
-    output_dir: str,
-    num_packets: int = 32,
-) -> None:
-    """
-    Generate example paths for all pairs of nodes and save to JSONL files.
-    Files are saved to output_dir/<variant>/paths/<src>-<tgt>.jsonl (lowercase, sorted order).
-    """
-    variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
-    paths_dir = os.path.join(output_dir, variant_prefix, "paths")
-    os.makedirs(paths_dir, exist_ok=True)
+                
+                variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[hop_variant]
+                raw_dir = os.path.join(output_dir, variant_prefix, "raw")
+                os.makedirs(raw_dir, exist_ok=True)
+                
+                hop_path = os.path.join(raw_dir, "hop_results.json")
+                with open(hop_path, "w") as f:
+                    json.dump({"source": hop_source, "results": hop_results}, f, indent=2)
+                print(f"  -> Saved hop results to {hop_path}")
     
-    node_ids = graph.node_ids()
-    pairs_done = set()
+    print(f"\n{'='*60}")
+    print("All simulations complete!")
+    print(f"{'='*60}")
+
+
+def run_derivations(graphs, variants, output_base: str):
+    """Derive info from raw simulation results. Reads from raw/, writes to info/."""
+    import analysis
+    import csv
     
-    for src in node_ids:
-        for tgt in node_ids:
-            if src == tgt:
+    for name, nodes_csv, edges_csv in graphs:
+        if name not in GRAPH_PAIRS:
+            continue
+        S, T = GRAPH_PAIRS[name]
+        
+        output_dir = os.path.join(output_base, name)
+        
+        print(f"\n{'='*60}")
+        print(f"{name}: Deriving info from raw data")
+        print(f"{'='*60}")
+        
+        for variant in variants:
+            variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
+            variant_dir = os.path.join(output_dir, variant_prefix)
+            raw_dir = os.path.join(variant_dir, "raw")
+            info_dir = os.path.join(variant_dir, "info")
+            os.makedirs(info_dir, exist_ok=True)
+            
+            # Load config
+            config_path = os.path.join(raw_dir, "config.json")
+            if not os.path.exists(config_path):
+                print(f"  [{variant}] No config found at {config_path}")
                 continue
-            # canonical pair order to avoid duplicates (src-tgt and tgt-src)
-            pair_key = tuple(sorted([src, tgt]))
-            if pair_key in pairs_done:
-                continue
-            pairs_done.add(pair_key)
             
-            # reset graph state for each pair
-            graph.reset()
+            with open(config_path, "r") as f:
+                raw_config = json.load(f)
             
-            # simulate to get num_packets arrivals
-            arrived = simulate_single_pair(
-                graph, src, tgt, variant=variant, max_packets=num_packets
-            )
+            # === Throughput analysis ===
+            result_path = os.path.join(raw_dir, "simulation_result.json")
+            if os.path.exists(result_path):
+                print(f"\n[{name}/{variant}] Deriving throughput info...")
+                result = SimulationResult.load(result_path)
+                
+                analysis_config = {
+                    "KEY_SIZE": raw_config["key_size"],
+                    "NODE_BUFF_KEYS": raw_config["node_buff_keys"],
+                    "LINK_BUFF_BITS": raw_config["link_buff_bits"],
+                    "LINKS_EMPTY_AT_START": raw_config["links_empty_at_start"],
+                    "QKD_SKR": raw_config["qkd_skr"],
+                    "LATENCY": raw_config["latency"],
+                    "TICK_INTERVAL": TICK_INTERVAL,
+                    "WINDOW_SIZE": WINDOW_SIZE,
+                    "SIM_DURATION": raw_config["sim_duration"],
+                    "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
+                    "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
+                    "BURN_IN": BURN_IN,
+                    "S": S,
+                    "T": T,
+                    "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[variant],
+                    "VARIANT_LONG": variant,
+                    "GRAPH": name,
+                    "nodes_count": raw_config.get("nodes_count", 0),
+                    "edges_count": raw_config.get("edges_count", 0),
+                }
+                
+                arrival_times = result.arrival_times
+                analyzer = analysis.Analyzer(analysis_config)
+                summary = analyzer.compute_summary(arrival_times)
+                arrival = analyzer.compute_arrival_metrics(arrival_times, summary)
+                non_overlapping = analyzer.compute_non_overlapping_throughput(arrival_times)
+                sliding = analyzer.compute_sliding_window_metrics(arrival_times)
+                log_domain = analyzer.compute_log_domain_metrics(non_overlapping.thr_bins)
+                
+                # Save throughput.txt (human-readable)
+                analyzer.print_summary(
+                    summary, arrival, non_overlapping, sliding, log_domain,
+                    summary_path=os.path.join(info_dir, "throughput.txt"),
+                )
+                
+                # Save throughput.json (machine-readable)
+                throughput_data = {
+                    "total_keys": summary.total_keys,
+                    "total_bits": summary.total_bits,
+                    "mean_iat": arrival.mean_iat if summary.has_enough_arrivals else None,
+                    "cv_iat": arrival.cv_iat if summary.has_enough_arrivals else None,
+                    "rate_keys": arrival.rate_keys if summary.has_enough_arrivals else None,
+                    "rate_bits": arrival.rate_bits if summary.has_enough_arrivals else None,
+                    "median_throughput": non_overlapping.median_thr if summary.has_enough_arrivals else None,
+                    "mean_throughput": non_overlapping.mean_thr if summary.has_enough_arrivals else None,
+                    "p05": non_overlapping.p05 if summary.has_enough_arrivals else None,
+                    "p95": non_overlapping.p95 if summary.has_enough_arrivals else None,
+                }
+                with open(os.path.join(info_dir, "throughput.json"), "w") as f:
+                    json.dump(throughput_data, f, indent=2)
+                
+                # Save visits info (derived from simulation_result)
+                print(f"  -> Deriving visit info...")
+                visit_data = compute_visit_from_simulation(result, S, T)
+                
+                with open(os.path.join(info_dir, "visits.json"), "w") as f:
+                    json.dump(visit_data, f, indent=2)
+                
+                # Save visits.txt
+                with open(os.path.join(info_dir, "visits.txt"), "w") as f:
+                    f.write(f"Edge & Node Visit Analysis: {name.upper()}\n")
+                    f.write(f"Source: {S}, Target: {T}\n")
+                    f.write(f"Variant: {variant}\n")
+                    f.write(f"Total packets: {visit_data['total_packets']}\n")
+                    f.write(f"{'='*60}\n\n")
+                    f.write("Edge Multiplicity (expected visits per packet, ascending):\n")
+                    f.write(f"{'-'*40}\n")
+                    for edge, mult in sorted(visit_data['edge_multiplicity'].items(), key=lambda x: x[1]):
+                        f.write(f"  {edge}: {mult:.4f}\n")
+                    f.write(f"\nNode Hitting Probability (excludes {S}, {T}, ascending):\n")
+                    f.write(f"{'-'*40}\n")
+                    for node, prob in sorted(visit_data['node_hitting_prob'].items(), key=lambda x: x[1]):
+                        f.write(f"  {node}: {prob:.4f}\n")
+                print(f"  -> Saved visits.json and visits.txt")
             
-            # write to jsonl file
-            filename = f"{src.lower()}-{tgt.lower()}.jsonl"
-            filepath = os.path.join(paths_dir, filename)
+            # === Pairwise analysis ===
+            pairwise_path = os.path.join(raw_dir, "pairwise_results.json")
+            if os.path.exists(pairwise_path):
+                print(f"\n[{name}/{variant}] Deriving pairwise info...")
+                with open(pairwise_path, "r") as f:
+                    pairwise_results = json.load(f)
+                
+                # Compute summary metrics (without packet_data for smaller file)
+                pairwise_summary = []
+                for r in pairwise_results:
+                    pairwise_summary.append({
+                        "source": r["source"],
+                        "target": r["target"],
+                        "throughput_kbps": r["throughput_kbps"],
+                        "mean_hops": r["mean_hops"],
+                        "packets": r["packets"],
+                    })
+                
+                # Save pairwise.json
+                with open(os.path.join(info_dir, "pairwise.json"), "w") as f:
+                    json.dump(pairwise_summary, f, indent=2)
+                
+                # Save pairwise.csv
+                with open(os.path.join(info_dir, "pairwise.csv"), "w", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=["source", "target", "throughput_kbps", "mean_hops", "packets"])
+                    writer.writeheader()
+                    writer.writerows(pairwise_summary)
+                
+                # Compute correlation
+                import numpy as np
+                valid = [(r["throughput_kbps"], r["mean_hops"]) for r in pairwise_summary 
+                         if r["throughput_kbps"] > 0 and not np.isnan(r["mean_hops"])]
+                if len(valid) > 2:
+                    t_vals, h_vals = zip(*valid)
+                    mean_t, mean_h = np.mean(t_vals), np.mean(h_vals)
+                    cov = sum((t - mean_t) * (h - mean_h) for t, h in valid)
+                    std_t = np.std(t_vals) * len(t_vals)
+                    std_h = np.std(h_vals) * len(h_vals)
+                    pearson_r = cov / (std_t * std_h) if std_t > 0 and std_h > 0 else 0
+                else:
+                    pearson_r = float('nan')
+                
+                # Save pairwise.txt
+                with open(os.path.join(info_dir, "pairwise.txt"), "w") as f:
+                    f.write(f"Pairwise Metrics: {name.upper()}\n")
+                    f.write(f"Variant: {variant}\n")
+                    f.write(f"{'='*70}\n\n")
+                    f.write(f"Correlation (Pearson r) between throughput and hop count: {pearson_r:.4f}\n")
+                    f.write(f"  (negative = higher hops -> lower throughput, as expected)\n\n")
+                    f.write(f"{'Source':<8} {'Target':<8} {'Throughput':>12} {'Mean hops':>10} {'Packets':>8}\n")
+                    f.write(f"{'-'*70}\n")
+                    for r in pairwise_summary:
+                        f.write(f"{r['source']:<8} {r['target']:<8} {r['throughput_kbps']:>10.2f}  "
+                               f"{r['mean_hops']:>10.2f} {r['packets']:>8}\n")
+                
+                # Derive hitting info from pairwise
+                print(f"  -> Deriving hitting info...")
+                hitting_results = compute_hitting_from_pairwise(pairwise_results)
+                
+                with open(os.path.join(info_dir, "hitting.json"), "w") as f:
+                    json.dump(hitting_results, f, indent=2)
+                
+                # Save hitting.txt
+                selected_nodes = HEATMAP_NODES.get(name, [])
+                with open(os.path.join(info_dir, "hitting.txt"), "w") as f:
+                    f.write(f"Max Hitting Node Heatmap: {name.upper()}\n")
+                    f.write(f"Variant: {variant}\n")
+                    f.write(f"{'='*70}\n\n")
+                    f.write(f"{'Source':<8} {'Target':<8} {'MaxHitNode':<12} {'Prob':>8} {'Packets':>8}\n")
+                    f.write(f"{'-'*60}\n")
+                    for r in hitting_results:
+                        f.write(f"{r['source']:<8} {r['target']:<8} {r['max_hitting_node']:<12} "
+                               f"{r['max_hitting_prob']:>8.4f} {r['packets']:>8}\n")
+                
+                print(f"  -> Saved pairwise.json, pairwise.csv, pairwise.txt, hitting.json, hitting.txt")
             
-            with open(filepath, 'w') as f:
-                for packet in arrived[:num_packets]:
-                    record = {
-                        "started_at": packet.started_at,
-                        "finished_at": packet.finished_at,
-                        "history": packet.history,
-                    }
-                    f.write(json.dumps(record) + "\n")
-            
-            print(f"  {src}-{tgt}: {len(arrived)} packets -> {filename}")
-
-
-def main(
-    graph: RelayNetwork,
-    S: str,
-    T: str,
-    config: dict[str, object],
-    output_dir: str = "out",
-):
-    variant = config["VARIANT_LONG"]
-    arrived_packets = simulate_single_pair(
-        graph, S, T, config["SIM_DURATION"], variant=variant
-    )
-    arrival_times = [p.finished_at for p in arrived_packets if p.finished_at is not None]
-    print(f"# of arrivals: {len(arrival_times)}")
-    print("Simulation complete")
-
-    analyzer = analysis.Analyzer(config)
-    summary = analyzer.compute_summary(arrival_times)
-    arrival = analyzer.compute_arrival_metrics(arrival_times, summary)
-    non_overlapping = analyzer.compute_non_overlapping_throughput(arrival_times)
-    sliding = analyzer.compute_sliding_window_metrics(arrival_times)
-    log_domain = analyzer.compute_log_domain_metrics(non_overlapping.thr_bins)
-
-    # Create variant subdirectory
-    variant_dir = os.path.join(output_dir, str(config['VARIANT']).lower())
-    os.makedirs(variant_dir, exist_ok=True)
+            # === Hop analysis ===
+            hop_path = os.path.join(raw_dir, "hop_results.json")
+            if os.path.exists(hop_path):
+                print(f"\n[{name}/{variant}] Deriving hop info...")
+                with open(hop_path, "r") as f:
+                    hop_data = json.load(f)
+                
+                hop_source = hop_data["source"]
+                hop_results = hop_data["results"]
+                
+                # Sort by mean hops
+                import numpy as np
+                hop_results_sorted = sorted(hop_results, 
+                    key=lambda x: x["mean_hops"] if not np.isnan(x["mean_hops"]) else float('inf'))
+                
+                # Save hops.json
+                with open(os.path.join(info_dir, "hops.json"), "w") as f:
+                    json.dump({"source": hop_source, "results": hop_results_sorted}, f, indent=2)
+                
+                # Save hops.csv
+                with open(os.path.join(info_dir, "hops.csv"), "w", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=["destination", "mean_hops", "std_hops", "min_hops", "max_hops", "packets"])
+                    writer.writeheader()
+                    for r in hop_results_sorted:
+                        writer.writerow({
+                            "destination": r["destination"],
+                            "mean_hops": r["mean_hops"],
+                            "std_hops": r["std_hops"],
+                            "min_hops": r["min_hops"],
+                            "max_hops": r["max_hops"],
+                            "packets": r["packets"],
+                        })
+                
+                # Save hops.txt
+                with open(os.path.join(info_dir, "hops.txt"), "w") as f:
+                    f.write(f"Hop Count Analysis: {name.upper()}\n")
+                    f.write(f"Source: {hop_source}\n")
+                    f.write(f"Variant: {variant}\n")
+                    f.write(f"{'='*60}\n\n")
+                    f.write(f"{'Destination':<12} {'Mean':>8} {'Std':>8} {'Min':>6} {'Max':>6} {'Packets':>8}\n")
+                    f.write(f"{'-'*60}\n")
+                    for r in hop_results_sorted:
+                        f.write(f"{r['destination']:<12} {r['mean_hops']:>8.2f} {r['std_hops']:>8.2f} "
+                               f"{r['min_hops']:>6} {r['max_hops']:>6} {r['packets']:>8}\n")
+                
+                print(f"  -> Saved hops.json, hops.csv, hops.txt")
     
-    analyzer.print_summary(
-        summary,
-        arrival,
-        non_overlapping,
-        sliding,
-        log_domain,
-        summary_path=os.path.join(variant_dir, "throughput_summary.txt"),
-    )
-    plot_all(
-        summary,
-        sliding,
-        non_overlapping,
-        config,
-        output_path=os.path.join(variant_dir, "throughput.png"),
-        output_dir=variant_dir,
-        show=False,
-    )
+    print(f"\n{'='*60}")
+    print("All derivations complete!")
+    print(f"{'='*60}")
+
+
+def run_visualizations(args, graphs, variants, output_base: str, dpi: int):
+    """Generate charts from info/ data. Reads from info/, writes to charts/."""
+    import analysis
+    
+    for name, nodes_csv, edges_csv in graphs:
+        if name not in GRAPH_PAIRS:
+            continue
+        S, T = GRAPH_PAIRS[name]
+        
+        output_dir = os.path.join(output_base, name)
+        
+        print(f"\n{'='*60}")
+        print(f"{name}: Generating charts")
+        print(f"{'='*60}")
+        
+        for variant in variants:
+            variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
+            variant_dir = os.path.join(output_dir, variant_prefix)
+            raw_dir = os.path.join(variant_dir, "raw")
+            info_dir = os.path.join(variant_dir, "info")
+            charts_dir = os.path.join(variant_dir, "charts")
+            os.makedirs(charts_dir, exist_ok=True)
+            
+            # Load config
+            config_path = os.path.join(raw_dir, "config.json")
+            if not os.path.exists(config_path):
+                print(f"  [{variant}] No config found at {config_path}")
+                continue
+            
+            with open(config_path, "r") as f:
+                raw_config = json.load(f)
+            
+            # === Throughput charts ===
+            result_path = os.path.join(raw_dir, "simulation_result.json")
+            if os.path.exists(result_path):
+                print(f"\n[{name}/{variant}] Generating throughput charts...")
+                result = SimulationResult.load(result_path)
+                
+                plot_config = {
+                    "KEY_SIZE": raw_config["key_size"],
+                    "NODE_BUFF_KEYS": raw_config["node_buff_keys"],
+                    "LINK_BUFF_BITS": raw_config["link_buff_bits"],
+                    "LINKS_EMPTY_AT_START": raw_config["links_empty_at_start"],
+                    "QKD_SKR": raw_config["qkd_skr"],
+                    "LATENCY": raw_config["latency"],
+                    "TICK_INTERVAL": TICK_INTERVAL,
+                    "WINDOW_SIZE": WINDOW_SIZE,
+                    "SIM_DURATION": raw_config["sim_duration"],
+                    "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
+                    "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
+                    "BURN_IN": BURN_IN,
+                    "S": S,
+                    "T": T,
+                    "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[variant],
+                    "VARIANT_LONG": variant,
+                    "GRAPH": name,
+                    "DPI": dpi,
+                    "nodes_count": raw_config.get("nodes_count", 0),
+                    "edges_count": raw_config.get("edges_count", 0),
+                }
+                
+                arrival_times = result.arrival_times
+                print(f"  # of arrivals: {len(arrival_times)}")
+                
+                analyzer = analysis.Analyzer(plot_config)
+                summary = analyzer.compute_summary(arrival_times)
+                non_overlapping = analyzer.compute_non_overlapping_throughput(arrival_times)
+                sliding = analyzer.compute_sliding_window_metrics(arrival_times)
+                
+                plot_all(
+                    summary, sliding, non_overlapping, plot_config,
+                    output_path=os.path.join(charts_dir, "throughput.png"),
+                    output_dir=charts_dir,
+                    show=False,
+                )
+            
+            # === Pairwise heatmaps ===
+            pairwise_info_path = os.path.join(info_dir, "pairwise.json")
+            if name in HEATMAP_NODES and os.path.exists(pairwise_info_path):
+                print(f"\n[{name}/{variant}] Generating pairwise heatmaps...")
+                with open(pairwise_info_path, "r") as f:
+                    pairwise_data = json.load(f)
+                visualize_pairwise_heatmaps(
+                    pairwise_data,
+                    selected_nodes=HEATMAP_NODES[name],
+                    output_dir=charts_dir,
+                    graph_name=name,
+                    variant=variant,
+                    dpi=dpi,
+                )
+                
+                # Hitting heatmap
+                hitting_info_path = os.path.join(info_dir, "hitting.json")
+                if os.path.exists(hitting_info_path):
+                    print(f"  -> Generating hitting heatmap...")
+                    with open(hitting_info_path, "r") as f:
+                        hitting_data = json.load(f)
+                    visualize_hitting_heatmap(
+                        hitting_data,
+                        selected_nodes=HEATMAP_NODES[name],
+                        output_dir=charts_dir,
+                        graph_name=name,
+                        variant=variant,
+                        dpi=dpi,
+                    )
+            
+            # === Hop count chart ===
+            hops_info_path = os.path.join(info_dir, "hops.json")
+            if os.path.exists(hops_info_path):
+                print(f"\n[{name}/{variant}] Generating hop count chart...")
+                with open(hops_info_path, "r") as f:
+                    hops_data = json.load(f)
+                visualize_hop_counts(
+                    hops_data["results"],
+                    source=hops_data["source"],
+                    output_dir=charts_dir,
+                    graph_name=name,
+                    variant=variant,
+                    dpi=dpi,
+                )
+            
+            # === Visit charts ===
+            visits_info_path = os.path.join(info_dir, "visits.json")
+            if os.path.exists(visits_info_path):
+                print(f"\n[{name}/{variant}] Generating visit charts...")
+                with open(visits_info_path, "r") as f:
+                    visits_data = json.load(f)
+                visualize_edge_node_visits(
+                    visits_data,
+                    output_dir=charts_dir,
+                    graph_name=name,
+                    variant=variant,
+                    dpi=dpi,
+                )
+    
+    print(f"\n{'='*60}")
+    print("All charts complete!")
+    print(f"{'='*60}")
 
 
 def plot_all(
-    summary: analysis.Summary,
-    sliding: analysis.SlidingWindowSeries,
-    non_overlapping: analysis.NonOverlappingThroughput,
-    config: dict[str, object],
+    summary,
+    sliding,
+    non_overlapping,
+    config: dict,
     output_path: str | None = "throughput.png",
     output_dir: str = "out",
     show: bool = True,
 ):
+    import analysis
+    
     if not summary.has_enough_arrivals:
         return None, None
 
@@ -413,7 +570,7 @@ def plot_all(
     if show:
         plt.show()
     if output_path:
-        print(f"\nPlot saved to {output_path}")
+        print(f"  Plot saved to {output_path}")
 
     os.makedirs(output_dir, exist_ok=True)
     _save_single_plot(
@@ -439,384 +596,249 @@ def _save_single_plot(plot_fn, path: str, dpi: int = 150) -> None:
     plt.close(fig)
 
 
-def generate_pairwise_metrics(
-    graph: RelayNetwork,
-    selected_nodes: list[str],
-    variant: Literal["random", "nonbacktracking", "lrv"],
-    sim_duration: float,
+def compute_hitting_from_pairwise(pairwise_results: list) -> list:
+    """Compute max hitting node for each pair from pairwise packet data."""
+    from collections import Counter
+    
+    results = []
+    for r in pairwise_results:
+        src, tgt = r["source"], r["target"]
+        packet_data = r.get("packet_data", [])
+        
+        if not packet_data:
+            results.append({
+                "source": src,
+                "target": tgt,
+                "max_hitting_node": "",
+                "max_hitting_prob": float('nan'),
+                "packets": 0,
+            })
+            continue
+        
+        node_hit_counts = Counter()
+        for p in packet_data:
+            visited = set(p["history"])
+            for node in visited:
+                if node != src and node != tgt:
+                    node_hit_counts[node] += 1
+        
+        if node_hit_counts:
+            best_node = max(node_hit_counts.keys(), key=lambda n: node_hit_counts[n])
+            best_prob = node_hit_counts[best_node] / len(packet_data)
+        else:
+            best_node = "-"
+            best_prob = 0
+        
+        results.append({
+            "source": src,
+            "target": tgt,
+            "max_hitting_node": best_node,
+            "max_hitting_prob": best_prob,
+            "packets": len(packet_data),
+        })
+    
+    return results
+
+
+def compute_visit_from_simulation(result: SimulationResult, source: str, target: str) -> dict:
+    """Compute edge multiplicity and node hitting probability from simulation result."""
+    from collections import Counter
+    
+    packets = result.packets
+    total_packets = len(packets)
+    
+    if total_packets == 0:
+        return {
+            "source": source,
+            "target": target,
+            "total_packets": 0,
+            "edge_multiplicity": {},
+            "node_hitting_prob": {},
+        }
+    
+    edge_visit_counts = Counter()
+    node_hit_counts = Counter()
+    
+    for p in packets:
+        history = p["history"]
+        visited_nodes = set()
+        
+        # Count edge traversals
+        for k in range(len(history) - 1):
+            edge = tuple(sorted([history[k], history[k + 1]]))
+            edge_visit_counts[edge] += 1
+        
+        # Count node visits (excluding source and target)
+        for node in history:
+            if node != source and node != target:
+                visited_nodes.add(node)
+        for node in visited_nodes:
+            node_hit_counts[node] += 1
+    
+    edge_multiplicity = {f"{e[0]}-{e[1]}": c / total_packets for e, c in edge_visit_counts.items()}
+    node_hitting_prob = {n: c / total_packets for n, c in node_hit_counts.items()}
+    
+    return {
+        "source": source,
+        "target": target,
+        "total_packets": total_packets,
+        "edge_multiplicity": edge_multiplicity,
+        "node_hitting_prob": node_hitting_prob,
+    }
+
+
+def visualize_pairwise_heatmaps(
+    results: list,
+    selected_nodes: list,
     output_dir: str,
     graph_name: str,
+    variant: str,
     dpi: int = 150,
 ) -> None:
-    """
-    Generate heatmaps of throughput and hop counts between all pairs of selected nodes.
-    Computes correlation between the two metrics.
-    Saves CSV/TXT data and PNG visualizations to output_dir/<variant_prefix>/.
-    """
+    """Generate heatmaps from pairwise data (reads from info/)."""
     import matplotlib.pyplot as plt
     import numpy as np
     
-    # Create variant subdirectory
-    variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
-    variant_dir = os.path.join(output_dir, variant_prefix)
-    os.makedirs(variant_dir, exist_ok=True)
-    
     n = len(selected_nodes)
-    throughput_matrix = np.zeros((n, n))
-    hopcount_matrix = np.zeros((n, n))
+    throughput_matrix = np.full((n, n), np.nan)
+    hopcount_matrix = np.full((n, n), np.nan)
     
-    results = []
-    total_pairs = n * (n - 1)
-    pair_count = 0
+    node_to_idx = {node: i for i, node in enumerate(selected_nodes)}
     
-    for i, src in enumerate(selected_nodes):
-        for j, tgt in enumerate(selected_nodes):
-            if src == tgt:
-                throughput_matrix[i, j] = float('nan')
-                hopcount_matrix[i, j] = float('nan')
-                continue
-            
-            pair_count += 1
-            print(f"  [{pair_count}/{total_pairs}] {src} -> {tgt}...", end=" ", flush=True)
-            
-            graph.reset()
-            arrived = simulate_single_pair(
-                graph, src, tgt, sim_duration=sim_duration, variant=variant
-            )
-            
-            # throughput in kbit/s
-            if arrived:
-                last_arrival = max(p.finished_at for p in arrived if p.finished_at)
-                keys_per_sec = len(arrived) / last_arrival if last_arrival > 0 else 0
-                throughput_kbps = (keys_per_sec * KEY_SIZE) / 1000
-                # hop count = len(history) - 1
-                hop_counts = [len(p.history) - 1 for p in arrived]
-                mean_hops = sum(hop_counts) / len(hop_counts)
-            else:
-                throughput_kbps = 0
-                mean_hops = float('nan')
-            
-            throughput_matrix[i, j] = throughput_kbps
-            hopcount_matrix[i, j] = mean_hops
-            results.append({
-                "source": src, "target": tgt, 
-                "throughput_kbps": throughput_kbps, 
-                "mean_hops": mean_hops,
-                "packets": len(arrived)
-            })
-            print(f"{throughput_kbps:.2f} kbit/s, {mean_hops:.1f} hops ({len(arrived)} packets)")
-    
-    # Save CSV
-    csv_path = os.path.join(variant_dir, "pairwise.csv")
-    with open(csv_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=["source", "target", "throughput_kbps", "mean_hops", "packets"])
-        writer.writeheader()
-        writer.writerows(results)
-    print(f"\nCSV saved to {csv_path}")
-    
-    # Compute correlation between throughput and hop count
-    valid_throughputs = []
-    valid_hops = []
     for r in results:
-        if not np.isnan(r["mean_hops"]) and r["throughput_kbps"] > 0:
-            valid_throughputs.append(r["throughput_kbps"])
-            valid_hops.append(r["mean_hops"])
+        i = node_to_idx.get(r["source"])
+        j = node_to_idx.get(r["target"])
+        if i is not None and j is not None:
+            throughput_matrix[i, j] = r["throughput_kbps"]
+            hopcount_matrix[i, j] = r["mean_hops"]
     
-    if len(valid_throughputs) > 2:
-        # Pearson correlation
-        mean_t = sum(valid_throughputs) / len(valid_throughputs)
-        mean_h = sum(valid_hops) / len(valid_hops)
-        
-        cov = sum((t - mean_t) * (h - mean_h) for t, h in zip(valid_throughputs, valid_hops))
-        std_t = (sum((t - mean_t)**2 for t in valid_throughputs)) ** 0.5
-        std_h = (sum((h - mean_h)**2 for h in valid_hops)) ** 0.5
-        
-        pearson_r = cov / (std_t * std_h) if std_t > 0 and std_h > 0 else 0
-    else:
-        pearson_r = float('nan')
-    
-    # Save text summary
-    txt_path = os.path.join(variant_dir, "pairwise.txt")
-    with open(txt_path, 'w') as f:
-        f.write(f"Pairwise Metrics: {graph_name.upper()}\n")
-        f.write(f"Variant: {variant}\n")
-        f.write(f"Simulation duration: {sim_duration}s\n")
-        f.write(f"Selected nodes: {', '.join(selected_nodes)}\n")
-        f.write(f"{'='*70}\n\n")
-        f.write(f"Correlation (Pearson r) between throughput and hop count: {pearson_r:.4f}\n")
-        f.write(f"  (negative = higher hops -> lower throughput, as expected)\n\n")
-        f.write(f"{'Source':<8} {'Target':<8} {'Throughput':>12} {'Mean hops':>10} {'Packets':>8}\n")
-        f.write(f"{'-'*70}\n")
-        for r in results:
-            f.write(f"{r['source']:<8} {r['target']:<8} {r['throughput_kbps']:>10.2f}  "
-                   f"{r['mean_hops']:>10.2f} {r['packets']:>8}\n")
-    print(f"Summary saved to {txt_path}")
-    print(f"\n*** Correlation (Pearson r): {pearson_r:.4f} ***\n")
-    
-    # Create throughput heatmap
+    # Throughput heatmap
     _plot_heatmap(
-        throughput_matrix, selected_nodes, 
+        throughput_matrix, selected_nodes,
         title=f"{graph_name.upper()} throughput heatmap ({variant})",
         cbar_label="Throughput (kbit/s)",
-        output_path=os.path.join(variant_dir, "throughput_heatmap.png"),
+        output_path=os.path.join(output_dir, "throughput_heatmap.png"),
         cmap="magma", fmt=".1f", dpi=dpi
     )
     
-    # Create hop count heatmap
+    # Hop count heatmap
     _plot_heatmap(
         hopcount_matrix, selected_nodes,
         title=f"{graph_name.upper()} hop count heatmap ({variant})",
         cbar_label="Mean hop count",
-        output_path=os.path.join(variant_dir, "hopcount_heatmap.png"),
+        output_path=os.path.join(output_dir, "hopcount_heatmap.png"),
         cmap="viridis", fmt=".1f", dpi=dpi
     )
 
 
 def _plot_heatmap(
-    matrix, labels: list[str], title: str, cbar_label: str, 
+    matrix, labels: list, title: str, cbar_label: str,
     output_path: str, cmap: str = "magma", fmt: str = ".1f", dpi: int = 150
 ) -> None:
     """Helper to plot a heatmap."""
     import matplotlib.pyplot as plt
     import numpy as np
-    
+
     n = len(labels)
     fig, ax = plt.subplots(figsize=(10, 8))
-    
+
     masked_data = np.ma.masked_invalid(matrix)
-    
+
     colormap = plt.colormaps.get_cmap(cmap).copy()
     colormap.set_bad(color='#1a1a2e')
-    
+
     im = ax.imshow(masked_data, cmap=colormap, aspect='equal')
-    
+
     cbar = ax.figure.colorbar(im, ax=ax, shrink=0.8)
     cbar.ax.set_ylabel(cbar_label, rotation=-90, va="bottom", fontsize=11)
-    
+
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_yticklabels(labels, fontsize=9)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    
+
     ax.set_xlabel("Destination", fontsize=12)
     ax.set_ylabel("Source", fontsize=12)
     ax.set_title(title, fontsize=14, pad=10)
-    
+
     for i in range(n):
         for j in range(n):
             if i != j and not np.isnan(matrix[i, j]):
                 val = matrix[i, j]
                 text_color = "white" if val < masked_data.max() * 0.6 else "black"
-                ax.text(j, i, f"{val:{fmt}}", ha="center", va="center", 
+                ax.text(j, i, f"{val:{fmt}}", ha="center", va="center",
                        color=text_color, fontsize=9)
-    
+
     plt.tight_layout()
     plt.savefig(output_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"Heatmap saved to {output_path}")
+    print(f"  Heatmap saved to {output_path}")
 
 
-# Pre-selected nodes for heatmap (10 nodes each, geographically spread)
-HEATMAP_NODES = {
-    "geant": ["AMS", "ATH", "BER", "COP", "FRA", "LON", "MAD", "MIL", "PAR", "VIE"],
-    "nsfnet": ["SEA", "PAO", "SAN", "HOU", "ATL", "PIT", "CMI", "BOU", "SLC", "ARB"],
-}
-
-# Fixed source nodes for hop count analysis
-HOP_ANALYSIS_SOURCES = {
-    "geant": "MIL",
-    "nsfnet": "BOU",
-    "secoqc": "BRE",
-}
-
-
-def analyze_hop_counts(
-    graph: RelayNetwork,
+def visualize_hop_counts(
+    results: list,
     source: str,
-    variant: Literal["random", "nonbacktracking", "lrv"],
-    sim_duration: float,
     output_dir: str,
     graph_name: str,
+    variant: str,
     dpi: int = 150,
 ) -> None:
-    """
-    Analyze expected hop counts from a fixed source to all destinations.
-    Saves text log and bar chart visualization.
-    """
+    """Generate hop count bar chart from results (reads from info/)."""
     import matplotlib.pyplot as plt
     import numpy as np
     
-    os.makedirs(output_dir, exist_ok=True)
-    
-    destinations = [n for n in graph.node_ids() if n != source]
-    results = []
-    
-    total = len(destinations)
-    for i, dest in enumerate(destinations):
-        print(f"  [{i+1}/{total}] {source} -> {dest}...", end=" ", flush=True)
-        
-        graph.reset()
-        arrived = simulate_single_pair(
-            graph, source, dest, sim_duration=sim_duration, variant=variant
-        )
-        
-        if arrived:
-            # hop count = len(history) - 1 (history includes source and destination)
-            hop_counts = [len(p.history) - 1 for p in arrived]
-            mean_hops = sum(hop_counts) / len(hop_counts)
-            min_hops = min(hop_counts)
-            max_hops = max(hop_counts)
-            std_hops = (sum((h - mean_hops)**2 for h in hop_counts) / len(hop_counts)) ** 0.5
-        else:
-            mean_hops = float('nan')
-            min_hops = 0
-            max_hops = 0
-            std_hops = 0
-        
-        results.append({
-            "destination": dest,
-            "mean_hops": mean_hops,
-            "min_hops": min_hops,
-            "max_hops": max_hops,
-            "std_hops": std_hops,
-            "packets": len(arrived),
-        })
-        print(f"{mean_hops:.1f} hops (min={min_hops}, max={max_hops}, n={len(arrived)})")
-    
-    # Sort by mean hops ascending
-    results.sort(key=lambda x: x["mean_hops"] if not np.isnan(x["mean_hops"]) else float('inf'))
-    
-    # Save text log
-    variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
-    variant_dir = os.path.join(output_dir, variant_prefix)
-    os.makedirs(variant_dir, exist_ok=True)
-    txt_path = os.path.join(variant_dir, "hop_counts.txt")
-    with open(txt_path, 'w') as f:
-        f.write(f"Hop Count Analysis: {graph_name.upper()}\n")
-        f.write(f"Source: {source}\n")
-        f.write(f"Variant: {variant}\n")
-        f.write(f"Simulation duration: {sim_duration}s\n")
-        f.write(f"{'='*60}\n\n")
-        f.write(f"{'Destination':<12} {'Mean':>8} {'Std':>8} {'Min':>6} {'Max':>6} {'Packets':>8}\n")
-        f.write(f"{'-'*60}\n")
-        for r in results:
-            f.write(f"{r['destination']:<12} {r['mean_hops']:>8.2f} {r['std_hops']:>8.2f} "
-                   f"{r['min_hops']:>6} {r['max_hops']:>6} {r['packets']:>8}\n")
-    print(f"\nLog saved to {txt_path}")
-    
-    # Create bar chart (same aspect ratio as time series: 6x5)
+    # Results should already be sorted from info phase
     fig, ax = plt.subplots(figsize=(6, 5))
     
     dests = [r["destination"] for r in results]
     means = [r["mean_hops"] for r in results]
     stds = [r["std_hops"] for r in results]
     
-    # Color gradient based on hop count
     colors = plt.cm.viridis(np.linspace(0, 1, len(dests)))
     
-    bars = ax.bar(range(len(dests)), means, yerr=stds, capsize=2, 
-                  color=colors, edgecolor='white', linewidth=0.5,
-                  error_kw={'ecolor': 'gray', 'alpha': 0.6, 'capthick': 1})
+    ax.bar(range(len(dests)), means, yerr=stds, capsize=2,
+           color=colors, edgecolor='white', linewidth=0.5,
+           error_kw={'ecolor': 'gray', 'alpha': 0.6, 'capthick': 1})
     
     ax.set_xticks(range(len(dests)))
     ax.set_xticklabels(dests, rotation=90, ha='center', fontsize=6)
     ax.set_xlabel("Destination", fontsize=10)
     ax.set_ylabel("Expected hop count", fontsize=10)
     ax.set_title(f"{graph_name.upper()} hop counts from {source} ({variant}, ±1σ)", fontsize=11)
-    
-    # Horizontal grid lines
     ax.grid(True, axis='y', alpha=0.3)
     ax.set_axisbelow(True)
-    
     ax.set_ylim(bottom=0)
-    plt.tight_layout()
     
-    png_path = os.path.join(variant_dir, "hop_counts.png")
+    plt.tight_layout()
+    png_path = os.path.join(output_dir, "hop_counts.png")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"Chart saved to {png_path}")
+    print(f"  Chart saved to {png_path}")
 
 
-def analyze_edge_node_visits(
-    graph: RelayNetwork,
-    source: str,
-    target: str,
-    variant: Literal["random", "nonbacktracking", "lrv"],
-    sim_duration: float,
+def visualize_edge_node_visits(
+    data: dict,
     output_dir: str,
     graph_name: str,
+    variant: str,
     dpi: int = 150,
 ) -> None:
-    """
-    Analyze edge multiplicity and node hitting probability for a specific (source, target) pair.
-    - Edge multiplicity: expected number of times each edge is traversed
-    - Node hitting: probability of visiting each intermediate node at least once (excludes source/target)
-    """
+    """Generate edge multiplicity and node hitting charts (reads from info/)."""
     import matplotlib.pyplot as plt
     import numpy as np
-    from collections import Counter
     
-    variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
-    variant_dir = os.path.join(output_dir, variant_prefix)
-    os.makedirs(variant_dir, exist_ok=True)
-    
-    print(f"  {source} -> {target}...", end=" ", flush=True)
-    
-    graph.reset()
-    arrived = simulate_single_pair(
-        graph, source, target, sim_duration=sim_duration, variant=variant
-    )
-    
-    total_packets = len(arrived)
-    edge_visit_counts = Counter()  # edge -> total visits across all packets
-    node_hit_counts = Counter()    # node -> number of packets that visited it
-    
-    for p in arrived:
-        visited_nodes = set()
-        # Count edge traversals
-        for k in range(len(p.history) - 1):
-            edge = tuple(sorted([p.history[k], p.history[k+1]]))
-            edge_visit_counts[edge] += 1
-        # Count node visits (at least once per packet), excluding source and target
-        for node in p.history:
-            if node != source and node != target:
-                visited_nodes.add(node)
-        for node in visited_nodes:
-            node_hit_counts[node] += 1
-    
-    print(f"{total_packets} packets")
+    source = data["source"]
+    target = data["target"]
+    total_packets = data["total_packets"]
+    edge_multiplicity = data["edge_multiplicity"]
+    node_hitting_prob = data["node_hitting_prob"]
     
     if total_packets == 0:
-        print("No packets arrived, skipping analysis")
+        print("  No packets, skipping visualization")
         return
     
-    # Compute expected edge multiplicity (avg visits per packet)
-    edge_multiplicity = {e: c / total_packets for e, c in edge_visit_counts.items()}
-    # Compute node hitting probability (excluding source and target)
-    node_hitting_prob = {n: c / total_packets for n, c in node_hit_counts.items()}
-    
-    # Save text summary
-    txt_path = os.path.join(variant_dir, "edge_node_visits.txt")
-    with open(txt_path, 'w') as f:
-        f.write(f"Edge & Node Visit Analysis: {graph_name.upper()}\n")
-        f.write(f"Source: {source}, Target: {target}\n")
-        f.write(f"Variant: {variant}\n")
-        f.write(f"Total packets: {total_packets}\n")
-        f.write(f"{'='*60}\n\n")
-        
-        f.write("Edge Multiplicity (expected visits per packet, ascending):\n")
-        f.write(f"{'-'*40}\n")
-        for edge, mult in sorted(edge_multiplicity.items(), key=lambda x: x[1]):
-            f.write(f"  {edge[0]}-{edge[1]}: {mult:.4f}\n")
-        
-        f.write(f"\nNode Hitting Probability (excludes {source}, {target}, ascending):\n")
-        f.write(f"{'-'*40}\n")
-        for node, prob in sorted(node_hitting_prob.items(), key=lambda x: x[1]):
-            f.write(f"  {node}: {prob:.4f}\n")
-    print(f"Summary saved to {txt_path}")
-    
-    # Plot edge multiplicity histogram (sorted ascending, with color gradient)
+    # Edge multiplicity chart
     fig, ax = plt.subplots(figsize=(6, 5))
     edges_sorted = sorted(edge_multiplicity.keys(), key=lambda e: edge_multiplicity[e])
     multiplicities = [edge_multiplicity[e] for e in edges_sorted]
@@ -828,12 +850,12 @@ def analyze_edge_node_visits(
     ax.grid(True, axis='y', alpha=0.3)
     ax.set_axisbelow(True)
     plt.tight_layout()
-    png_path = os.path.join(variant_dir, "edge_multiplicity.png")
+    png_path = os.path.join(output_dir, "edge_multiplicity.png")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"Edge multiplicity chart saved to {png_path}")
+    print(f"  Edge multiplicity chart saved to {png_path}")
     
-    # Plot node hitting probability histogram (sorted ascending)
+    # Node hitting chart
     fig, ax = plt.subplots(figsize=(6, 5))
     nodes_sorted = sorted(node_hitting_prob.keys(), key=lambda n: node_hitting_prob[n])
     probs = [node_hitting_prob[n] for n in nodes_sorted]
@@ -848,141 +870,38 @@ def analyze_edge_node_visits(
     ax.set_axisbelow(True)
     ax.set_ylim(0, 1.05)
     plt.tight_layout()
-    png_path = os.path.join(variant_dir, "node_hitting.png")
+    png_path = os.path.join(output_dir, "node_hitting.png")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"Node hitting chart saved to {png_path}")
+    print(f"  Node hitting chart saved to {png_path}")
 
 
-def generate_hitting_heatmap(
-    graph: RelayNetwork,
-    selected_nodes: list[str],
-    variant: Literal["random", "nonbacktracking", "lrv"],
-    sim_duration: float,
+def visualize_hitting_heatmap(
+    results: list,
+    selected_nodes: list,
     output_dir: str,
     graph_name: str,
+    variant: str,
     dpi: int = 150,
 ) -> None:
-    """
-    For each pair (s, t), find the intermediate node v with highest hitting probability.
-    Display as a heatmap showing which node is most likely to be visited.
-    """
+    """Generate hitting probability heatmap (reads from info/)."""
     import matplotlib.pyplot as plt
     import numpy as np
-    from collections import Counter
-    
-    variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
-    variant_dir = os.path.join(output_dir, variant_prefix)
-    os.makedirs(variant_dir, exist_ok=True)
     
     n = len(selected_nodes)
-    # Store the highest-hitting node for each pair
     max_hitting_node = [['' for _ in range(n)] for _ in range(n)]
-    max_hitting_prob = np.zeros((n, n))
+    max_hitting_prob = np.full((n, n), np.nan)
     
-    results = []
-    total_pairs = n * (n - 1)
-    pair_count = 0
+    node_to_idx = {node: i for i, node in enumerate(selected_nodes)}
     
-    for i, src in enumerate(selected_nodes):
-        for j, tgt in enumerate(selected_nodes):
-            if src == tgt:
-                max_hitting_prob[i, j] = float('nan')
-                continue
-            
-            pair_count += 1
-            print(f"  [{pair_count}/{total_pairs}] {src} -> {tgt}...", end=" ", flush=True)
-            
-            graph.reset()
-            arrived = simulate_single_pair(
-                graph, src, tgt, sim_duration=sim_duration, variant=variant
-            )
-            
-            if not arrived:
-                max_hitting_prob[i, j] = float('nan')
-                print("no packets")
-                continue
-            
-            # Count node hits (excluding source and target)
-            node_hit_counts = Counter()
-            for p in arrived:
-                visited = set(p.history)
-                for node in visited:
-                    if node != src and node != tgt:
-                        node_hit_counts[node] += 1
-            
-            # Find node with highest hitting prob
-            if node_hit_counts:
-                best_node = max(node_hit_counts.keys(), key=lambda n: node_hit_counts[n])
-                best_prob = node_hit_counts[best_node] / len(arrived)
-            else:
-                best_node = "-"
-                best_prob = 0
-            
-            max_hitting_node[i][j] = best_node
-            max_hitting_prob[i, j] = best_prob
-            results.append({
-                "source": src, "target": tgt, 
-                "max_hitting_node": best_node, 
-                "max_hitting_prob": best_prob,
-                "packets": len(arrived)
-            })
-            print(f"{best_node} ({best_prob:.2f})")
-    
-    # Compute summary statistics
-    # For each source, find max hitting prob < 1.0
-    max_per_source = {}
     for r in results:
-        src = r['source']
-        prob = r['max_hitting_prob']
-        if prob < 1.0 and prob > 0:
-            if src not in max_per_source or prob > max_per_source[src]['prob']:
-                max_per_source[src] = {'target': r['target'], 'node': r['max_hitting_node'], 'prob': prob}
+        i = node_to_idx.get(r["source"])
+        j = node_to_idx.get(r["target"])
+        if i is not None and j is not None:
+            max_hitting_node[i][j] = r["max_hitting_node"]
+            max_hitting_prob[i, j] = r["max_hitting_prob"]
     
-    # Overall max hitting prob < 1.0
-    valid_results = [r for r in results if 0 < r['max_hitting_prob'] < 1.0]
-    if valid_results:
-        overall_max = max(valid_results, key=lambda r: r['max_hitting_prob'])
-    else:
-        overall_max = None
-    
-    # Save text summary
-    txt_path = os.path.join(variant_dir, "hitting_heatmap.txt")
-    with open(txt_path, 'w') as f:
-        f.write(f"Max Hitting Node Heatmap: {graph_name.upper()}\n")
-        f.write(f"Variant: {variant}\n")
-        f.write(f"{'='*70}\n\n")
-        
-        # Overall max
-        f.write("=== OVERALL MAXIMUM (prob < 1.0) ===\n")
-        if overall_max:
-            f.write(f"  Pair: {overall_max['source']} -> {overall_max['target']}\n")
-            f.write(f"  Node: {overall_max['max_hitting_node']}\n")
-            f.write(f"  Probability: {overall_max['max_hitting_prob']:.4f}\n")
-        else:
-            f.write("  No valid pairs found\n")
-        f.write("\n")
-        
-        # Per-source max
-        f.write("=== MAX PER SOURCE (prob < 1.0) ===\n")
-        for src in selected_nodes:
-            if src in max_per_source:
-                m = max_per_source[src]
-                f.write(f"  {src}: -> {m['target']}, node {m['node']}, prob {m['prob']:.4f}\n")
-            else:
-                f.write(f"  {src}: no valid pairs (all probs = 1.0 or 0)\n")
-        f.write("\n")
-        
-        # Full table
-        f.write("=== ALL PAIRS ===\n")
-        f.write(f"{'Source':<8} {'Target':<8} {'MaxHitNode':<12} {'Prob':>8} {'Packets':>8}\n")
-        f.write(f"{'-'*60}\n")
-        for r in results:
-            f.write(f"{r['source']:<8} {r['target']:<8} {r['max_hitting_node']:<12} "
-                   f"{r['max_hitting_prob']:>8.4f} {r['packets']:>8}\n")
-    print(f"Summary saved to {txt_path}")
-    
-    # Create heatmap with node labels
+    # Create heatmap
     fig, ax = plt.subplots(figsize=(10, 8))
     
     masked_data = np.ma.masked_invalid(max_hitting_prob)
@@ -1004,28 +923,59 @@ def generate_hitting_heatmap(
     ax.set_ylabel("Source", fontsize=12)
     ax.set_title(f"{graph_name.upper()} max hitting node ({variant})", fontsize=14, pad=10)
     
-    # Add node labels in cells
     for i in range(n):
         for j in range(n):
             if i != j and max_hitting_node[i][j]:
                 prob = max_hitting_prob[i, j]
-                text_color = "white" if prob > 0.5 else "black"
-                ax.text(j, i, f"{max_hitting_node[i][j]}\n{prob:.2f}", 
-                       ha="center", va="center", color=text_color, fontsize=9)
+                if not np.isnan(prob):
+                    text_color = "white" if prob > 0.5 else "black"
+                    ax.text(j, i, f"{max_hitting_node[i][j]}\n{prob:.2f}",
+                           ha="center", va="center", color=text_color, fontsize=9)
     
     plt.tight_layout()
-    png_path = os.path.join(variant_dir, "hitting_heatmap.png")
+    png_path = os.path.join(output_dir, "hitting_heatmap.png")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"Heatmap saved to {png_path}")
+    print(f"  Heatmap saved to {png_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Random walk key relaying throughput simulation")
-    parser.add_argument("--quick", action="store_true", 
-                       help="Quick mode: shorter simulations (10s), lower DPI (72), output to quick/")
+    parser = argparse.ArgumentParser(
+        description="Random walk key relaying throughput simulation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  pypy3 throughput.py --mode sim           # Fast simulation with PyPy (raw/)
+  python3 throughput.py --mode info        # Derive info from raw data (info/)
+  python3 throughput.py --mode charts      # Generate charts (charts/)
+  python3 throughput.py --mode all         # All phases (default)
+  python3 throughput.py --mode sim --quick # Quick test run
+        """
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["sim", "info", "charts", "all"],
+        default="all",
+        help="sim=simulation, info=derivation, charts=visualization, all=all phases (default: all)"
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick mode: shorter simulations (10s), lower DPI (72), output to quick/"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of parallel workers for simulations (default: CPU count)"
+    )
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel execution (useful for debugging)"
+    )
     args = parser.parse_args()
-    
+
     # Apply quick mode settings
     if args.quick:
         QUICK_MODE = True
@@ -1033,14 +983,15 @@ if __name__ == "__main__":
         DPI = 72
         HEATMAP_SIM_DURATION = 10.0
         HOP_SIM_DURATION = 10.0
-        SIM_DURATION = 100.0  # main throughput sim
+        SIM_DURATION = 100.0
         print("*** QUICK MODE: shorter simulations, lower quality images ***\n")
     else:
         OUTPUT_BASE = "out"
         DPI = 150
         HEATMAP_SIM_DURATION = 100.0
         HOP_SIM_DURATION = 100.0
-    
+        SIM_DURATION = 1000.0
+
     graphs = [
         ("geant", "graphs/geant/geant_nodes.csv", "graphs/geant/geant_edges.csv"),
         ("nsfnet", "graphs/nsfnet/nsfnet_nodes.csv", "graphs/nsfnet/nsfnet_edges.csv"),
@@ -1048,117 +999,21 @@ if __name__ == "__main__":
     ]
 
     variants = ["random", "nonbacktracking", "lrv"]
-    graph_pairs = {
-        "geant": ("MIL", "COP"),
-        "nsfnet": ("BOU", "PIT"),
-        "secoqc": ("BRE", "SIE"),
-    }
 
-    for name, nodes_csv, edges_csv in graphs:
-        graph = RelayNetwork(nodes_csv, edges_csv)
-        if name not in graph_pairs:
-            print(f"{name}: missing S/T pair")
-            continue
-        S, T = graph_pairs[name]
-        if S not in graph.nodes or T not in graph.nodes:
-            print(f"{name}: S/T not in node list ({S}, {T})")
-            continue
-        print(f"{name}: S={S}, T={T}")
-        output_dir = os.path.join(OUTPUT_BASE, name)
-        
-        sim_duration = 100.0 if args.quick else SIM_DURATION
-        
-        for variant in variants:
-            graph.reset()
-            config = {
-                "KEY_SIZE": KEY_SIZE,
-                "NODE_BUFF_KEYS": NODE_BUFF_KEYS,
-                "LINK_BUFF_BITS": LINK_BUFF_BITS,
-                "LINKS_EMPTY_AT_START": LINKS_EMPTY_AT_START,
-                "QKD_SKR": QKD_SKR,
-                "LATENCY": LATENCY,
-                "TICK_INTERVAL": TICK_INTERVAL,
-                "WINDOW_SIZE": WINDOW_SIZE,
-                "SIM_DURATION": sim_duration,
-                "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
-                "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
-                "BURN_IN": BURN_IN,
-                "S": S,
-                "T": T,
-                "VARIANT": {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}[
-                    variant
-                ],
-                "VARIANT_LONG": variant,
-                "GRAPH": name,
-                "nodes_count": len(graph.nodes),
-                "edges_count": len(graph.edges),
-                "DPI": DPI,
-            }
-            main(graph, S, T, config, output_dir=output_dir)
-        
-        # Generate example paths for all pairs (all 3 variants)
-        # for path_variant in ["random", "nonbacktracking", "lrv"]:
-        #     print(f"\n{name}: generating {path_variant} paths for all pairs...")
-        #     graph.reset()
-        #     generate_paths_for_all_pairs(graph, path_variant, output_dir, num_packets=32)
-        
-        # Generate pairwise metrics heatmaps (for geant and nsfnet only)
-        if name in HEATMAP_NODES:
-            print(f"\n{name}: generating pairwise metrics (throughput & hop counts)...")
-            graph.reset()
-            generate_pairwise_metrics(
-                graph,
-                selected_nodes=HEATMAP_NODES[name],
-                variant="nonbacktracking",
-                sim_duration=HEATMAP_SIM_DURATION,
-                output_dir=output_dir,
-                graph_name=name,
-                dpi=DPI,
-            )
-        
-        # Analyze hop counts from fixed source (all 3 variants)
-        if name in HOP_ANALYSIS_SOURCES:
-            hop_source = HOP_ANALYSIS_SOURCES[name]
-            for hop_variant in ["random", "nonbacktracking", "lrv"]:
-                print(f"\n{name}: analyzing {hop_variant} hop counts from {hop_source}...")
-                graph.reset()
-                analyze_hop_counts(
-                    graph,
-                    source=hop_source,
-                    variant=hop_variant,
-                    sim_duration=HOP_SIM_DURATION,
-                    output_dir=output_dir,
-                    graph_name=name,
-                    dpi=DPI,
-                )
-        
-        # Analyze edge multiplicity and node hitting (all 3 variants)
-        if name in graph_pairs:
-            visit_source, visit_target = graph_pairs[name]
-            for visit_variant in ["random", "nonbacktracking", "lrv"]:
-                print(f"\n{name}: analyzing {visit_variant} edge/node visits {visit_source}→{visit_target}...")
-                graph.reset()
-                analyze_edge_node_visits(
-                    graph,
-                    source=visit_source,
-                    target=visit_target,
-                    variant=visit_variant,
-                    sim_duration=HOP_SIM_DURATION,
-                    output_dir=output_dir,
-                    graph_name=name,
-                    dpi=DPI,
-                )
-        
-        # Generate hitting probability heatmap (for geant and nsfnet only)
-        if name in HEATMAP_NODES:
-            print(f"\n{name}: generating hitting probability heatmap...")
-            graph.reset()
-            generate_hitting_heatmap(
-                graph,
-                selected_nodes=HEATMAP_NODES[name],
-                variant="nonbacktracking",
-                sim_duration=HEATMAP_SIM_DURATION,
-                output_dir=output_dir,
-                graph_name=name,
-                dpi=DPI,
-            )
+    if args.mode in ("sim", "all"):
+        print(f"\n{'#'*60}")
+        print("# SIMULATION PHASE (raw/)")
+        print(f"{'#'*60}")
+        run_all_simulations(args, graphs, variants, OUTPUT_BASE, SIM_DURATION)
+
+    if args.mode in ("info", "all"):
+        print(f"\n{'#'*60}")
+        print("# DERIVATION PHASE (info/)")
+        print(f"{'#'*60}")
+        run_derivations(graphs, variants, OUTPUT_BASE)
+
+    if args.mode in ("charts", "all"):
+        print(f"\n{'#'*60}")
+        print("# VISUALIZATION PHASE (charts/)")
+        print(f"{'#'*60}")
+        run_visualizations(args, graphs, variants, OUTPUT_BASE, DPI)
