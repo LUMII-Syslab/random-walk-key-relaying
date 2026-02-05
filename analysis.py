@@ -474,6 +474,120 @@ def plot_sliding_window(
     return ax
 
 
+def plot_sliding_window_series(
+    ax,
+    sliding: SlidingWindowSeries,
+    config: dict[str, Any],
+    *,
+    label: str,
+    color: str | None = None,
+    linestyle: str = "-",
+    linewidth: float = 1.8,
+    marker: str | None = None,
+    markersize: float = 4.0,
+    markevery: int | None = None,
+    smooth: bool = False,
+    sg_window: int = 41,
+    sg_poly: int = 3,
+) -> Any:
+    """
+    Plot a single sliding-window throughput series without mean/median overlays.
+    Intended for multi-variant combined plots where reference lines would clutter.
+    """
+    to_kbits = 1.0 / 1000.0
+    if len(sliding.values):
+        values_kbits = sliding.values * to_kbits
+        if smooth:
+            try:
+                from scipy.signal import savgol_filter  # type: ignore[import-not-found]
+            except ImportError as e:
+                raise ImportError(
+                    "SciPy is required for Savitzky–Golay smoothing in the combined plot. "
+                    "Install it (e.g. `pip install scipy`) or disable smoothing."
+                ) from e
+
+            y = values_kbits
+            n = len(y)
+            # Window must be odd, <= n, and > polyorder.
+            w = int(sg_window)
+            if w % 2 == 0:
+                w += 1
+            w = min(w, n if (n % 2 == 1) else (n - 1))
+            if w < 3:
+                w = 3 if n >= 3 else 1
+            p = int(sg_poly)
+            if p < 1:
+                p = 1
+            if w <= p:
+                # fallback: pick largest feasible odd window
+                w = max(3, p + 2)
+                if w % 2 == 0:
+                    w += 1
+                w = min(w, n if (n % 2 == 1) else (n - 1))
+
+            if n >= max(5, p + 2) and w >= max(5, p + 2):
+                # mode='interp' avoids edge shrinkage; good for time series plots.
+                values_kbits = savgol_filter(y, window_length=w, polyorder=p, mode="interp")
+        ax.plot(
+            sliding.times,
+            values_kbits,
+            label=label,
+            color=color,
+            linestyle=linestyle,
+            linewidth=linewidth,
+            marker=marker,
+            markersize=markersize,
+            markevery=markevery,
+        )
+    return ax
+
+
+def plot_sliding_window_combined(
+    ax,
+    series_by_variant: dict[str, SlidingWindowSeries],
+    config: dict[str, Any],
+) -> Any:
+    """
+    Plot combined throughput time series for multiple walk variants on the same axes.
+    Not relying solely on color: each variant also gets a distinct linestyle/marker.
+    """
+    # Color-blind friendly-ish defaults + distinct linestyles/markers
+    styles = {
+        "R":   {"color": "tab:green",  "linestyle": ":",  "marker": "o", "markevery": 25},
+        "NB":  {"color": "tab:orange", "linestyle": "--", "marker": "s", "markevery": 25},
+        "LRV": {"color": "tab:blue",   "linestyle": "-",  "marker": "^", "markevery": 25},
+    }
+
+    # Draw in a stable order when possible
+    order = ["LRV", "NB", "R"]
+    for v in order:
+        if v not in series_by_variant:
+            continue
+        st = styles.get(v, {"color": None, "linestyle": "-", "marker": None, "markevery": None})
+        plot_sliding_window_series(
+            ax,
+            series_by_variant[v],
+            config,
+            label=v,
+            color=st["color"],
+            linestyle=st["linestyle"],
+            marker=st["marker"],
+            markevery=st["markevery"],
+            smooth=True,
+            sg_window=int(config.get("SG_WINDOW", 41)),
+            sg_poly=int(config.get("SG_POLY", 3)),
+        )
+
+    ax.set_title(f"Throughput time series (sliding window - {config['WINDOW_SIZE']}s)")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel(f"Throughput [kbits/s] ({config['S']} → {config['T']})")
+    ax.grid(True, alpha=0.3)
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(loc="upper right", title="Walk variant")
+    return ax
+
+
 def plot_non_overlapping_histogram(
     ax, non_overlapping: NonOverlappingThroughput, config: dict[str, Any]
 ):

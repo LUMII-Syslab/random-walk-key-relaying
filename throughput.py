@@ -44,8 +44,8 @@ HEATMAP_SIM_DURATION = 100.0
 HOP_SIM_DURATION = 100.0
 
 # VISUALIZATION AND ANALYSIS PARAMETERS
-TICK_INTERVAL = 10  # seconds between throughput measurements (sliding window)
-WINDOW_SIZE = 5.0  # seconds for sliding window throughput
+TICK_INTERVAL = 1  # seconds between throughput measurements (sliding window)
+WINDOW_SIZE = 10.0  # seconds for sliding window throughput
 HIST_BIN_WIDTH = 100.0  # bits/s bins for histogram (non-overlapping samples)
 MIN_KEYS_IN_WINDOW = 1  # min keys in window before recording sliding throughput
 BURN_IN = 0 * WINDOW_SIZE  # ignore early transient in stats
@@ -408,11 +408,73 @@ def run_visualizations(args, graphs, variants, output_base: str, dpi: int):
         S, T = GRAPH_PAIRS[name]
         
         output_dir = os.path.join(output_base, name)
+        graph_charts_dir = os.path.join(output_dir, "charts")
+        os.makedirs(graph_charts_dir, exist_ok=True)
         
         print(f"\n{'='*60}")
         print(f"{name}: Generating charts")
         print(f"{'='*60}")
         
+        # --- Combined throughput time series (R/NB/LRV on same plot) ---
+        # We generate this once per graph (if all three variants exist).
+        combined_series: dict[str, analysis.SlidingWindowSeries] = {}
+        combined_cfg: dict | None = None
+        variant_to_short = {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}
+        for variant in variants:
+            variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
+            raw_dir = os.path.join(output_dir, variant_prefix, "raw")
+            config_path = os.path.join(raw_dir, "config.json")
+            result_path = os.path.join(raw_dir, "simulation_result.json")
+            if not (os.path.exists(config_path) and os.path.exists(result_path)):
+                continue
+            with open(config_path, "r") as f:
+                raw_config = json.load(f)
+            result = SimulationResult.load(result_path)
+
+            plot_config = {
+                "KEY_SIZE": raw_config["key_size"],
+                "NODE_BUFF_KEYS": raw_config["node_buff_keys"],
+                "LINK_BUFF_BITS": raw_config["link_buff_bits"],
+                "LINKS_EMPTY_AT_START": raw_config["links_empty_at_start"],
+                "QKD_SKR": raw_config["qkd_skr"],
+                "LATENCY": raw_config["latency"],
+                "TICK_INTERVAL": TICK_INTERVAL,
+                "WINDOW_SIZE": WINDOW_SIZE,
+                "SIM_DURATION": raw_config["sim_duration"],
+                "HIST_BIN_WIDTH": HIST_BIN_WIDTH,
+                "MIN_KEYS_IN_WINDOW": MIN_KEYS_IN_WINDOW,
+                "BURN_IN": BURN_IN,
+                "S": S,
+                "T": T,
+                "VARIANT": variant_to_short[variant],
+                "VARIANT_LONG": variant,
+                "GRAPH": name,
+                "DPI": dpi,
+                "nodes_count": raw_config.get("nodes_count", 0),
+                "edges_count": raw_config.get("edges_count", 0),
+            }
+
+            analyzer = analysis.Analyzer(plot_config)
+            sliding = analyzer.compute_sliding_window_metrics(result.arrival_times)
+            combined_series[variant_to_short[variant]] = sliding
+            combined_cfg = combined_cfg or plot_config
+
+        if combined_cfg is not None and all(k in combined_series for k in ("R", "NB", "LRV")):
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+            # Savitzky–Golay smoothing parameters for combined plot only.
+            # (Odd window length in samples; polyorder < window length)
+            combined_cfg = dict(combined_cfg)
+            combined_cfg.setdefault("SG_WINDOW", 41)
+            combined_cfg.setdefault("SG_POLY", 3)
+            analysis.plot_sliding_window_combined(ax, combined_series, combined_cfg)
+            fig.tight_layout()
+            out_path = os.path.join(graph_charts_dir, "throughput_combined.png")
+            fig.savefig(out_path, dpi=dpi, facecolor="white", edgecolor="none")
+            plt.close(fig)
+            print(f"\n[{name}] Combined throughput plot saved to {out_path}")
+
         for variant in variants:
             variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
             variant_dir = os.path.join(output_dir, variant_prefix)
