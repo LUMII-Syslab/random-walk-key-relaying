@@ -578,7 +578,7 @@ def plot_sliding_window_combined(
             sg_poly=int(config.get("SG_POLY", 3)),
         )
 
-    ax.set_title(f"Throughput time series (sliding window - {config['WINDOW_SIZE']}s)")
+    ax.set_title(f"{config['GRAPH'].upper()} throughput time series (sliding window {config['WINDOW_SIZE']}s)")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel(f"Throughput [kbits/s] ({config['S']} → {config['T']})")
     ax.grid(True, alpha=0.3)
@@ -635,7 +635,7 @@ def plot_non_overlapping_histogram(
         ax.axvline(x=non_overlapping.p95 * to_kbits, linestyle=":", linewidth=2, color="tab:purple")
         ax.set_title(
             # f"Non-overlapping Window Throughput (bin={non_overlapping.bin_w}s)"
-            f"Freq distribution (non-overlapping window - {non_overlapping.bin_w}s)"
+            f"{config['GRAPH'].upper()} freq distribution (disjoint windows {non_overlapping.bin_w}s)"
         )
         ax.set_xlabel(
             f"Throughput [kbits/s] ({config['S']} → {config['T']}, {config['VARIANT']})"
@@ -648,6 +648,81 @@ def plot_non_overlapping_histogram(
     else:
         ax.set_title("Histogram (no samples)")
         ax.set_axis_off()
+    return ax
+
+
+def plot_non_overlapping_histogram_combined(
+    ax,
+    non_overlapping_by_variant: dict[str, NonOverlappingThroughput],
+    config: dict[str, Any],
+) -> Any:
+    """
+    Plot a combined histogram (non-overlapping windows) for multiple walk variants.
+    Uses shared bins and distinguishes variants by both color and hatch pattern.
+    """
+    styles = {
+        "LRV": {"color": "tab:blue",   "hatch": "///"},
+        "NB":  {"color": "tab:orange", "hatch": "\\\\\\\\"},
+        "R":   {"color": "tab:green",  "hatch": "xx"},
+    }
+
+    order = ["LRV", "NB", "R"]
+    to_kbits = 1.0 / 1000.0
+
+    # Collect positive samples (exclude zero-throughput windows; they are handled separately elsewhere)
+    samples: dict[str, np.ndarray] = {}
+    all_pos = []
+    for v in order:
+        no = non_overlapping_by_variant.get(v)
+        if no is None or not len(no.thr_bins):
+            continue
+        thr_pos = no.thr_bins[no.thr_bins > 0] * to_kbits
+        if len(thr_pos):
+            samples[v] = thr_pos
+            all_pos.append(thr_pos)
+
+    if not all_pos:
+        ax.set_title("Histogram (no positive samples)")
+        ax.set_axis_off()
+        return ax
+
+    all_concat = np.concatenate(all_pos)
+    thr_step_kbits = (config["KEY_SIZE"] / float(config["WINDOW_SIZE"])) * to_kbits
+    if thr_step_kbits > 0:
+        bin_min = float(np.floor(all_concat.min() / thr_step_kbits) * thr_step_kbits)
+        bin_max = float(np.ceil(all_concat.max() / thr_step_kbits) * thr_step_kbits)
+        bin_start = max(thr_step_kbits, bin_min - 0.5 * thr_step_kbits)
+        bins = np.arange(bin_start, bin_max + 1.5 * thr_step_kbits, thr_step_kbits)
+    else:
+        bins = "auto"
+
+    # Overlaid histograms with % normalization per variant
+    for v in order:
+        x = samples.get(v)
+        if x is None or not len(x):
+            continue
+        st = styles.get(v, {"color": None, "hatch": None})
+        weights = np.full_like(x, 100.0 / len(x), dtype=float)
+        ax.hist(
+            x,
+            bins=bins,
+            weights=weights,
+            histtype="bar",
+            alpha=0.5,
+            color=st["color"],
+            edgecolor=st["color"],
+            linewidth=1.2,
+            hatch=st["hatch"],
+            label=v,
+        )
+
+    ax.set_title(f"{config['GRAPH'].upper()} throughput freq distribution (disjoint windows {config['WINDOW_SIZE']}s)")
+    ax.set_xlabel(f"Throughput [kbits/s] ({config['S']} → {config['T']})")
+    ax.set_ylabel("Frequency [%] (thr>0)")
+    ax.grid(True, alpha=0.3, axis="y")
+    handles, _ = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(loc="upper right", title="Walk variant")
     return ax
 
 

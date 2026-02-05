@@ -160,6 +160,89 @@ def run_derivations(graphs, variants, output_base: str):
     """Derive info from raw simulation results. Reads from raw/, writes to info/."""
     import analysis
     import csv
+
+    def _load_adj(nodes_csv: str, edges_csv: str) -> dict[str, list[str]]:
+        """Load an undirected unweighted graph as an adjacency list from CSV."""
+        import csv as _csv
+        from collections import defaultdict
+
+        adj: dict[str, list[str]] = defaultdict(list)
+        # ensure nodes exist (even if isolated)
+        with open(nodes_csv, "r") as f:
+            reader = _csv.DictReader(f)
+            for row in reader:
+                node_id = row.get("Id") or row.get("ID") or row.get("id")
+                if node_id and node_id not in adj:
+                    adj[node_id] = []
+        with open(edges_csv, "r") as f:
+            reader = _csv.DictReader(f)
+            for row in reader:
+                s, t = row["Source"], row["Target"]
+                adj[s].append(t)
+                adj[t].append(s)
+        return dict(adj)
+
+    def _bfs_dist(adj: dict[str, list[str]], s: str, t: str) -> int | None:
+        """Shortest-path hop distance by BFS (returns None if unreachable)."""
+        if s == t:
+            return 0
+        if s not in adj or t not in adj:
+            return None
+        from collections import deque
+
+        q = deque([(s, 0)])
+        seen = {s}
+        while q:
+            v, d = q.popleft()
+            for u in adj.get(v, []):
+                if u == t:
+                    return d + 1
+                if u not in seen:
+                    seen.add(u)
+                    q.append((u, d + 1))
+        return None
+
+    def _pearson(x, y) -> float:
+        import numpy as np
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if len(x) < 2:
+            return float("nan")
+        if np.std(x) == 0 or np.std(y) == 0:
+            return float("nan")
+        return float(np.corrcoef(x, y)[0, 1])
+
+    def _spearman(x, y) -> float:
+        # Prefer SciPy if available (handles ties well), fallback to rank+Pearson.
+        try:
+            from scipy.stats import spearmanr  # type: ignore[import-not-found]
+            r = spearmanr(x, y).correlation
+            return float(r)
+        except Exception:
+            import numpy as np
+            x = np.asarray(x, dtype=float)
+            y = np.asarray(y, dtype=float)
+
+            def _rank_avg(a: np.ndarray) -> np.ndarray:
+                """Average ranks for ties; ranks are 1..n."""
+                n = len(a)
+                order = np.argsort(a, kind="mergesort")  # stable for deterministic tie handling
+                ranks = np.empty(n, dtype=float)
+                i = 0
+                while i < n:
+                    j = i
+                    while j + 1 < n and a[order[j + 1]] == a[order[i]]:
+                        j += 1
+                    avg_rank = 0.5 * (i + j) + 1.0
+                    ranks[order[i : j + 1]] = avg_rank
+                    i = j + 1
+                return ranks
+
+            xr = _rank_avg(x)
+            yr = _rank_avg(y)
+            if np.std(xr) == 0 or np.std(yr) == 0:
+                return float("nan")
+            return float(np.corrcoef(xr, yr)[0, 1])
     
     for name, nodes_csv, edges_csv in graphs:
         if name not in GRAPH_PAIRS:
@@ -167,6 +250,9 @@ def run_derivations(graphs, variants, output_base: str):
         S, T = GRAPH_PAIRS[name]
         
         output_dir = os.path.join(output_base, name)
+        adj = None
+        nx_graph = None
+        sp_method = "bfs"
         
         print(f"\n{'='*60}")
         print(f"{name}: Deriving info from raw data")
@@ -338,6 +424,51 @@ def run_derivations(graphs, variants, output_base: str):
                     f.write(f"Max Hitting Node Heatmap: {name.upper()}\n")
                     f.write(f"Variant: {variant}\n")
                     f.write(f"{'='*70}\n\n")
+                    # Correlation between max hitting probability and shortest-path distance
+                    import numpy as np
+                    probs: list[float] = []
+                    dists: list[float] = []
+                    # Prefer networkx if available, otherwise BFS
+                    if nx_graph is None:
+                        try:
+                            import networkx as nx  # type: ignore[import-not-found]
+                            nx_graph = nx.Graph()
+                            for u, nbrs in (_load_adj(nodes_csv, edges_csv)).items():
+                                for v in nbrs:
+                                    nx_graph.add_edge(u, v)
+                            sp_method = "networkx"
+                        except Exception:
+                            nx_graph = None
+                    if adj is None and nx_graph is None:
+                        adj = _load_adj(nodes_csv, edges_csv)
+                        sp_method = "bfs"
+
+                    for r in hitting_results:
+                        if r.get("packets", 0) <= 0:
+                            continue
+                        p = r.get("max_hitting_prob", float("nan"))
+                        if p is None or (isinstance(p, float) and np.isnan(p)):
+                            continue
+                        dist = None
+                        if nx_graph is not None:
+                            try:
+                                dist = nx_graph.shortest_path_length(r["source"], r["target"])
+                            except Exception:
+                                dist = None
+                        else:
+                            dd = _bfs_dist(adj or {}, r["source"], r["target"])
+                            dist = dd
+                        if dist is None:
+                            continue
+                        probs.append(float(p))
+                        dists.append(float(dist))
+                    if len(probs) >= 3:
+                        pr = _pearson(dists, probs)
+                        sr = _spearman(dists, probs)
+                        f.write("Correlation vs shortest-path distance d(s,t) [hops]:\n")
+                        f.write(f"  Method: {sp_method}\n")
+                        f.write(f"  Pearson r(max_hit_prob, d):   {pr:.4f} (n={len(probs)})\n")
+                        f.write(f"  Spearman ρ(max_hit_prob, d): {sr:.4f} (n={len(probs)})\n\n")
                     f.write(f"{'Source':<8} {'Target':<8} {'MaxHitNode':<12} {'Prob':>8} {'Packets':>8}\n")
                     f.write(f"{'-'*60}\n")
                     for r in hitting_results:
@@ -385,6 +516,48 @@ def run_derivations(graphs, variants, output_base: str):
                     f.write(f"Source: {hop_source}\n")
                     f.write(f"Variant: {variant}\n")
                     f.write(f"{'='*60}\n\n")
+                    # Correlation between expected hop count and shortest-path distance
+                    import numpy as np
+                    mean_h: list[float] = []
+                    dist_h: list[float] = []
+                    if nx_graph is None:
+                        try:
+                            import networkx as nx  # type: ignore[import-not-found]
+                            nx_graph = nx.Graph()
+                            for u, nbrs in (_load_adj(nodes_csv, edges_csv)).items():
+                                for v in nbrs:
+                                    nx_graph.add_edge(u, v)
+                            sp_method = "networkx"
+                        except Exception:
+                            nx_graph = None
+                    if adj is None and nx_graph is None:
+                        adj = _load_adj(nodes_csv, edges_csv)
+                        sp_method = "bfs"
+
+                    for r in hop_results_sorted:
+                        mh = r.get("mean_hops", float("nan"))
+                        if mh is None or (isinstance(mh, float) and np.isnan(mh)):
+                            continue
+                        dest = r["destination"]
+                        dist = None
+                        if nx_graph is not None:
+                            try:
+                                dist = nx_graph.shortest_path_length(hop_source, dest)
+                            except Exception:
+                                dist = None
+                        else:
+                            dist = _bfs_dist(adj or {}, hop_source, dest)
+                        if dist is None:
+                            continue
+                        mean_h.append(float(mh))
+                        dist_h.append(float(dist))
+                    if len(mean_h) >= 3:
+                        pr = _pearson(dist_h, mean_h)
+                        sr = _spearman(dist_h, mean_h)
+                        f.write("Correlation vs shortest-path distance d(source, v) [hops]:\n")
+                        f.write(f"  Method: {sp_method}\n")
+                        f.write(f"  Pearson r(E[H], d):   {pr:.4f} (n={len(mean_h)})\n")
+                        f.write(f"  Spearman ρ(E[H], d): {sr:.4f} (n={len(mean_h)})\n\n")
                     f.write(f"{'Destination':<12} {'Mean':>8} {'Std':>8} {'Min':>6} {'Max':>6} {'Packets':>8}\n")
                     f.write(f"{'-'*60}\n")
                     for r in hop_results_sorted:
@@ -418,6 +591,7 @@ def run_visualizations(args, graphs, variants, output_base: str, dpi: int):
         # --- Combined throughput time series (R/NB/LRV on same plot) ---
         # We generate this once per graph (if all three variants exist).
         combined_series: dict[str, analysis.SlidingWindowSeries] = {}
+        combined_freq: dict[str, analysis.NonOverlappingThroughput] = {}
         combined_cfg: dict | None = None
         variant_to_short = {"random": "R", "nonbacktracking": "NB", "lrv": "LRV"}
         for variant in variants:
@@ -457,6 +631,8 @@ def run_visualizations(args, graphs, variants, output_base: str, dpi: int):
             analyzer = analysis.Analyzer(plot_config)
             sliding = analyzer.compute_sliding_window_metrics(result.arrival_times)
             combined_series[variant_to_short[variant]] = sliding
+            non_overlapping = analyzer.compute_non_overlapping_throughput(result.arrival_times)
+            combined_freq[variant_to_short[variant]] = non_overlapping
             combined_cfg = combined_cfg or plot_config
 
         if combined_cfg is not None and all(k in combined_series for k in ("R", "NB", "LRV")):
@@ -470,10 +646,26 @@ def run_visualizations(args, graphs, variants, output_base: str, dpi: int):
             combined_cfg.setdefault("SG_POLY", 3)
             analysis.plot_sliding_window_combined(ax, combined_series, combined_cfg)
             fig.tight_layout()
-            out_path = os.path.join(graph_charts_dir, "throughput_combined.png")
-            fig.savefig(out_path, dpi=dpi, facecolor="white", edgecolor="none")
+            out_png = os.path.join(graph_charts_dir, "throughput_combined.png")
+            out_pdf = os.path.join(graph_charts_dir, "throughput_combined.pdf")
+            fig.savefig(out_png, dpi=dpi, facecolor="white", edgecolor="none")
+            fig.savefig(out_pdf, facecolor="white", edgecolor="none")
             plt.close(fig)
-            print(f"\n[{name}] Combined throughput plot saved to {out_path}")
+            print(f"\n[{name}] Combined throughput plot saved to {out_png} and {out_pdf}")
+
+        # --- Combined frequency distribution (non-overlapping windows) ---
+        if combined_cfg is not None and all(k in combined_freq for k in ("R", "NB", "LRV")):
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+            analysis.plot_non_overlapping_histogram_combined(ax, combined_freq, combined_cfg)
+            fig.tight_layout()
+            out_path = os.path.join(graph_charts_dir, "throughput_freq_combined.png")
+            pdf_path = os.path.join(graph_charts_dir, "throughput_freq_combined.pdf")
+            fig.savefig(out_path, dpi=dpi, facecolor="white", edgecolor="none")
+            fig.savefig(pdf_path, facecolor="white", edgecolor="none")
+            plt.close(fig)
+            print(f"[{name}] Combined freq distribution plot saved to {out_path}")
 
         for variant in variants:
             variant_prefix = {"random": "r", "nonbacktracking": "nb", "lrv": "lrv"}[variant]
@@ -918,22 +1110,34 @@ def visualize_edge_node_visits(
     print(f"  Edge multiplicity chart saved to {png_path}")
     
     # Node hitting chart
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = plt.subplots(figsize=(10, 6))
     nodes_sorted = sorted(node_hitting_prob.keys(), key=lambda n: node_hitting_prob[n])
     probs = [node_hitting_prob[n] for n in nodes_sorted]
     colors = plt.cm.viridis(np.linspace(0, 1, len(nodes_sorted)))
     ax.bar(range(len(nodes_sorted)), probs, color=colors, edgecolor='white', linewidth=0.5)
     ax.set_xticks(range(len(nodes_sorted)))
-    ax.set_xticklabels(nodes_sorted, rotation=90, ha='center', fontsize=6)
-    ax.set_xlabel("Node (sorted ascending)", fontsize=10)
-    ax.set_ylabel("Hitting probability", fontsize=10)
-    ax.set_title(f"{graph_name.upper()} node hitting {source}→{target} ({variant})", fontsize=11)
+    # Dynamic label size for readability across different graph sizes
+    nlab = len(nodes_sorted)
+    if nlab <= 20:
+        fs = 14
+    elif nlab <= 45:
+        fs = 10
+    else:
+        fs = 9
+    ax.set_xticklabels(nodes_sorted, rotation=90, ha='center', fontsize=fs)
+    ax.set_xlabel("Node (sorted ascending)", fontsize=fs + 4)
+    ax.set_ylabel("Hitting probability", fontsize=fs + 4)
+    ax.set_title(f"{graph_name.upper()} node hitting {source}→{target} ({variant.upper()})", fontsize=fs + 4)
+    # Make y tick labels readable in publications (defaults are too small)
+    ax.tick_params(axis="y", labelsize=fs + 4)
     ax.grid(True, axis='y', alpha=0.3)
     ax.set_axisbelow(True)
     ax.set_ylim(0, 1.05)
     plt.tight_layout()
     png_path = os.path.join(output_dir, "node_hitting.png")
+    pdf_path = os.path.join(output_dir, "node_hitting.pdf")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
+    plt.savefig(pdf_path, facecolor='white', edgecolor='none')
     plt.close(fig)
     print(f"  Node hitting chart saved to {png_path}")
 
