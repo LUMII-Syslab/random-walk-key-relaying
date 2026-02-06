@@ -1,3 +1,6 @@
 __pycache__/
 out/
 quick/
+build/
+out2/
+simulate_proactive

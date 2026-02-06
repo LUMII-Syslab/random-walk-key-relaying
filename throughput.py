@@ -1133,13 +1133,23 @@ def visualize_edge_node_visits(
     ax.grid(True, axis='y', alpha=0.3)
     ax.set_axisbelow(True)
     ax.set_ylim(0, 1.05)
+    ax.text(
+        0.99,
+        0.97,
+        f"delivered packets: {total_packets}",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        fontsize=fs + 2,
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "alpha": 0.75, "edgecolor": "none"},
+    )
     plt.tight_layout()
     png_path = os.path.join(output_dir, "node_hitting.png")
     pdf_path = os.path.join(output_dir, "node_hitting.pdf")
     plt.savefig(png_path, dpi=dpi, facecolor='white', edgecolor='none')
     plt.savefig(pdf_path, facecolor='white', edgecolor='none')
     plt.close(fig)
-    print(f"  Node hitting chart saved to {png_path}")
+    print(f"  Node hitting chart saved to {png_path} and {pdf_path}")
 
 
 def visualize_hitting_heatmap(
