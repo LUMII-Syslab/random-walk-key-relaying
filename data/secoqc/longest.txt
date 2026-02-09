@@ -1,0 +1,5 @@
+graph: secoqc
+source: FRM
+target: STP
+longest_simple_approx: 5
+path_nodes: FRM ERD SIE GUD BRE STP

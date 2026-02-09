@@ -12,12 +12,13 @@ It will read graph CSVs from:
 
 and write results to:
   data/{geant,nsfnet,secoqc}/longest.csv
+  data/{geant,nsfnet,secoqc}/longest.txt
 
 The computed value is an *approximation* of the longest simple path length
 (in edges) between each unordered node pair (source < target order as in mflow.py).
 
 Tuning (via environment variables):
-  - LONGEST_PAIR_TIME_S : per-pair time budget (default: 0.1)
+  - LONGEST_PAIR_TIME_S : per-pair time budget (default: 1)
   - LONGEST_BRANCH_K    : max neighbors explored per node (default: 4)
   - LONGEST_SEED        : base RNG seed (default: 1)
 """
@@ -218,7 +219,7 @@ def approximate_longest_simple_st_path(
 def main() -> None:
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    time_per_pair_s = float(os.getenv("LONGEST_PAIR_TIME_S", "0.1"))
+    time_per_pair_s = float(os.getenv("LONGEST_PAIR_TIME_S", "1"))
     branch_k = int(os.getenv("LONGEST_BRANCH_K", "4"))
     base_seed = int(os.getenv("LONGEST_SEED", "1"))
 
@@ -233,12 +234,17 @@ def main() -> None:
         out_dir = f"{base_dir}/data/{name}"
         os.makedirs(out_dir, exist_ok=True)
         out_csv = f"{out_dir}/longest.csv"
+        out_txt = f"{out_dir}/longest.txt"
 
         print(f"\n{name.upper()}")
         print("-" * 40)
         print(f"  Nodes: {len(nodes)}, Edges: {sum(len(v) for v in adj.values()) // 2}")
         print(f"  Per-pair time budget: {time_per_pair_s}s, branch_k={branch_k}, seed={base_seed}")
         print(f"  Writing: {out_csv}")
+
+        graph_best_len = -1
+        graph_best_pair: tuple[str, str] | None = None
+        graph_best_nodes: List[str] = []
 
         with open(out_csv, "w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(
@@ -252,7 +258,7 @@ def main() -> None:
                 # make per-pair RNG stable but distinct
                 pair_seed = (hash((name, source, target, base_seed)) & 0xFFFFFFFF) ^ base_seed
                 rng = random.Random(pair_seed)
-                best_path = approximate_longest_simple_st_path(
+                path_nodes = approximate_longest_simple_st_path(
                     adj,
                     source,
                     target,
@@ -260,7 +266,7 @@ def main() -> None:
                     branch_k=branch_k,
                     rng=rng,
                 )
-                longest_len = (len(best_path) - 1) if best_path else -1
+                longest_len = (len(path_nodes) - 1) if path_nodes else -1
                 w.writerow(
                     {
                         "source": source,
@@ -268,6 +274,24 @@ def main() -> None:
                         "longest_simple_approx": longest_len,
                     }
                 )
+
+                # Track the single maximum-length pair for this graph (keep first in case of tie).
+                if longest_len > graph_best_len:
+                    graph_best_len = longest_len
+                    graph_best_pair = (source, target)
+                    graph_best_nodes = path_nodes
+
+        assert graph_best_pair is not None
+        source, target = graph_best_pair
+
+        print(f"  Max pair: {source} -> {target}, longest_simple_approx={graph_best_len}")
+        print(f"  Path nodes: {' '.join(graph_best_nodes)}")
+        with open(out_txt, "w", encoding="utf-8") as f:
+            f.write(f"graph: {name}\n")
+            f.write(f"source: {source}\n")
+            f.write(f"target: {target}\n")
+            f.write(f"longest_simple_approx: {graph_best_len}\n")
+            f.write(f"path_nodes: {' '.join(graph_best_nodes)}\n")
 
 
 if __name__ == "__main__":
