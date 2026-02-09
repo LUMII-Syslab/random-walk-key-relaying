@@ -109,6 +109,15 @@ inline string fmt_2dp(double t)
     return s;
 };
 
+inline string fmt_3dp(double t)
+{
+    ostringstream oss;
+    oss.setf(ios::fixed);
+    oss << setprecision(3) << t;
+    string s = oss.str();
+    return s;
+}
+
 struct EdgesCsvGraph{
     vector<string> node_names;
     vector<vector<int>> adj;

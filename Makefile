@@ -6,9 +6,7 @@ BIN := $(BUILD_DIR)/simulate
 SRC := simulate/simulate.cpp
 
 # Default edge list (override: `make run EDGE=graphs/nsfnet/nsfnet_edges.csv`)
-EDGE ?= graphs/geant/edges.csv
-SRC_NODE ?= MIL
-TGT_NODE ?= COP
+EDGE ?= graphs/secoqc/edges.csv
 
 .PHONY: all run clean
 
@@ -21,7 +19,7 @@ $(BIN): $(SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 run: $(BIN)
-	./$(BIN) "$(EDGE)" "$(SRC_NODE)" "$(TGT_NODE)"
+	./$(BIN) "$(EDGE)"
 
 clean:
 	rm -rf $(BUILD_DIR)

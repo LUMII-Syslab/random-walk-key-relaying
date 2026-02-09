@@ -227,6 +227,14 @@ struct Graph
                 return i;
         throw runtime_error("Node not found in graph: " + name);
     }
+
+    void reset_link_states()
+    {
+        for (auto &[key, state] : link)
+            state.bit_balance = 0.0;
+        for (auto &[key, state] : link)
+            state.last_request = 0.0;
+    }
 };
 
 
@@ -242,6 +250,7 @@ Graph to_graph(const EdgesCsvGraph &g)
 static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
 {
     const int N = static_cast<int>(g.adj.size());
+    g.reset_link_states();
 
     vector<int> chunk_count(N, 0);
     vector<pair<double, int>> kept_events;
@@ -385,6 +394,16 @@ static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
     return kept_events;
 }
 
+void write_kept_events(const vector<pair<double, int>> &kept_events, const string &out_path)
+{
+    fs::create_directories(fs::path(out_path).parent_path());
+    ofstream out(out_path); assert(out);
+    for (const auto &[t, idx] : kept_events) {
+        out << fmt_2dp(t) << " " << idx << "\n";
+    }
+    cout<<"Wrote "<<out_path<<"\n";
+}
+
 int main(int argc, char **argv)
 {
     try
@@ -397,29 +416,39 @@ int main(int argc, char **argv)
 
         const string edges_path = argv[1];
         auto g = to_graph(load_edges_csv(edges_path));
-        int src = g.get_node_index(argv[2]);
-        int tgt = g.get_node_index(argv[3]);
-        auto kept_events = run_simulation(g, src, tgt);
+        // int src = g.get_node_index(argv[2]);
+        // int tgt = g.get_node_index(argv[3]);
+        // auto kept_events = run_simulation(g, src, tgt);
+        // sort(kept_events.begin(), kept_events.end(),
+        //      [](const auto &a, const auto &b)
+        //      { return a.first < b.first; });
+            
+        // write_kept_events(kept_events, "out2/rcv.txt");
+        ofstream out("out2/throughput.csv"); assert(out);
+        out<<"source,target,lrv_throughput,lrv_tput_rev\n";
 
-        fs::path out_dir = fs::path("out2");
-        fs::create_directories(out_dir);
-        fs::path out_path = out_dir / "rcv.txt";
-        ofstream out(out_path);
-        if (!out)
-        {
-            cerr << "Failed to open output: " << out_path << "\n";
-            return 2;
+        int total_pairs = g.adj.size()*(g.adj.size()-1)/2;
+        int processed_pairs = 0;
+        for(int src = 0; src < g.adj.size(); src++){
+            for(int tgt = 0; tgt < g.adj.size(); tgt++){
+                if(g.node_names[src] >= g.node_names[tgt]) continue;
+                auto kept_events = run_simulation(g, src, tgt);
+                sort(kept_events.begin(), kept_events.end(),
+                     [](const auto &a, const auto &b)
+                     { return a.first < b.first; });
+                const double throughput = (kept_events.size()/SIM_DURATION_S)*(256.0/1000.0);
+                auto kept_events_rev = run_simulation(g, tgt, src);
+                sort(kept_events_rev.begin(), kept_events_rev.end(),
+                     [](const auto &a, const auto &b)
+                     { return a.first < b.first; });
+                const double throughput_rev = (kept_events_rev.size()/SIM_DURATION_S)*(256.0/1000.0);
+                out<<g.node_names[src]<<","<<g.node_names[tgt]<<","<<fmt_3dp(throughput)<<","<<fmt_3dp(throughput_rev)<<"\n";
+
+                processed_pairs++;
+                cout<<"Processed "<<processed_pairs<<"/"<<total_pairs<<" pairs\r";
+                cout.flush();
+            }
         }
-
-        sort(kept_events.begin(), kept_events.end(),
-             [](const auto &a, const auto &b)
-             { return a.first < b.first; });
-
-        // One line per keep event: "<time> <NODE>"
-        for (const auto &[t, idx] : kept_events)
-            out << fmt_2dp(t) << " " << g.node_names[idx] << "\n";
-
-        cout << "Done. Wrote " << out_path.string() << "\n";
         return 0;
     }
     catch (const exception &e)
