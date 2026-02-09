@@ -40,7 +40,7 @@ static constexpr double LATENCY_S = 0.05;
 static constexpr double SIM_DURATION_S = 1000.0;
 static constexpr int RELAY_BUFFER_CAPACITY = 100000; // per node, in chunks
 
-static constexpr RandomWalkVariant RANDOM_WALK_VARIANT = R;
+static constexpr RandomWalkVariant RANDOM_WALK_VARIANT = LRV;
 
 // proactive-specific knobs
 static constexpr int KEY_BUFFER_CAPACITY = 1000; // per node, in chunks
@@ -83,7 +83,7 @@ struct LinkState
 enum class EventType : uint8_t
 {
     OTP_AVAILABLE = 0, // OTP is available for encryption
-    POLL_BUFFER = 1, // continuously polling for relay buffer space
+    POLLED_BUFFER = 1, // continuously polling for relay buffer space
     SLOT_ACQUIRED = 2, // acquired slot in relay buffer
     KEY_ARRIVED = 3, // key arrived at next (this) node
 };
@@ -92,6 +92,9 @@ struct Event
 {
     double time = 0.0;
     EventType type;
+    int from = -1; // from which node the event is sent
+    int at = -1; // at which node the event occurs
+    int next = -1; // to which neighbor is OTP_AVAILABLE
     shared_ptr<Packet> pkt;
 };
 
@@ -144,11 +147,13 @@ static int choose_next_neighbor(const vector<int> &nbrs, const shared_ptr<Packet
         break;
     case RandomWalkVariant::NB:
     {
-        assert(pkt->history.size() >= 2);
-        const int prev = pkt->history.back();
-        for (int n : nbrs)
-            if (n != prev)
-                choices.push_back(n);
+        if(pkt->history.size()>=2) {
+            const int prev = pkt->history[pkt->history.size() - 2];
+            for (int n : nbrs)
+                if (n != prev) choices.push_back(n);
+        } else {
+            choices = nbrs;
+        }
         break;
     }
     case RandomWalkVariant::LRV:
@@ -299,19 +304,21 @@ static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
 {
     const int N = static_cast<int>(g.adj.size());
 
-    vector<int> key_count(N, 0);
+    vector<int> chunk_count(N, 0);
     vector<pair<double, int>> kept_events;
     kept_events.reserve(100000);
 
     priority_queue<Event, vector<Event>, EventGreater> pq;
 
     vector<int> relay_free(N, RELAY_BUFFER_CAPACITY);
-    vector<deque<shared_ptr<Packet>>> relay_wait(N);
+    vector<queue<Event>> slot_polling_events(N);
 
     int next_packet_id = 0;
 
     auto schedule_first_hop = [&](double now, int source_node)
     {
+        assert(relay_free[source_node] > 0);
+        relay_free[source_node]--;
         if (g.adj[source_node].empty())
             return;
         auto pkt = make_shared<Packet>();
@@ -322,104 +329,117 @@ static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
         pkt->history.push_back(source_node);
 
         int next = choose_next_neighbor(g.adj[source_node], pkt);
-        if (next < 0)
-            return;
-
         double wait = g.link_state(source_node, next).reserve(now, KEY_SIZE_BITS);
-        double arrive_t = now + wait + LATENCY_S;
-        pq.push(Event{arrive_t, EventType::ARRIVE, next, -1, false, pkt});
+        pq.push(Event{now+wait, EventType::OTP_AVAILABLE, source_node, source_node, next, pkt});
     };
 
     for (int i = 0; i < RELAY_BUFFER_CAPACITY; i++)
         schedule_first_hop(0.0, src);
 
+    // a free slot is available after sending the key or keeping a key
     auto try_admit = [&](double now, int node)
     {
-        if (relay_free[node] <= 0)
-            return;
-        if (relay_wait[node].empty())
-            return;
-        auto pkt = relay_wait[node].front();
-        relay_wait[node].pop_front();
-        relay_free[node]--;
-        pq.push(Event{now + LATENCY_S, EventType::PROCESS, node, -1, false, pkt});
+        if(!slot_polling_events[node].empty())
+        {
+            assert(relay_free[node]==0);
+            auto og_ev = slot_polling_events[node].front();
+            slot_polling_events[node].pop();
+
+            const double t = now + LATENCY_S;
+            const EventType type = EventType::SLOT_ACQUIRED;
+            const int from = node;
+            const int to = og_ev.from;
+            const shared_ptr<Packet> pkt = og_ev.pkt;
+            pq.push(Event{t, type, from, to, -1, pkt});
+        } else relay_free[node]++, assert(relay_free[node]<=RELAY_BUFFER_CAPACITY);
+
+        if (node==src) schedule_first_hop(now, node);
     };
 
     while (!pq.empty())
     {
         Event ev = pq.top();
         pq.pop();
-        if (ev.time > SIM_DURATION_S)
-            break;
-        if (!ev.pkt)
-            continue;
-        const int node = ev.to;
-        auto &pkt = *ev.pkt;
+        if (ev.time > SIM_DURATION_S) break;
 
-        if (ev.type == EventType::ARRIVE)
+        if (ev.type == EventType::OTP_AVAILABLE)
         {
-            pkt.history.push_back(node);
-            if (relay_free[node] > 0)
+            // start polling neighbour to secure a slot in the relay buffer
+            const double t = ev.time + LATENCY_S;
+            const EventType type = EventType::POLLED_BUFFER;
+            const int from = ev.at;
+            const int to = ev.next;
+            const shared_ptr<Packet> pkt = ev.pkt;
+            pq.push(Event{t, type, from, to, -1, pkt});
+        }
+
+        if (ev.type == EventType::POLLED_BUFFER)
+        {
+            // relay_free keeps a counter of free slots in the buffer
+            // if full, we keep a queue of nodes that are waiting for a slot
+            // irl deployments, the source node would just keep polling
+            // and the order would not be guaranteed
+            if (relay_free[ev.at] > 0)
             {
-                relay_free[node]--;
-                pq.push(Event{ev.time, EventType::PROCESS, node, -1, false, ev.pkt});
+                relay_free[ev.at]--;
+                const double t = ev.time+LATENCY_S;
+                const EventType type = EventType::SLOT_ACQUIRED;
+                const int from = ev.at;
+                const int to = ev.from;
+                const shared_ptr<Packet> pkt = ev.pkt;
+                pq.push(Event{t, type, from, to, -1, pkt});
             }
             else
             {
-                relay_wait[node].push_back(ev.pkt);
+                slot_polling_events[ev.at].push(ev);
             }
-            continue;
         }
 
-        if (ev.type == EventType::PROCESS)
+        if (ev.type == EventType::SLOT_ACQUIRED)
         {
+            // we can now send the packet to the neighbor
+            const double t = ev.time+LATENCY_S;
+            const EventType type = EventType::KEY_ARRIVED;
+            const int from = ev.at;
+            const int to = ev.from;
+            const shared_ptr<Packet> pkt = ev.pkt;
+            pq.push(Event{t, type, from, to, -1, pkt});
+
+            // since we have sent the key, a new spot is available in the buffer
+            try_admit(ev.time, ev.at);
+        }
+
+        if (ev.type == EventType::KEY_ARRIVED)
+        {
+            ev.pkt->history.push_back(ev.at);
+
             bool keep = false;
-            if (pkt.target == -1)
+            if (ev.pkt->target == -1) // proactive key relaying mode
             {
-                const int hops_so_far = static_cast<int>(pkt.history.size()) - 1;
-                double p_keep = keep_probability(key_count[node], hops_so_far);
+                const vector<int> &history = ev.pkt->history;
+                const int hops_so_far = static_cast<int>(history.size()) - 1;
+                double p_keep = keep_probability(chunk_count[ev.at], hops_so_far);
                 uniform_real_distribution<double> uni01(0.0, 1.0);
                 keep = (uni01(rng) < p_keep);
             }
-            else keep = (pkt.target == node);
+            else keep = (ev.pkt->target == ev.at);
 
             if (keep) {
-                pq.push(Event{ev.time, EventType::DISPATCH, node, -1, true, ev.pkt});
+                chunk_count[ev.at]++;
+                try_admit(ev.time, ev.at);
+                kept_events.emplace_back(ev.time, ev.at);
                 continue;
+            } else {
+                const int nxt = choose_next_neighbor(g.adj[ev.at], ev.pkt);
+                const double wait = g.link_state(ev.at, nxt).reserve(ev.time, KEY_SIZE_BITS);
+                const double t = ev.time + wait;
+                const EventType type = EventType::OTP_AVAILABLE;
+                const int from = ev.at;
+                const int to = ev.at;
+                const int next = nxt;
+                const shared_ptr<Packet> pkt = ev.pkt;
+                pq.push(Event{t, type, from, to, next, pkt});
             }
-
-            int nxt = choose_next_neighbor(g.adj[node], ev.pkt);
-            pq.push(Event{ev.time, EventType::DISPATCH, node, nxt, false, ev.pkt});
-            continue;
-        }
-
-        if (ev.type == EventType::DISPATCH)
-        {
-            relay_free[node]++;
-            if (relay_free[node] > RELAY_BUFFER_CAPACITY)
-                relay_free[node] = RELAY_BUFFER_CAPACITY;
-            try_admit(ev.time, node);
-
-            if (ev.keep)
-            {
-                if (key_count[node] < KEY_BUFFER_CAPACITY)
-                    key_count[node] += 1;
-                kept_events.push_back({ev.time, node});
-                schedule_first_hop(ev.time, pkt.source);
-                continue;
-            }
-
-            const int nxt = ev.next;
-            LinkState *ls = g.link_state_ptr(node, nxt);
-            if (!ls)
-            {
-                schedule_first_hop(ev.time, pkt.source);
-                continue;
-            }
-            double wait = ls->reserve(ev.time, KEY_SIZE_BITS);
-            double arrive_t = ev.time + wait + LATENCY_S;
-            pq.push(Event{arrive_t, EventType::ARRIVE, nxt, -1, false, ev.pkt});
-            continue;
         }
     }
 
