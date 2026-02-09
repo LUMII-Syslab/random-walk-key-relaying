@@ -1,6 +1,44 @@
-# Random Walk Key Relaying Simulation
+# Random Walk Key Relaying
 
-Simulates and analyzes random walk key relaying throughput in QKD networks.
+Simulates and analyzes random walk key relaying in context of QKD networks.
+
+## Network topologies
+
+Node and edge CSV files are stored in the `graphs/` directory.
+
+| Graph   | Nodes | Edges | Avg Degree | Description |
+|---------|-------|-------|------------|-------------|
+| SECOQC  | 6     | 8     | 2.67       | Vienna metro-scale QKD testbed (2004–2008) |
+| NSFNET  | 14    | 21    | 3.00       | US academic backbone topology (1991) |
+| GÉANT   | 43    | 59    | 2.74       | Pan-European research network (links >1000km pruned) |
+
+Distances are calculated for pairs of nodes using the Haversine formula
+based on latitude and longitude from the nodes CSV.
+
+```py
+R_KM = 6371.0088  # mean Earth radius in km
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * R_KM * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+```
+
+## `Data` directory
+
+This data is light and can be stored in a Git version controlled directory.
+
+Currently CSV files contain the following columns:
+- `source`, `target`: node IDs
+- `shortest`: shortest path length
+- `max_flow`: max # of edge-disjoint paths
+
+We should add (TODO) the following info:
+1. expected number of hops per each random walk variant
+2. mean throughput over a simulation of 1000s duration
+3. longest possible path length?
 
 ## Usage
 
