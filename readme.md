@@ -58,6 +58,8 @@ out/<graph>/<variant>/
 - `--quick` outputs to `quick/` instead of `out/`
 - Variants: `r` (random), `nb` (non-backtracking), `lrv` (least-recently-visited)
 
+## Graph Topologies
+
 ## Other Tools
 
 **Add edge weights from node coordinates:**
