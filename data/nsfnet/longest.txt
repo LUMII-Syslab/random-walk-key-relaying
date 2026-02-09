@@ -1,5 +1,5 @@
 graph: nsfnet
 source: SEA
 target: PAO
-longest_simple_approx: 13
-path_nodes: SEA CMI LNK BOU SLC ARB ITH CPK PRI PIT ATL HOU SAN PAO
+length: 13
+path: SEA CMI LNK BOU SLC ARB ITH CPK PRI PIT ATL HOU SAN PAO

@@ -42,6 +42,23 @@ We should add (TODO) the following info:
 
 We approximate the longest path by a heuristic search bound by 0.1s per pair.
 
+## Throughput simulation
+
+Default configuration that was used to get data.
+
+```json
+{
+    "key_size": 256,
+    "node_buff_keys": 100000,
+    "link_buff_bits": 100000,
+    "links_empty_at_start": true,
+    "qkd_skr": 1000,
+    "latency": 0.05,
+    "sim_duration": 1000.0,
+    "random_seed": 2026
+}
+```
+
 ## Usage
 
 ```bash
