@@ -229,75 +229,14 @@ struct Graph
     }
 };
 
-static Graph load_graph_from_edges_csv(const string &edges_path)
+
+Graph to_graph(const EdgesCsvGraph &g)
 {
-    ifstream in(edges_path);
-    if (!in)
-        throw runtime_error("Failed to open edges file: " + edges_path);
-
-    unordered_map<string, int> node_idx;
-    vector<string> node_names;
-    vector<pair<int, int>> edges;
-
-    string header_line;
-    if (!getline(in, header_line))
-        throw runtime_error("Empty edges file");
-
-    auto header = split_csv_line(header_line);
-    int col_source = -1, col_target = -1;
-    for (int i = 0; i < static_cast<int>(header.size()); i++)
-    {
-        string h = header[i];
-        for (auto &ch : h)
-            ch = static_cast<char>(tolower(static_cast<unsigned char>(ch)));
-        if (h == "source")
-            col_source = i;
-        if (h == "target")
-            col_target = i;
-    }
-    if (col_source < 0 || col_target < 0)
-    {
-        throw runtime_error("CSV header must contain Source,Target columns");
-    }
-
-    string line;
-    while (getline(in, line))
-    {
-        if (trim(line).empty())
-            continue;
-        auto cols = split_csv_line(line);
-        if (col_source >= static_cast<int>(cols.size()) ||
-            col_target >= static_cast<int>(cols.size()))
-            continue;
-        const string s = cols[col_source];
-        const string t = cols[col_target];
-        if (s.empty() || t.empty())
-            continue;
-        int u = get_or_add_node(s, node_idx, node_names);
-        int v = get_or_add_node(t, node_idx, node_names);
-        if (u == v)
-            continue;
-        edges.emplace_back(u, v);
-    }
-
-    const int N = static_cast<int>(node_names.size());
-    if (N == 0)
-        throw runtime_error("No nodes found in edge list");
-
-    vector<vector<int>> adj(N);
-    for (auto [u, v] : edges)
-    {
-        adj[u].push_back(v);
-        adj[v].push_back(u);
-    }
-
     map<EdgeKey, LinkState> link;
-    for (auto [u, v] : edges)
-    {
-        (void)link.emplace(EdgeKey(u, v), LinkState{0.0, 0.0});
-    }
-
-    return Graph{move(node_names), move(adj), move(link)};
+    for (size_t i = 0; i < g.adj.size(); i++)
+        for (int v : g.adj[i])
+            link.emplace(EdgeKey(i, v), LinkState{0.0, 0.0});
+    return Graph{move(g.node_names), move(g.adj), move(link)};
 }
 
 static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
@@ -457,7 +396,7 @@ int main(int argc, char **argv)
         }
 
         const string edges_path = argv[1];
-        auto g = load_graph_from_edges_csv(edges_path);
+        auto g = to_graph(load_edges_csv(edges_path));
         int src = g.get_node_index(argv[2]);
         int tgt = g.get_node_index(argv[3]);
         auto kept_events = run_simulation(g, src, tgt);
