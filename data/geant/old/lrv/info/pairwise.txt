@@ -1,0 +1,99 @@
+Pairwise Metrics: GEANT
+Variant: lrv
+======================================================================
+
+Correlation (Pearson r) between throughput and hop count: -0.0089
+  (negative = higher hops -> lower throughput, as expected)
+
+Source   Target     Throughput  Mean hops  Packets
+----------------------------------------------------------------------
+ATH      MAD            0.65       24.22      252
+ATH      MIL            0.84        9.81      328
+ATH      FRA            0.70       18.67      273
+ATH      COP            0.60       25.50      230
+ATH      BER            0.57       25.78      223
+AMS      VIE            1.46       14.04      568
+ATH      AMS            0.66       21.05      247
+AMS      LON            2.06        8.32      804
+AMS      PAR            2.85        8.61     1112
+AMS      ATH            0.54       19.86      210
+AMS      FRA            2.96        8.96     1157
+AMS      MIL            1.85       10.99      724
+AMS      MAD            1.33       12.96      519
+AMS      COP            1.69       12.83      660
+AMS      BER            1.77       13.19      691
+ATH      LON            0.58       24.26      225
+ATH      PAR            0.66       20.27      259
+ATH      VIE            0.72       16.59      281
+BER      AMS            1.76       12.30      689
+BER      FRA            1.70       13.06      663
+BER      COP            2.89       12.95     1128
+BER      LON            1.07       16.25      417
+BER      ATH            0.39       26.71      150
+BER      PAR            1.40       14.39      547
+BER      MIL            1.26       14.20      490
+BER      VIE            1.14       15.07      446
+BER      MAD            0.88       19.10      344
+COP      AMS            1.63       10.43      635
+COP      ATH            0.48       26.28      186
+COP      FRA            1.62       12.71      629
+COP      LON            1.01       16.08      395
+COP      MAD            0.81       18.10      317
+COP      MIL            1.09       14.43      424
+COP      BER            2.61       10.78     1018
+COP      PAR            1.25       13.27      489
+COP      VIE            1.03       15.65      402
+FRA      AMS            2.72        8.67     1063
+FRA      LON            1.82       11.31      708
+FRA      MAD            1.31       12.34      511
+FRA      MIL            2.33       10.61      908
+FRA      PAR            2.49       10.18      970
+FRA      BER            1.64       14.10      639
+FRA      COP            1.61       13.83      629
+FRA      ATH            0.56       17.69      220
+LON      AMS            2.27       10.83      885
+FRA      VIE            1.98       12.09      773
+LON      BER            1.50       18.66      583
+LON      COP            1.55       18.44      604
+LON      ATH            0.51       23.57      200
+LON      MIL            1.75       13.35      684
+LON      MAD            1.38       16.06      536
+LON      PAR            2.89        6.77     1127
+LON      FRA            2.19       12.98      855
+MAD      AMS            1.55       14.44      604
+MAD      MIL            1.64       10.82      639
+MAD      FRA            1.61       14.47      627
+MAD      LON            1.37       16.97      536
+MAD      PAR            1.88       10.29      734
+MAD      COP            1.09       21.40      422
+LON      VIE            1.53       16.54      599
+MAD      BER            1.03       20.31      402
+MAD      ATH            0.58       23.09      224
+MAD      VIE            1.36       16.05      532
+MIL      AMS            2.12       10.45      825
+MIL      ATH            0.66        9.14      256
+MIL      FRA            2.45       10.37      954
+MIL      BER            1.29       13.78      501
+MIL      COP            1.19       13.98      464
+MIL      LON            1.60       12.08      625
+MIL      VIE            2.48        8.94      969
+MIL      MAD            1.69       10.56      659
+MIL      PAR            2.11        9.33      823
+PAR      AMS            2.84        9.75     1109
+PAR      FRA            2.67       10.50     1043
+PAR      BER            1.21       15.84      473
+PAR      ATH            0.49       17.74      190
+PAR      MAD            1.85        9.37      722
+PAR      LON            2.81        6.33     1096
+PAR      COP            1.26       15.00      492
+VIE      AMS            1.72       13.82      672
+PAR      MIL            2.06        9.97      803
+PAR      VIE            1.55       13.39      607
+VIE      BER            1.34       15.68      520
+VIE      COP            1.41       15.75      550
+VIE      ATH            0.62       16.82      241
+VIE      MIL            2.53        8.69      990
+VIE      FRA            1.96       12.59      765
+VIE      MAD            1.33       16.79      517
+VIE      LON            1.37       16.39      535
+VIE      PAR            1.76       14.37      687

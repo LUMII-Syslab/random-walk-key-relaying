@@ -1,0 +1,632 @@
+[
+  {
+    "source": "SEA",
+    "target": "SAN",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.30923076923076925,
+    "packets": 650
+  },
+  {
+    "source": "PAO",
+    "target": "CMI",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.565,
+    "packets": 400
+  },
+  {
+    "source": "PAO",
+    "target": "HOU",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.5024154589371981,
+    "packets": 414
+  },
+  {
+    "source": "PAO",
+    "target": "SAN",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.3386627906976744,
+    "packets": 688
+  },
+  {
+    "source": "PAO",
+    "target": "PIT",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.504424778761062,
+    "packets": 339
+  },
+  {
+    "source": "PAO",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7351778656126482,
+    "packets": 253
+  },
+  {
+    "source": "SEA",
+    "target": "PAO",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.3135464231354642,
+    "packets": 657
+  },
+  {
+    "source": "PAO",
+    "target": "SEA",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.3458646616541353,
+    "packets": 665
+  },
+  {
+    "source": "SEA",
+    "target": "CMI",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.23498233215547704,
+    "packets": 566
+  },
+  {
+    "source": "SEA",
+    "target": "SLC",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.5687830687830688,
+    "packets": 378
+  },
+  {
+    "source": "SEA",
+    "target": "HOU",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.5793103448275863,
+    "packets": 435
+  },
+  {
+    "source": "SEA",
+    "target": "PIT",
+    "max_hitting_node": "CMI",
+    "max_hitting_prob": 0.6056338028169014,
+    "packets": 355
+  },
+  {
+    "source": "SEA",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.6942446043165468,
+    "packets": 278
+  },
+  {
+    "source": "SEA",
+    "target": "BOU",
+    "max_hitting_node": "CMI",
+    "max_hitting_prob": 0.4931129476584022,
+    "packets": 363
+  },
+  {
+    "source": "PAO",
+    "target": "BOU",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5287356321839081,
+    "packets": 435
+  },
+  {
+    "source": "SEA",
+    "target": "ARB",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5684210526315789,
+    "packets": 285
+  },
+  {
+    "source": "PAO",
+    "target": "SLC",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.22621184919210055,
+    "packets": 557
+  },
+  {
+    "source": "PAO",
+    "target": "ARB",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.7190332326283988,
+    "packets": 331
+  },
+  {
+    "source": "SAN",
+    "target": "SEA",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.33234859675036926,
+    "packets": 677
+  },
+  {
+    "source": "SAN",
+    "target": "HOU",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.22586206896551725,
+    "packets": 580
+  },
+  {
+    "source": "SAN",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.8082706766917294,
+    "packets": 266
+  },
+  {
+    "source": "SAN",
+    "target": "BOU",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.625,
+    "packets": 368
+  },
+  {
+    "source": "SAN",
+    "target": "CMI",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.6126373626373627,
+    "packets": 364
+  },
+  {
+    "source": "SAN",
+    "target": "PAO",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.31693198263386396,
+    "packets": 691
+  },
+  {
+    "source": "SAN",
+    "target": "ARB",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.5863095238095238,
+    "packets": 336
+  },
+  {
+    "source": "SAN",
+    "target": "PIT",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.6,
+    "packets": 370
+  },
+  {
+    "source": "SAN",
+    "target": "SLC",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.5158924205378973,
+    "packets": 409
+  },
+  {
+    "source": "HOU",
+    "target": "ATL",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.23828125,
+    "packets": 512
+  },
+  {
+    "source": "HOU",
+    "target": "PIT",
+    "max_hitting_node": "ATL",
+    "max_hitting_prob": 0.37105751391465674,
+    "packets": 539
+  },
+  {
+    "source": "HOU",
+    "target": "PAO",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.5639686684073107,
+    "packets": 383
+  },
+  {
+    "source": "HOU",
+    "target": "SAN",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.2115732368896926,
+    "packets": 553
+  },
+  {
+    "source": "HOU",
+    "target": "SEA",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.5817694369973191,
+    "packets": 373
+  },
+  {
+    "source": "HOU",
+    "target": "CMI",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.41012658227848103,
+    "packets": 395
+  },
+  {
+    "source": "HOU",
+    "target": "BOU",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.2097902097902098,
+    "packets": 572
+  },
+  {
+    "source": "HOU",
+    "target": "SLC",
+    "max_hitting_node": "BOU",
+    "max_hitting_prob": 0.4681372549019608,
+    "packets": 408
+  },
+  {
+    "source": "ATL",
+    "target": "SEA",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7216494845360825,
+    "packets": 291
+  },
+  {
+    "source": "ATL",
+    "target": "PAO",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7122302158273381,
+    "packets": 278
+  },
+  {
+    "source": "HOU",
+    "target": "ARB",
+    "max_hitting_node": "CPK",
+    "max_hitting_prob": 0.4949238578680203,
+    "packets": 394
+  },
+  {
+    "source": "ATL",
+    "target": "SAN",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7903225806451613,
+    "packets": 310
+  },
+  {
+    "source": "ATL",
+    "target": "PIT",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.3287435456110155,
+    "packets": 581
+  },
+  {
+    "source": "ATL",
+    "target": "CMI",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.7089337175792507,
+    "packets": 347
+  },
+  {
+    "source": "ATL",
+    "target": "HOU",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.34891485809682804,
+    "packets": 599
+  },
+  {
+    "source": "ATL",
+    "target": "BOU",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7419354838709677,
+    "packets": 341
+  },
+  {
+    "source": "PIT",
+    "target": "SEA",
+    "max_hitting_node": "CMI",
+    "max_hitting_prob": 0.6398809523809523,
+    "packets": 336
+  },
+  {
+    "source": "ATL",
+    "target": "SLC",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.6666666666666666,
+    "packets": 309
+  },
+  {
+    "source": "ATL",
+    "target": "ARB",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.5945121951219512,
+    "packets": 328
+  },
+  {
+    "source": "PIT",
+    "target": "PAO",
+    "max_hitting_node": "CMI",
+    "max_hitting_prob": 0.506578947368421,
+    "packets": 304
+  },
+  {
+    "source": "PIT",
+    "target": "HOU",
+    "max_hitting_node": "ATL",
+    "max_hitting_prob": 0.36151079136690645,
+    "packets": 556
+  },
+  {
+    "source": "PIT",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.2471042471042471,
+    "packets": 518
+  },
+  {
+    "source": "PIT",
+    "target": "SAN",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.579088471849866,
+    "packets": 373
+  },
+  {
+    "source": "PIT",
+    "target": "CMI",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.20817843866171004,
+    "packets": 538
+  },
+  {
+    "source": "PIT",
+    "target": "BOU",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.46,
+    "packets": 400
+  },
+  {
+    "source": "PIT",
+    "target": "SLC",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.40896358543417366,
+    "packets": 357
+  },
+  {
+    "source": "CMI",
+    "target": "PAO",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.6519337016574586,
+    "packets": 362
+  },
+  {
+    "source": "PIT",
+    "target": "ARB",
+    "max_hitting_node": "PRI",
+    "max_hitting_prob": 0.4800796812749004,
+    "packets": 502
+  },
+  {
+    "source": "CMI",
+    "target": "SEA",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.20925925925925926,
+    "packets": 540
+  },
+  {
+    "source": "CMI",
+    "target": "PIT",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.22426470588235295,
+    "packets": 544
+  },
+  {
+    "source": "CMI",
+    "target": "BOU",
+    "max_hitting_node": "LNK",
+    "max_hitting_prob": 0.48661800486618007,
+    "packets": 411
+  },
+  {
+    "source": "CMI",
+    "target": "SAN",
+    "max_hitting_node": "SEA",
+    "max_hitting_prob": 0.6443298969072165,
+    "packets": 388
+  },
+  {
+    "source": "CMI",
+    "target": "HOU",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.4327731092436975,
+    "packets": 476
+  },
+  {
+    "source": "CMI",
+    "target": "SLC",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.4375,
+    "packets": 416
+  },
+  {
+    "source": "CMI",
+    "target": "ATL",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.7109634551495017,
+    "packets": 301
+  },
+  {
+    "source": "CMI",
+    "target": "ARB",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.6611295681063123,
+    "packets": 301
+  },
+  {
+    "source": "BOU",
+    "target": "SAN",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.5769230769230769,
+    "packets": 390
+  },
+  {
+    "source": "BOU",
+    "target": "SEA",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.47570332480818417,
+    "packets": 391
+  },
+  {
+    "source": "BOU",
+    "target": "PAO",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5459317585301837,
+    "packets": 381
+  },
+  {
+    "source": "BOU",
+    "target": "HOU",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.24794745484400657,
+    "packets": 609
+  },
+  {
+    "source": "BOU",
+    "target": "PIT",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.5075,
+    "packets": 400
+  },
+  {
+    "source": "BOU",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.7263513513513513,
+    "packets": 296
+  },
+  {
+    "source": "BOU",
+    "target": "CMI",
+    "max_hitting_node": "LNK",
+    "max_hitting_prob": 0.4780600461893764,
+    "packets": 433
+  },
+  {
+    "source": "BOU",
+    "target": "SLC",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.2641509433962264,
+    "packets": 583
+  },
+  {
+    "source": "BOU",
+    "target": "ARB",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5765027322404371,
+    "packets": 366
+  },
+  {
+    "source": "SLC",
+    "target": "SEA",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.6224489795918368,
+    "packets": 392
+  },
+  {
+    "source": "SLC",
+    "target": "SAN",
+    "max_hitting_node": "PAO",
+    "max_hitting_prob": 0.5212264150943396,
+    "packets": 424
+  },
+  {
+    "source": "SLC",
+    "target": "PAO",
+    "max_hitting_node": "SAN",
+    "max_hitting_prob": 0.21189591078066913,
+    "packets": 538
+  },
+  {
+    "source": "SLC",
+    "target": "PIT",
+    "max_hitting_node": "ARB",
+    "max_hitting_prob": 0.4864864864864865,
+    "packets": 444
+  },
+  {
+    "source": "SLC",
+    "target": "ARB",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.20656370656370657,
+    "packets": 518
+  },
+  {
+    "source": "SLC",
+    "target": "ATL",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.6289752650176679,
+    "packets": 283
+  },
+  {
+    "source": "SLC",
+    "target": "CMI",
+    "max_hitting_node": "BOU",
+    "max_hitting_prob": 0.48205128205128206,
+    "packets": 390
+  },
+  {
+    "source": "SLC",
+    "target": "HOU",
+    "max_hitting_node": "BOU",
+    "max_hitting_prob": 0.46942800788954636,
+    "packets": 507
+  },
+  {
+    "source": "SLC",
+    "target": "BOU",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.23633156966490299,
+    "packets": 567
+  },
+  {
+    "source": "ARB",
+    "target": "SEA",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5894039735099338,
+    "packets": 302
+  },
+  {
+    "source": "ARB",
+    "target": "PAO",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.7071005917159763,
+    "packets": 338
+  },
+  {
+    "source": "ARB",
+    "target": "SAN",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.5765472312703583,
+    "packets": 307
+  },
+  {
+    "source": "ARB",
+    "target": "ATL",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.6869009584664537,
+    "packets": 313
+  },
+  {
+    "source": "ARB",
+    "target": "HOU",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.43209876543209874,
+    "packets": 405
+  },
+  {
+    "source": "ARB",
+    "target": "PIT",
+    "max_hitting_node": "ITH",
+    "max_hitting_prob": 0.4704761904761905,
+    "packets": 525
+  },
+  {
+    "source": "ARB",
+    "target": "CMI",
+    "max_hitting_node": "PIT",
+    "max_hitting_prob": 0.5486725663716814,
+    "packets": 339
+  },
+  {
+    "source": "ARB",
+    "target": "SLC",
+    "max_hitting_node": "HOU",
+    "max_hitting_prob": 0.21973929236499068,
+    "packets": 537
+  },
+  {
+    "source": "ARB",
+    "target": "BOU",
+    "max_hitting_node": "SLC",
+    "max_hitting_prob": 0.6380697050938338,
+    "packets": 373
+  }
+]

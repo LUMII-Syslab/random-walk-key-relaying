@@ -1,0 +1,21 @@
+Edge & Node Visit Analysis: SECOQC
+Source: BRE, Target: SIE
+Variant: nonbacktracking
+Total packets: 9410
+============================================================
+
+Edge Multiplicity (expected visits per packet, ascending):
+----------------------------------------
+  ERD-FRM: 0.2006
+  ERD-GUD: 0.2096
+  BRE-ERD: 0.2731
+  ERD-SIE: 0.2767
+  GUD-SIE: 0.3083
+  BRE-GUD: 0.3119
+  BRE-SIE: 0.4150
+
+Node Hitting Probability (excludes BRE, SIE, ascending):
+----------------------------------------
+  FRM: 0.1003
+  ERD: 0.3797
+  GUD: 0.4035

@@ -30,7 +30,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 This data is light and can be stored in a Git version controlled directory.
 
-Currently CSV files contain the following columns:
+Currently `pairs.csv` contain the following columns:
 - `source`, `target`: node IDs
 - `shortest`: shortest path length
 - `max_flow`: max # of edge-disjoint paths
@@ -39,6 +39,8 @@ We should add (TODO) the following info:
 1. expected number of hops per each random walk variant
 2. mean throughput over a simulation of 1000s duration
 3. longest possible path length?
+
+We approximate the longest path by a heuristic search bound by 0.1s per pair.
 
 ## Usage
 

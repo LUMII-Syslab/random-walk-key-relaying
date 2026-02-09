@@ -1,0 +1,632 @@
+[
+  {
+    "source": "SEA",
+    "target": "SAN",
+    "throughput_kbps": 2.212061206120612,
+    "mean_hops": 4.49537037037037,
+    "packets": 864
+  },
+  {
+    "source": "PAO",
+    "target": "BOU",
+    "throughput_kbps": 1.8317188375630455,
+    "mean_hops": 6.057342657342657,
+    "packets": 715
+  },
+  {
+    "source": "PAO",
+    "target": "PIT",
+    "throughput_kbps": 1.826120015206997,
+    "mean_hops": 5.532959326788219,
+    "packets": 713
+  },
+  {
+    "source": "SEA",
+    "target": "SLC",
+    "throughput_kbps": 1.731806900968698,
+    "mean_hops": 5.812130177514793,
+    "packets": 676
+  },
+  {
+    "source": "SEA",
+    "target": "CMI",
+    "throughput_kbps": 1.8254625462546255,
+    "mean_hops": 5.077138849929874,
+    "packets": 713
+  },
+  {
+    "source": "SEA",
+    "target": "BOU",
+    "throughput_kbps": 1.797947055645598,
+    "mean_hops": 6.012820512820513,
+    "packets": 702
+  },
+  {
+    "source": "SEA",
+    "target": "PAO",
+    "throughput_kbps": 2.2683868386838686,
+    "mean_hops": 4.863431151241535,
+    "packets": 886
+  },
+  {
+    "source": "PAO",
+    "target": "SAN",
+    "throughput_kbps": 2.1787778777877786,
+    "mean_hops": 4.679200940070506,
+    "packets": 851
+  },
+  {
+    "source": "PAO",
+    "target": "ATL",
+    "throughput_kbps": 1.119954840530624,
+    "mean_hops": 7.456221198156682,
+    "packets": 434
+  },
+  {
+    "source": "SEA",
+    "target": "ARB",
+    "throughput_kbps": 1.4115763349611723,
+    "mean_hops": 6.651542649727768,
+    "packets": 551
+  },
+  {
+    "source": "SEA",
+    "target": "ATL",
+    "throughput_kbps": 0.9990344383649835,
+    "mean_hops": 7.690721649484536,
+    "packets": 388
+  },
+  {
+    "source": "SEA",
+    "target": "HOU",
+    "throughput_kbps": 1.9647774575728492,
+    "mean_hops": 5.044328552803129,
+    "packets": 767
+  },
+  {
+    "source": "PAO",
+    "target": "SEA",
+    "throughput_kbps": 2.2402240224022405,
+    "mean_hops": 4.6411428571428575,
+    "packets": 875
+  },
+  {
+    "source": "SEA",
+    "target": "PIT",
+    "throughput_kbps": 1.7915181610668378,
+    "mean_hops": 5.400572246065808,
+    "packets": 699
+  },
+  {
+    "source": "PAO",
+    "target": "CMI",
+    "throughput_kbps": 1.7984148586982631,
+    "mean_hops": 5.99002849002849,
+    "packets": 702
+  },
+  {
+    "source": "PAO",
+    "target": "HOU",
+    "throughput_kbps": 2.0049675506770313,
+    "mean_hops": 5.179028132992327,
+    "packets": 782
+  },
+  {
+    "source": "PAO",
+    "target": "SLC",
+    "throughput_kbps": 1.8689868986898692,
+    "mean_hops": 5.445205479452055,
+    "packets": 730
+  },
+  {
+    "source": "PAO",
+    "target": "ARB",
+    "throughput_kbps": 1.5175535217191045,
+    "mean_hops": 6.101351351351352,
+    "packets": 592
+  },
+  {
+    "source": "SAN",
+    "target": "SEA",
+    "throughput_kbps": 2.278627862786279,
+    "mean_hops": 4.753932584269663,
+    "packets": 890
+  },
+  {
+    "source": "SAN",
+    "target": "PAO",
+    "throughput_kbps": 2.352875287528753,
+    "mean_hops": 4.945593035908597,
+    "packets": 919
+  },
+  {
+    "source": "SAN",
+    "target": "PIT",
+    "throughput_kbps": 1.7980346054138787,
+    "mean_hops": 5.483547925608011,
+    "packets": 699
+  },
+  {
+    "source": "SAN",
+    "target": "BOU",
+    "throughput_kbps": 1.8078662025367112,
+    "mean_hops": 6.024079320113314,
+    "packets": 706
+  },
+  {
+    "source": "SAN",
+    "target": "CMI",
+    "throughput_kbps": 1.8504665411877772,
+    "mean_hops": 5.998614958448753,
+    "packets": 722
+  },
+  {
+    "source": "HOU",
+    "target": "SEA",
+    "throughput_kbps": 1.780481947001842,
+    "mean_hops": 4.543884892086331,
+    "packets": 695
+  },
+  {
+    "source": "SAN",
+    "target": "ATL",
+    "throughput_kbps": 1.1753691033489382,
+    "mean_hops": 6.810457516339869,
+    "packets": 459
+  },
+  {
+    "source": "HOU",
+    "target": "PAO",
+    "throughput_kbps": 1.8011184830323324,
+    "mean_hops": 4.6923076923076925,
+    "packets": 702
+  },
+  {
+    "source": "SAN",
+    "target": "ARB",
+    "throughput_kbps": 1.428726855116556,
+    "mean_hops": 6.537906137184115,
+    "packets": 554
+  },
+  {
+    "source": "HOU",
+    "target": "SAN",
+    "throughput_kbps": 1.8766676667666768,
+    "mean_hops": 3.9672578444747613,
+    "packets": 733
+  },
+  {
+    "source": "HOU",
+    "target": "PIT",
+    "throughput_kbps": 2.5720919061724445,
+    "mean_hops": 4.085657370517929,
+    "packets": 1004
+  },
+  {
+    "source": "SAN",
+    "target": "SLC",
+    "throughput_kbps": 1.8837851908213523,
+    "mean_hops": 5.684353741496599,
+    "packets": 735
+  },
+  {
+    "source": "SAN",
+    "target": "HOU",
+    "throughput_kbps": 2.0302830283028306,
+    "mean_hops": 4.48297604035309,
+    "packets": 793
+  },
+  {
+    "source": "HOU",
+    "target": "ATL",
+    "throughput_kbps": 1.5489548954895491,
+    "mean_hops": 3.3157024793388428,
+    "packets": 605
+  },
+  {
+    "source": "HOU",
+    "target": "CMI",
+    "throughput_kbps": 2.037162500751669,
+    "mean_hops": 4.866498740554156,
+    "packets": 794
+  },
+  {
+    "source": "HOU",
+    "target": "SLC",
+    "throughput_kbps": 1.922229786552401,
+    "mean_hops": 4.82,
+    "packets": 750
+  },
+  {
+    "source": "HOU",
+    "target": "BOU",
+    "throughput_kbps": 2.114771477147715,
+    "mean_hops": 4.12590799031477,
+    "packets": 826
+  },
+  {
+    "source": "ATL",
+    "target": "SEA",
+    "throughput_kbps": 1.2906743645257017,
+    "mean_hops": 7.713717693836978,
+    "packets": 503
+  },
+  {
+    "source": "HOU",
+    "target": "ARB",
+    "throughput_kbps": 1.6959249533965408,
+    "mean_hops": 4.8653555219364595,
+    "packets": 661
+  },
+  {
+    "source": "ATL",
+    "target": "SAN",
+    "throughput_kbps": 1.274588768007053,
+    "mean_hops": 7.609657947686117,
+    "packets": 497
+  },
+  {
+    "source": "ATL",
+    "target": "PAO",
+    "throughput_kbps": 1.3022249814751774,
+    "mean_hops": 7.755905511811024,
+    "packets": 508
+  },
+  {
+    "source": "ATL",
+    "target": "PIT",
+    "throughput_kbps": 1.7998599859986,
+    "mean_hops": 4.54054054054054,
+    "packets": 703
+  },
+  {
+    "source": "ATL",
+    "target": "SLC",
+    "throughput_kbps": 1.3667403981500108,
+    "mean_hops": 7.27683615819209,
+    "packets": 531
+  },
+  {
+    "source": "ATL",
+    "target": "HOU",
+    "throughput_kbps": 1.7870587058705871,
+    "mean_hops": 4.356733524355301,
+    "packets": 698
+  },
+  {
+    "source": "ATL",
+    "target": "CMI",
+    "throughput_kbps": 1.4813984221697172,
+    "mean_hops": 7.22318339100346,
+    "packets": 578
+  },
+  {
+    "source": "ATL",
+    "target": "BOU",
+    "throughput_kbps": 1.4032729164165973,
+    "mean_hops": 7.0510948905109485,
+    "packets": 548
+  },
+  {
+    "source": "ATL",
+    "target": "ARB",
+    "throughput_kbps": 1.3623844935757383,
+    "mean_hops": 6.992467043314501,
+    "packets": 531
+  },
+  {
+    "source": "PIT",
+    "target": "SEA",
+    "throughput_kbps": 1.518505181450807,
+    "mean_hops": 4.957841483979764,
+    "packets": 593
+  },
+  {
+    "source": "PIT",
+    "target": "SAN",
+    "throughput_kbps": 1.4511598041576372,
+    "mean_hops": 5.327433628318584,
+    "packets": 565
+  },
+  {
+    "source": "PIT",
+    "target": "PAO",
+    "throughput_kbps": 1.5960291409815073,
+    "mean_hops": 5.532905296950241,
+    "packets": 623
+  },
+  {
+    "source": "PIT",
+    "target": "HOU",
+    "throughput_kbps": 2.6680549437347327,
+    "mean_hops": 4.293948126801153,
+    "packets": 1041
+  },
+  {
+    "source": "PIT",
+    "target": "ATL",
+    "throughput_kbps": 1.49006900690069,
+    "mean_hops": 3.2731958762886597,
+    "packets": 582
+  },
+  {
+    "source": "PIT",
+    "target": "CMI",
+    "throughput_kbps": 1.8510651065106511,
+    "mean_hops": 4.132780082987552,
+    "packets": 723
+  },
+  {
+    "source": "PIT",
+    "target": "ARB",
+    "throughput_kbps": 1.9709262744783953,
+    "mean_hops": 4.5149544863459035,
+    "packets": 769
+  },
+  {
+    "source": "PIT",
+    "target": "BOU",
+    "throughput_kbps": 1.8092962553960448,
+    "mean_hops": 5.144886363636363,
+    "packets": 704
+  },
+  {
+    "source": "PIT",
+    "target": "SLC",
+    "throughput_kbps": 1.8530295142365143,
+    "mean_hops": 5.080221300138312,
+    "packets": 723
+  },
+  {
+    "source": "CMI",
+    "target": "SEA",
+    "throughput_kbps": 1.8203420342034202,
+    "mean_hops": 4.853727144866386,
+    "packets": 711
+  },
+  {
+    "source": "CMI",
+    "target": "PAO",
+    "throughput_kbps": 1.6362981634857767,
+    "mean_hops": 5.539906103286385,
+    "packets": 639
+  },
+  {
+    "source": "CMI",
+    "target": "PIT",
+    "throughput_kbps": 2.004680468046805,
+    "mean_hops": 4.648786717752235,
+    "packets": 783
+  },
+  {
+    "source": "CMI",
+    "target": "BOU",
+    "throughput_kbps": 2.0273116815505987,
+    "mean_hops": 5.3097345132743365,
+    "packets": 791
+  },
+  {
+    "source": "CMI",
+    "target": "HOU",
+    "throughput_kbps": 2.1469279788385243,
+    "mean_hops": 5.255675029868578,
+    "packets": 837
+  },
+  {
+    "source": "CMI",
+    "target": "SAN",
+    "throughput_kbps": 1.6439803144880576,
+    "mean_hops": 5.6152647975077885,
+    "packets": 642
+  },
+  {
+    "source": "CMI",
+    "target": "ATL",
+    "throughput_kbps": 1.198631370430399,
+    "mean_hops": 6.463675213675214,
+    "packets": 468
+  },
+  {
+    "source": "CMI",
+    "target": "ARB",
+    "throughput_kbps": 1.4720294405888135,
+    "mean_hops": 6.391304347826087,
+    "packets": 575
+  },
+  {
+    "source": "CMI",
+    "target": "SLC",
+    "throughput_kbps": 1.80130117105395,
+    "mean_hops": 6.260312944523471,
+    "packets": 703
+  },
+  {
+    "source": "BOU",
+    "target": "SEA",
+    "throughput_kbps": 1.6472660315427112,
+    "mean_hops": 5.897356143079316,
+    "packets": 643
+  },
+  {
+    "source": "BOU",
+    "target": "PAO",
+    "throughput_kbps": 1.7658884305794724,
+    "mean_hops": 5.622641509433962,
+    "packets": 689
+  },
+  {
+    "source": "BOU",
+    "target": "SAN",
+    "throughput_kbps": 1.6434580562454948,
+    "mean_hops": 5.547581903276131,
+    "packets": 641
+  },
+  {
+    "source": "BOU",
+    "target": "HOU",
+    "throughput_kbps": 2.212061206120612,
+    "mean_hops": 4.476851851851852,
+    "packets": 864
+  },
+  {
+    "source": "BOU",
+    "target": "ATL",
+    "throughput_kbps": 1.2212712221130908,
+    "mean_hops": 6.5966386554621845,
+    "packets": 476
+  },
+  {
+    "source": "BOU",
+    "target": "PIT",
+    "throughput_kbps": 1.859899127371708,
+    "mean_hops": 5.362258953168044,
+    "packets": 726
+  },
+  {
+    "source": "BOU",
+    "target": "CMI",
+    "throughput_kbps": 2.0725322232007053,
+    "mean_hops": 5.337453646477132,
+    "packets": 809
+  },
+  {
+    "source": "BOU",
+    "target": "ARB",
+    "throughput_kbps": 1.5242974941958214,
+    "mean_hops": 5.794957983193277,
+    "packets": 595
+  },
+  {
+    "source": "SLC",
+    "target": "PAO",
+    "throughput_kbps": 1.7256125612561257,
+    "mean_hops": 4.406528189910979,
+    "packets": 674
+  },
+  {
+    "source": "BOU",
+    "target": "SLC",
+    "throughput_kbps": 2.045644564456446,
+    "mean_hops": 5.254067584480601,
+    "packets": 799
+  },
+  {
+    "source": "SLC",
+    "target": "SEA",
+    "throughput_kbps": 1.678008165879434,
+    "mean_hops": 5.483969465648855,
+    "packets": 655
+  },
+  {
+    "source": "SLC",
+    "target": "HOU",
+    "throughput_kbps": 2.124704657402587,
+    "mean_hops": 5.300361881785284,
+    "packets": 829
+  },
+  {
+    "source": "SLC",
+    "target": "SAN",
+    "throughput_kbps": 1.7658884305794724,
+    "mean_hops": 5.44267053701016,
+    "packets": 689
+  },
+  {
+    "source": "SLC",
+    "target": "PIT",
+    "throughput_kbps": 2.052037466976224,
+    "mean_hops": 5.3083645443196,
+    "packets": 801
+  },
+  {
+    "source": "SLC",
+    "target": "ATL",
+    "throughput_kbps": 1.1314718675459523,
+    "mean_hops": 6.607709750566894,
+    "packets": 441
+  },
+  {
+    "source": "SLC",
+    "target": "BOU",
+    "throughput_kbps": 1.9355535553555359,
+    "mean_hops": 4.865079365079365,
+    "packets": 756
+  },
+  {
+    "source": "SLC",
+    "target": "CMI",
+    "throughput_kbps": 1.8815612921314568,
+    "mean_hops": 5.994550408719346,
+    "packets": 734
+  },
+  {
+    "source": "SLC",
+    "target": "ARB",
+    "throughput_kbps": 1.7512151215121512,
+    "mean_hops": 4.691520467836257,
+    "packets": 684
+  },
+  {
+    "source": "ARB",
+    "target": "PAO",
+    "throughput_kbps": 1.3366942743968315,
+    "mean_hops": 5.854406130268199,
+    "packets": 522
+  },
+  {
+    "source": "ARB",
+    "target": "SEA",
+    "throughput_kbps": 1.3936434232647512,
+    "mean_hops": 6.080882352941177,
+    "packets": 544
+  },
+  {
+    "source": "ARB",
+    "target": "SAN",
+    "throughput_kbps": 1.3264514063937909,
+    "mean_hops": 6.405405405405405,
+    "packets": 518
+  },
+  {
+    "source": "ARB",
+    "target": "PIT",
+    "throughput_kbps": 2.3707500700812947,
+    "mean_hops": 5.043243243243243,
+    "packets": 925
+  },
+  {
+    "source": "ARB",
+    "target": "HOU",
+    "throughput_kbps": 2.2390521175246185,
+    "mean_hops": 5.311212814645309,
+    "packets": 874
+  },
+  {
+    "source": "ARB",
+    "target": "BOU",
+    "throughput_kbps": 1.5496802902443427,
+    "mean_hops": 5.602649006622516,
+    "packets": 604
+  },
+  {
+    "source": "ARB",
+    "target": "SLC",
+    "throughput_kbps": 1.7716971697169717,
+    "mean_hops": 4.73121387283237,
+    "packets": 692
+  },
+  {
+    "source": "ARB",
+    "target": "ATL",
+    "throughput_kbps": 1.089263545713027,
+    "mean_hops": 6.684705882352941,
+    "packets": 425
+  },
+  {
+    "source": "ARB",
+    "target": "CMI",
+    "throughput_kbps": 1.5634135597292862,
+    "mean_hops": 6.168852459016393,
+    "packets": 610
+  }
+]

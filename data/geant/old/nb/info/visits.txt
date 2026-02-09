@@ -1,0 +1,111 @@
+Edge & Node Visit Analysis: GEANT
+Source: MIL, Target: COP
+Variant: nonbacktracking
+Total packets: 3456
+============================================================
+
+Edge Multiplicity (expected visits per packet, ascending):
+----------------------------------------
+  ATH-THE: 0.0538
+  ATH-NIC: 0.0538
+  MIL-TIR: 0.0570
+  SOF-TIR: 0.0570
+  SOF-THE: 0.0613
+  IST-THE: 0.0619
+  IST-SOF: 0.0619
+  BEL-SOF: 0.0628
+  LJU-MIL: 0.0642
+  LJU-ZAG: 0.0642
+  SKO-SOF: 0.0657
+  BEL-SKO: 0.0657
+  BEL-ZAG: 0.0666
+  POD-ZAG: 0.0706
+  BUC-SOF: 0.1027
+  BUC-BUD: 0.1027
+  BUD-ZAG: 0.1053
+  BRA-BUD: 0.1675
+  BRA-VIE: 0.1675
+  COP-HEL: 0.1698
+  HEL-STO: 0.1759
+  OSL-STO: 0.1759
+  COP-OSL: 0.1759
+  GEN-MAR: 0.1976
+  MAD-MAR: 0.2133
+  MAR-MIL: 0.2188
+  LIS-MAD: 0.2335
+  BIL-MAD: 0.2454
+  BIL-POR: 0.2491
+  LIS-POR: 0.2491
+  LIS-SIN: 0.2500
+  BIL-PAR: 0.3018
+  BER-COP: 0.3090
+  GEN-PAR: 0.3134
+  GEN-MIL: 0.3142
+  BER-HAM: 0.3183
+  COP-HAM: 0.3452
+  MIL-VIE: 0.3458
+  KAU-POZ: 0.3458
+  KAU-RIG: 0.3458
+  RIG-TAR: 0.3458
+  HEL-TAR: 0.3458
+  LON-PAR: 0.3472
+  COR-PAR: 0.3484
+  COR-DUB: 0.3484
+  DUB-LON: 0.3484
+  BRU-PAR: 0.3542
+  BER-POZ: 0.3559
+  FRA-GEN: 0.3565
+  BRU-LUX: 0.3611
+  FRA-LUX: 0.3611
+  KIE-POZ: 0.3646
+  FRA-PRA: 0.3747
+  AMS-FRA: 0.3869
+  AMS-BRU: 0.3924
+  AMS-LON: 0.3947
+  PRA-VIE: 0.4757
+  AMS-HAM: 0.5182
+  POZ-PRA: 0.5790
+
+Node Hitting Probability (excludes MIL, COP, ascending):
+----------------------------------------
+  ATH: 0.0237
+  NIC: 0.0237
+  POD: 0.0333
+  IST: 0.0414
+  THE: 0.0440
+  SKO: 0.0515
+  TIR: 0.0570
+  LJU: 0.0642
+  BEL: 0.0677
+  BUC: 0.0825
+  SOF: 0.0990
+  ZAG: 0.1013
+  SIN: 0.1019
+  BUD: 0.1444
+  BRA: 0.1444
+  POR: 0.1542
+  LIS: 0.1684
+  OSL: 0.1759
+  STO: 0.1759
+  KIE: 0.1785
+  MAD: 0.2164
+  BIL: 0.2231
+  COR: 0.2558
+  DUB: 0.2558
+  MAR: 0.2755
+  LUX: 0.2905
+  RIG: 0.3458
+  HEL: 0.3458
+  TAR: 0.3458
+  KAU: 0.3458
+  LON: 0.3466
+  BRU: 0.3903
+  PAR: 0.4502
+  BER: 0.4659
+  VIE: 0.4705
+  GEN: 0.4988
+  FRA: 0.5382
+  HAM: 0.5622
+  AMS: 0.5796
+  POZ: 0.6183
+  PRA: 0.6522

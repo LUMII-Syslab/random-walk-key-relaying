@@ -1,0 +1,122 @@
+{
+  "source": "BOU",
+  "results": [
+    {
+      "source": "BOU",
+      "destination": "HOU",
+      "mean_hops": 4.648055832502492,
+      "min_hops": 1,
+      "max_hops": 13,
+      "std_hops": 3.4937294218434,
+      "packets": 1003
+    },
+    {
+      "source": "BOU",
+      "destination": "SLC",
+      "mean_hops": 5.008602150537635,
+      "min_hops": 1,
+      "max_hops": 18,
+      "std_hops": 4.058169933271302,
+      "packets": 930
+    },
+    {
+      "source": "BOU",
+      "destination": "LNK",
+      "mean_hops": 5.219973009446694,
+      "min_hops": 1,
+      "max_hops": 19,
+      "std_hops": 5.129253035913125,
+      "packets": 741
+    },
+    {
+      "source": "BOU",
+      "destination": "CMI",
+      "mean_hops": 5.296216216216216,
+      "min_hops": 2,
+      "max_hops": 16,
+      "std_hops": 3.7380203977227158,
+      "packets": 925
+    },
+    {
+      "source": "BOU",
+      "destination": "PIT",
+      "mean_hops": 5.570289132602193,
+      "min_hops": 3,
+      "max_hops": 13,
+      "std_hops": 2.5440867681155144,
+      "packets": 1003
+    },
+    {
+      "source": "BOU",
+      "destination": "PAO",
+      "mean_hops": 6.1726190476190474,
+      "min_hops": 2,
+      "max_hops": 16,
+      "std_hops": 3.4832883748685424,
+      "packets": 840
+    },
+    {
+      "source": "BOU",
+      "destination": "ARB",
+      "mean_hops": 6.237485448195576,
+      "min_hops": 2,
+      "max_hops": 13,
+      "std_hops": 3.0352130086117874,
+      "packets": 859
+    },
+    {
+      "source": "BOU",
+      "destination": "SAN",
+      "mean_hops": 6.285714285714286,
+      "min_hops": 2,
+      "max_hops": 15,
+      "std_hops": 3.4070857102228094,
+      "packets": 819
+    },
+    {
+      "source": "BOU",
+      "destination": "CPK",
+      "mean_hops": 6.358722358722359,
+      "min_hops": 2,
+      "max_hops": 15,
+      "std_hops": 3.119498217550946,
+      "packets": 814
+    },
+    {
+      "source": "BOU",
+      "destination": "SEA",
+      "mean_hops": 6.500650195058517,
+      "min_hops": 3,
+      "max_hops": 16,
+      "std_hops": 3.5033422041463513,
+      "packets": 769
+    },
+    {
+      "source": "BOU",
+      "destination": "PRI",
+      "mean_hops": 6.633689839572193,
+      "min_hops": 3,
+      "max_hops": 14,
+      "std_hops": 2.925005374107861,
+      "packets": 748
+    },
+    {
+      "source": "BOU",
+      "destination": "ITH",
+      "mean_hops": 6.692913385826771,
+      "min_hops": 3,
+      "max_hops": 14,
+      "std_hops": 2.906717202964505,
+      "packets": 762
+    },
+    {
+      "source": "BOU",
+      "destination": "ATL",
+      "mean_hops": 6.760330578512397,
+      "min_hops": 2,
+      "max_hops": 17,
+      "std_hops": 3.786502329421949,
+      "packets": 605
+    }
+  ]
+}

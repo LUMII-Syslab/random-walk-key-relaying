@@ -1,0 +1,99 @@
+Pairwise Metrics: NSFNET
+Variant: nonbacktracking
+======================================================================
+
+Correlation (Pearson r) between throughput and hop count: -0.0076
+  (negative = higher hops -> lower throughput, as expected)
+
+Source   Target     Throughput  Mean hops  Packets
+----------------------------------------------------------------------
+SEA      SAN            2.21        4.50      864
+PAO      BOU            1.83        6.06      715
+PAO      PIT            1.83        5.53      713
+SEA      SLC            1.73        5.81      676
+SEA      CMI            1.83        5.08      713
+SEA      BOU            1.80        6.01      702
+SEA      PAO            2.27        4.86      886
+PAO      SAN            2.18        4.68      851
+PAO      ATL            1.12        7.46      434
+SEA      ARB            1.41        6.65      551
+SEA      ATL            1.00        7.69      388
+SEA      HOU            1.96        5.04      767
+PAO      SEA            2.24        4.64      875
+SEA      PIT            1.79        5.40      699
+PAO      CMI            1.80        5.99      702
+PAO      HOU            2.00        5.18      782
+PAO      SLC            1.87        5.45      730
+PAO      ARB            1.52        6.10      592
+SAN      SEA            2.28        4.75      890
+SAN      PAO            2.35        4.95      919
+SAN      PIT            1.80        5.48      699
+SAN      BOU            1.81        6.02      706
+SAN      CMI            1.85        6.00      722
+HOU      SEA            1.78        4.54      695
+SAN      ATL            1.18        6.81      459
+HOU      PAO            1.80        4.69      702
+SAN      ARB            1.43        6.54      554
+HOU      SAN            1.88        3.97      733
+HOU      PIT            2.57        4.09     1004
+SAN      SLC            1.88        5.68      735
+SAN      HOU            2.03        4.48      793
+HOU      ATL            1.55        3.32      605
+HOU      CMI            2.04        4.87      794
+HOU      SLC            1.92        4.82      750
+HOU      BOU            2.11        4.13      826
+ATL      SEA            1.29        7.71      503
+HOU      ARB            1.70        4.87      661
+ATL      SAN            1.27        7.61      497
+ATL      PAO            1.30        7.76      508
+ATL      PIT            1.80        4.54      703
+ATL      SLC            1.37        7.28      531
+ATL      HOU            1.79        4.36      698
+ATL      CMI            1.48        7.22      578
+ATL      BOU            1.40        7.05      548
+ATL      ARB            1.36        6.99      531
+PIT      SEA            1.52        4.96      593
+PIT      SAN            1.45        5.33      565
+PIT      PAO            1.60        5.53      623
+PIT      HOU            2.67        4.29     1041
+PIT      ATL            1.49        3.27      582
+PIT      CMI            1.85        4.13      723
+PIT      ARB            1.97        4.51      769
+PIT      BOU            1.81        5.14      704
+PIT      SLC            1.85        5.08      723
+CMI      SEA            1.82        4.85      711
+CMI      PAO            1.64        5.54      639
+CMI      PIT            2.00        4.65      783
+CMI      BOU            2.03        5.31      791
+CMI      HOU            2.15        5.26      837
+CMI      SAN            1.64        5.62      642
+CMI      ATL            1.20        6.46      468
+CMI      ARB            1.47        6.39      575
+CMI      SLC            1.80        6.26      703
+BOU      SEA            1.65        5.90      643
+BOU      PAO            1.77        5.62      689
+BOU      SAN            1.64        5.55      641
+BOU      HOU            2.21        4.48      864
+BOU      ATL            1.22        6.60      476
+BOU      PIT            1.86        5.36      726
+BOU      CMI            2.07        5.34      809
+BOU      ARB            1.52        5.79      595
+SLC      PAO            1.73        4.41      674
+BOU      SLC            2.05        5.25      799
+SLC      SEA            1.68        5.48      655
+SLC      HOU            2.12        5.30      829
+SLC      SAN            1.77        5.44      689
+SLC      PIT            2.05        5.31      801
+SLC      ATL            1.13        6.61      441
+SLC      BOU            1.94        4.87      756
+SLC      CMI            1.88        5.99      734
+SLC      ARB            1.75        4.69      684
+ARB      PAO            1.34        5.85      522
+ARB      SEA            1.39        6.08      544
+ARB      SAN            1.33        6.41      518
+ARB      PIT            2.37        5.04      925
+ARB      HOU            2.24        5.31      874
+ARB      BOU            1.55        5.60      604
+ARB      SLC            1.77        4.73      692
+ARB      ATL            1.09        6.68      425
+ARB      CMI            1.56        6.17      610

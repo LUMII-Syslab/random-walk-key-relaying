@@ -1,0 +1,632 @@
+[
+  {
+    "source": "ATH",
+    "target": "BER",
+    "throughput_kbps": 0.1510570329826848,
+    "mean_hops": 79.41379310344827,
+    "packets": 58
+  },
+  {
+    "source": "AMS",
+    "target": "FRA",
+    "throughput_kbps": 1.6923292329232924,
+    "mean_hops": 10.357034795763994,
+    "packets": 661
+  },
+  {
+    "source": "ATH",
+    "target": "MIL",
+    "throughput_kbps": 0.37281803025129073,
+    "mean_hops": 20.06896551724138,
+    "packets": 145
+  },
+  {
+    "source": "ATH",
+    "target": "LON",
+    "throughput_kbps": 0.18982883272570109,
+    "mean_hops": 59.59722222222222,
+    "packets": 72
+  },
+  {
+    "source": "ATH",
+    "target": "AMS",
+    "throughput_kbps": 0.25408537685721916,
+    "mean_hops": 57.37373737373738,
+    "packets": 99
+  },
+  {
+    "source": "ATH",
+    "target": "FRA",
+    "throughput_kbps": 0.22607409841452447,
+    "mean_hops": 56.651162790697676,
+    "packets": 86
+  },
+  {
+    "source": "ATH",
+    "target": "MAD",
+    "throughput_kbps": 0.17672482791740482,
+    "mean_hops": 73.84057971014492,
+    "packets": 69
+  },
+  {
+    "source": "AMS",
+    "target": "COP",
+    "throughput_kbps": 0.7560770493772777,
+    "mean_hops": 11.905084745762712,
+    "packets": 295
+  },
+  {
+    "source": "AMS",
+    "target": "MAD",
+    "throughput_kbps": 0.5342322818845815,
+    "mean_hops": 23.3125,
+    "packets": 208
+  },
+  {
+    "source": "AMS",
+    "target": "MIL",
+    "throughput_kbps": 0.62765190937475,
+    "mean_hops": 15.036734693877552,
+    "packets": 245
+  },
+  {
+    "source": "AMS",
+    "target": "LON",
+    "throughput_kbps": 1.3850985098509851,
+    "mean_hops": 7.170055452865065,
+    "packets": 541
+  },
+  {
+    "source": "AMS",
+    "target": "BER",
+    "throughput_kbps": 0.7953657118803746,
+    "mean_hops": 14.219354838709677,
+    "packets": 310
+  },
+  {
+    "source": "AMS",
+    "target": "ATH",
+    "throughput_kbps": 0.17979756248708967,
+    "mean_hops": 50.955882352941174,
+    "packets": 68
+  },
+  {
+    "source": "AMS",
+    "target": "PAR",
+    "throughput_kbps": 1.3840054463177287,
+    "mean_hops": 12.83148148148148,
+    "packets": 540
+  },
+  {
+    "source": "AMS",
+    "target": "VIE",
+    "throughput_kbps": 0.5429045875597747,
+    "mean_hops": 23.04245283018868,
+    "packets": 212
+  },
+  {
+    "source": "ATH",
+    "target": "COP",
+    "throughput_kbps": 0.1617701901959985,
+    "mean_hops": 85.01639344262296,
+    "packets": 61
+  },
+  {
+    "source": "ATH",
+    "target": "PAR",
+    "throughput_kbps": 0.20260468843919113,
+    "mean_hops": 47.88607594936709,
+    "packets": 79
+  },
+  {
+    "source": "ATH",
+    "target": "VIE",
+    "throughput_kbps": 0.3050203966234503,
+    "mean_hops": 36.23728813559322,
+    "packets": 118
+  },
+  {
+    "source": "BER",
+    "target": "AMS",
+    "throughput_kbps": 0.7201954266949663,
+    "mean_hops": 10.217081850533807,
+    "packets": 281
+  },
+  {
+    "source": "BER",
+    "target": "FRA",
+    "throughput_kbps": 0.6157670027460964,
+    "mean_hops": 16.595833333333335,
+    "packets": 240
+  },
+  {
+    "source": "BER",
+    "target": "COP",
+    "throughput_kbps": 1.6616061606160617,
+    "mean_hops": 7.194144838212635,
+    "packets": 649
+  },
+  {
+    "source": "BER",
+    "target": "ATH",
+    "throughput_kbps": 0.17249617151607985,
+    "mean_hops": 64.84848484848484,
+    "packets": 66
+  },
+  {
+    "source": "BER",
+    "target": "MIL",
+    "throughput_kbps": 0.44319910335441537,
+    "mean_hops": 25.034682080924856,
+    "packets": 173
+  },
+  {
+    "source": "COP",
+    "target": "AMS",
+    "throughput_kbps": 0.7048175884025469,
+    "mean_hops": 14.974545454545455,
+    "packets": 275
+  },
+  {
+    "source": "BER",
+    "target": "VIE",
+    "throughput_kbps": 0.4125455754084195,
+    "mean_hops": 29.2625,
+    "packets": 160
+  },
+  {
+    "source": "BER",
+    "target": "LON",
+    "throughput_kbps": 0.45865278750875826,
+    "mean_hops": 33.53072625698324,
+    "packets": 179
+  },
+  {
+    "source": "BER",
+    "target": "MAD",
+    "throughput_kbps": 0.31822627975220125,
+    "mean_hops": 43.68032786885246,
+    "packets": 122
+  },
+  {
+    "source": "COP",
+    "target": "FRA",
+    "throughput_kbps": 0.6095603977829808,
+    "mean_hops": 22.945378151260503,
+    "packets": 238
+  },
+  {
+    "source": "COP",
+    "target": "BER",
+    "throughput_kbps": 1.6232023202320234,
+    "mean_hops": 9.837539432176657,
+    "packets": 634
+  },
+  {
+    "source": "BER",
+    "target": "PAR",
+    "throughput_kbps": 0.4969978384436795,
+    "mean_hops": 22.891752577319586,
+    "packets": 194
+  },
+  {
+    "source": "COP",
+    "target": "MAD",
+    "throughput_kbps": 0.3090142804533739,
+    "mean_hops": 38.92372881355932,
+    "packets": 118
+  },
+  {
+    "source": "COP",
+    "target": "ATH",
+    "throughput_kbps": 0.12611091004142055,
+    "mean_hops": 84.71428571428571,
+    "packets": 49
+  },
+  {
+    "source": "COP",
+    "target": "MIL",
+    "throughput_kbps": 0.33992864093415553,
+    "mean_hops": 26.763358778625953,
+    "packets": 131
+  },
+  {
+    "source": "COP",
+    "target": "LON",
+    "throughput_kbps": 0.43077786013341723,
+    "mean_hops": 29.43452380952381,
+    "packets": 168
+  },
+  {
+    "source": "COP",
+    "target": "PAR",
+    "throughput_kbps": 0.4697104857675777,
+    "mean_hops": 22.39779005524862,
+    "packets": 181
+  },
+  {
+    "source": "COP",
+    "target": "VIE",
+    "throughput_kbps": 0.39740333051086657,
+    "mean_hops": 29.935064935064936,
+    "packets": 154
+  },
+  {
+    "source": "FRA",
+    "target": "AMS",
+    "throughput_kbps": 1.781938193819382,
+    "mean_hops": 9.514367816091953,
+    "packets": 696
+  },
+  {
+    "source": "FRA",
+    "target": "ATH",
+    "throughput_kbps": 0.18431833853892043,
+    "mean_hops": 41.605633802816904,
+    "packets": 71
+  },
+  {
+    "source": "FRA",
+    "target": "BER",
+    "throughput_kbps": 0.6436542121606741,
+    "mean_hops": 14.752988047808765,
+    "packets": 251
+  },
+  {
+    "source": "FRA",
+    "target": "COP",
+    "throughput_kbps": 0.5507965735329439,
+    "mean_hops": 15.232558139534884,
+    "packets": 215
+  },
+  {
+    "source": "FRA",
+    "target": "MIL",
+    "throughput_kbps": 0.9054480416390348,
+    "mean_hops": 10.715909090909092,
+    "packets": 352
+  },
+  {
+    "source": "FRA",
+    "target": "LON",
+    "throughput_kbps": 0.848344079131793,
+    "mean_hops": 13.045317220543806,
+    "packets": 331
+  },
+  {
+    "source": "FRA",
+    "target": "PAR",
+    "throughput_kbps": 1.1796998657610551,
+    "mean_hops": 11.034782608695652,
+    "packets": 460
+  },
+  {
+    "source": "LON",
+    "target": "ATH",
+    "throughput_kbps": 0.16458150499010163,
+    "mean_hops": 58.61904761904762,
+    "packets": 63
+  },
+  {
+    "source": "FRA",
+    "target": "MAD",
+    "throughput_kbps": 0.6662245533650852,
+    "mean_hops": 20.957528957528957,
+    "packets": 259
+  },
+  {
+    "source": "LON",
+    "target": "COP",
+    "throughput_kbps": 0.5238355720334698,
+    "mean_hops": 29.53960396039604,
+    "packets": 202
+  },
+  {
+    "source": "FRA",
+    "target": "VIE",
+    "throughput_kbps": 0.858232625366363,
+    "mean_hops": 18.080838323353294,
+    "packets": 334
+  },
+  {
+    "source": "LON",
+    "target": "AMS",
+    "throughput_kbps": 1.4414241424142415,
+    "mean_hops": 11.948490230905861,
+    "packets": 563
+  },
+  {
+    "source": "LON",
+    "target": "BER",
+    "throughput_kbps": 0.4549488945561177,
+    "mean_hops": 22.80225988700565,
+    "packets": 177
+  },
+  {
+    "source": "LON",
+    "target": "MAD",
+    "throughput_kbps": 0.5286805149799529,
+    "mean_hops": 23.390243902439025,
+    "packets": 205
+  },
+  {
+    "source": "LON",
+    "target": "MIL",
+    "throughput_kbps": 0.6847388351265254,
+    "mean_hops": 21.352059925093634,
+    "packets": 267
+  },
+  {
+    "source": "LON",
+    "target": "VIE",
+    "throughput_kbps": 0.4872282880897532,
+    "mean_hops": 31.089473684210525,
+    "packets": 190
+  },
+  {
+    "source": "LON",
+    "target": "FRA",
+    "throughput_kbps": 1.0301706705492197,
+    "mean_hops": 18.22613065326633,
+    "packets": 398
+  },
+  {
+    "source": "MAD",
+    "target": "AMS",
+    "throughput_kbps": 0.619711519145005,
+    "mean_hops": 24.070539419087137,
+    "packets": 241
+  },
+  {
+    "source": "MAD",
+    "target": "LON",
+    "throughput_kbps": 0.6342353908804595,
+    "mean_hops": 29.323886639676115,
+    "packets": 247
+  },
+  {
+    "source": "LON",
+    "target": "PAR",
+    "throughput_kbps": 1.7691369136913693,
+    "mean_hops": 11.031837916063676,
+    "packets": 691
+  },
+  {
+    "source": "MAD",
+    "target": "PAR",
+    "throughput_kbps": 0.96101497570964,
+    "mean_hops": 18.6951871657754,
+    "packets": 374
+  },
+  {
+    "source": "MAD",
+    "target": "BER",
+    "throughput_kbps": 0.3649843170801264,
+    "mean_hops": 37.77857142857143,
+    "packets": 140
+  },
+  {
+    "source": "MAD",
+    "target": "FRA",
+    "throughput_kbps": 0.6279912689989396,
+    "mean_hops": 24.759183673469387,
+    "packets": 245
+  },
+  {
+    "source": "MAD",
+    "target": "ATH",
+    "throughput_kbps": 0.15204079542894622,
+    "mean_hops": 65.74137931034483,
+    "packets": 58
+  },
+  {
+    "source": "MAD",
+    "target": "MIL",
+    "throughput_kbps": 0.7373893494449977,
+    "mean_hops": 13.365853658536585,
+    "packets": 287
+  },
+  {
+    "source": "MAD",
+    "target": "COP",
+    "throughput_kbps": 0.31129549774171816,
+    "mean_hops": 42.436974789915965,
+    "packets": 119
+  },
+  {
+    "source": "MAD",
+    "target": "VIE",
+    "throughput_kbps": 0.5895162104837897,
+    "mean_hops": 32.8859649122807,
+    "packets": 228
+  },
+  {
+    "source": "MIL",
+    "target": "AMS",
+    "throughput_kbps": 0.7969951995500846,
+    "mean_hops": 15.45483870967742,
+    "packets": 310
+  },
+  {
+    "source": "MIL",
+    "target": "ATH",
+    "throughput_kbps": 0.29062601362309476,
+    "mean_hops": 15.098214285714286,
+    "packets": 112
+  },
+  {
+    "source": "MIL",
+    "target": "BER",
+    "throughput_kbps": 0.470834170854274,
+    "mean_hops": 20.229508196721312,
+    "packets": 183
+  },
+  {
+    "source": "MIL",
+    "target": "COP",
+    "throughput_kbps": 0.35193770445742284,
+    "mean_hops": 24.094890510948904,
+    "packets": 137
+  },
+  {
+    "source": "MIL",
+    "target": "FRA",
+    "throughput_kbps": 0.9918496808126229,
+    "mean_hops": 14.958549222797927,
+    "packets": 386
+  },
+  {
+    "source": "MIL",
+    "target": "MAD",
+    "throughput_kbps": 0.7688537104745082,
+    "mean_hops": 14.535117056856187,
+    "packets": 299
+  },
+  {
+    "source": "MIL",
+    "target": "VIE",
+    "throughput_kbps": 1.4286228622862287,
+    "mean_hops": 8.799283154121865,
+    "packets": 558
+  },
+  {
+    "source": "MIL",
+    "target": "PAR",
+    "throughput_kbps": 0.8908500140398737,
+    "mean_hops": 14.005763688760807,
+    "packets": 347
+  },
+  {
+    "source": "PAR",
+    "target": "AMS",
+    "throughput_kbps": 1.3891313924152018,
+    "mean_hops": 11.27859778597786,
+    "packets": 542
+  },
+  {
+    "source": "PAR",
+    "target": "ATH",
+    "throughput_kbps": 0.16371277178878166,
+    "mean_hops": 45.65079365079365,
+    "packets": 63
+  },
+  {
+    "source": "PAR",
+    "target": "BER",
+    "throughput_kbps": 0.4079456393192889,
+    "mean_hops": 21.92452830188679,
+    "packets": 159
+  },
+  {
+    "source": "PAR",
+    "target": "FRA",
+    "throughput_kbps": 1.252059572250396,
+    "mean_hops": 13.76844262295082,
+    "packets": 488
+  },
+  {
+    "source": "PAR",
+    "target": "LON",
+    "throughput_kbps": 1.6641664166416643,
+    "mean_hops": 5.712307692307692,
+    "packets": 650
+  },
+  {
+    "source": "PAR",
+    "target": "COP",
+    "throughput_kbps": 0.3605053512513077,
+    "mean_hops": 24.09285714285714,
+    "packets": 140
+  },
+  {
+    "source": "PAR",
+    "target": "MAD",
+    "throughput_kbps": 0.9224715943309111,
+    "mean_hops": 11.334261838440112,
+    "packets": 359
+  },
+  {
+    "source": "MIL",
+    "target": "LON",
+    "throughput_kbps": 0.7114535677020627,
+    "mean_hops": 22.67870036101083,
+    "packets": 277
+  },
+  {
+    "source": "PAR",
+    "target": "MIL",
+    "throughput_kbps": 0.851367324451569,
+    "mean_hops": 13.364457831325302,
+    "packets": 332
+  },
+  {
+    "source": "PAR",
+    "target": "VIE",
+    "throughput_kbps": 0.5670187816953638,
+    "mean_hops": 22.285067873303166,
+    "packets": 221
+  },
+  {
+    "source": "VIE",
+    "target": "ATH",
+    "throughput_kbps": 0.21317922786740515,
+    "mean_hops": 21.44578313253012,
+    "packets": 83
+  },
+  {
+    "source": "VIE",
+    "target": "BER",
+    "throughput_kbps": 0.4686674669867968,
+    "mean_hops": 23.94535519125683,
+    "packets": 183
+  },
+  {
+    "source": "VIE",
+    "target": "AMS",
+    "throughput_kbps": 0.6987376322074383,
+    "mean_hops": 21.058823529411764,
+    "packets": 272
+  },
+  {
+    "source": "VIE",
+    "target": "FRA",
+    "throughput_kbps": 0.9283725030554391,
+    "mean_hops": 17.099447513812155,
+    "packets": 362
+  },
+  {
+    "source": "VIE",
+    "target": "PAR",
+    "throughput_kbps": 0.6824750947102569,
+    "mean_hops": 22.94360902255639,
+    "packets": 266
+  },
+  {
+    "source": "VIE",
+    "target": "MIL",
+    "throughput_kbps": 1.4823882388238823,
+    "mean_hops": 11.858376511226252,
+    "packets": 579
+  },
+  {
+    "source": "VIE",
+    "target": "LON",
+    "throughput_kbps": 0.5071132721051689,
+    "mean_hops": 25.792929292929294,
+    "packets": 198
+  },
+  {
+    "source": "VIE",
+    "target": "COP",
+    "throughput_kbps": 0.4204033404762384,
+    "mean_hops": 26.798780487804876,
+    "packets": 164
+  },
+  {
+    "source": "VIE",
+    "target": "MAD",
+    "throughput_kbps": 0.4774778388351858,
+    "mean_hops": 26.059139784946236,
+    "packets": 186
+  }
+]

@@ -1,0 +1,50 @@
+{
+  "source": "BRE",
+  "results": [
+    {
+      "source": "BRE",
+      "destination": "STP",
+      "mean_hops": 1.0,
+      "min_hops": 1,
+      "max_hops": 1,
+      "std_hops": 0.0,
+      "packets": 390
+    },
+    {
+      "source": "BRE",
+      "destination": "ERD",
+      "mean_hops": 1.7833675564681726,
+      "min_hops": 1,
+      "max_hops": 3,
+      "std_hops": 0.7329797378602915,
+      "packets": 974
+    },
+    {
+      "source": "BRE",
+      "destination": "SIE",
+      "mean_hops": 1.9819724284199365,
+      "min_hops": 1,
+      "max_hops": 6,
+      "std_hops": 1.1246272064237852,
+      "packets": 943
+    },
+    {
+      "source": "BRE",
+      "destination": "GUD",
+      "mean_hops": 1.9915074309978769,
+      "min_hops": 1,
+      "max_hops": 6,
+      "std_hops": 1.1389327422398805,
+      "packets": 942
+    },
+    {
+      "source": "BRE",
+      "destination": "FRM",
+      "mean_hops": 2.831081081081081,
+      "min_hops": 2,
+      "max_hops": 7,
+      "std_hops": 0.9821963358079213,
+      "packets": 296
+    }
+  ]
+}

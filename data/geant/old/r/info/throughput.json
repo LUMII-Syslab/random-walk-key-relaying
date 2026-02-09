@@ -1,0 +1,12 @@
+{
+  "total_keys": 1439,
+  "total_bits": 368384,
+  "mean_iat": 0.6913504867872028,
+  "cv_iat": 0.9825243272087324,
+  "rate_keys": 1.439,
+  "rate_bits": 368.384,
+  "median_throughput": 358.4,
+  "mean_throughput": 368.38399999999996,
+  "p05": 153.6,
+  "p95": 614.4
+}

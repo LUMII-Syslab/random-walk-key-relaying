@@ -1,0 +1,44 @@
+Edge & Node Visit Analysis: NSFNET
+Source: BOU, Target: PIT
+Variant: lrv
+Total packets: 9756
+============================================================
+
+Edge Multiplicity (expected visits per packet, ascending):
+----------------------------------------
+  PAO-SEA: 0.2103
+  PAO-SAN: 0.2117
+  SAN-SEA: 0.2267
+  PIT-PRI: 0.2315
+  ITH-PIT: 0.2374
+  CPK-ITH: 0.2399
+  CPK-PRI: 0.2402
+  ARB-PRI: 0.2495
+  ARB-ITH: 0.2544
+  CMI-PIT: 0.2612
+  CPK-HOU: 0.2625
+  CMI-SEA: 0.2649
+  ATL-HOU: 0.2699
+  ATL-PIT: 0.2699
+  HOU-SAN: 0.2873
+  BOU-LNK: 0.3134
+  CMI-LNK: 0.3134
+  PAO-SLC: 0.3191
+  BOU-SLC: 0.3306
+  BOU-HOU: 0.3560
+  ARB-SLC: 0.3614
+
+Node Hitting Probability (excludes BOU, PIT, ascending):
+----------------------------------------
+  ATL: 0.2699
+  LNK: 0.3134
+  SEA: 0.3414
+  PRI: 0.3606
+  SAN: 0.3629
+  ITH: 0.3658
+  PAO: 0.3705
+  CPK: 0.3713
+  CMI: 0.4102
+  ARB: 0.4327
+  SLC: 0.5055
+  HOU: 0.5795
