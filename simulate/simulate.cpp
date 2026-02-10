@@ -40,7 +40,21 @@ static constexpr double LATENCY_S = 0.05;
 static constexpr double SIM_DURATION_S = 1000.0;
 static constexpr int RELAY_BUFFER_CAPACITY = 100000; // per node, in chunks
 
-static constexpr RandomWalkVariant RANDOM_WALK_VARIANT = R;
+// Selected at runtime from argv in main(). No default allowed.
+static RandomWalkVariant RANDOM_WALK_VARIANT;
+
+
+static RandomWalkVariant parse_walk_variant(const string &s_raw)
+{
+    const string s = to_upper_ascii(s_raw);
+    if (s == "R")
+        return RandomWalkVariant::R;
+    if (s == "NB")
+        return RandomWalkVariant::NB;
+    if (s == "LRV")
+        return RandomWalkVariant::LRV;
+    throw runtime_error("Invalid walk variant: '" + s_raw + "' (expected R, NB, or LRV)");
+}
 
 // proactive-specific knobs
 static constexpr int KEY_BUFFER_CAPACITY = 1000; // per node, in chunks
@@ -247,14 +261,20 @@ Graph to_graph(const EdgesCsvGraph &g)
     return Graph{move(g.node_names), move(g.adj), move(link)};
 }
 
-static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
+struct ArrivedPacket{
+    double time;
+    vector<int> history;
+    int source_node() const { return history[0]; }
+    int finished_at() const { return history.back(); }
+};
+
+static vector<ArrivedPacket> run_simulation(Graph &g, int src, int tgt)
 {
     const int N = static_cast<int>(g.adj.size());
     g.reset_link_states();
 
     vector<int> chunk_count(N, 0);
-    vector<pair<double, int>> kept_events;
-    kept_events.reserve(100000);
+    vector<ArrivedPacket> arrived_packets;
 
     priority_queue<Event, vector<Event>, EventGreater> pq;
 
@@ -375,7 +395,10 @@ static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
             if (keep) {
                 chunk_count[ev.at]++;
                 try_admit(ev.time, ev.at);
-                kept_events.emplace_back(ev.time, ev.at);
+                arrived_packets.emplace_back(ev.time, ev.pkt->history);
+                assert(arrived_packets.back().source_node() == src);
+                assert(arrived_packets.back().finished_at() == ev.at);
+                if(tgt != -1) assert(ev.at == tgt);
                 continue;
             } else {
                 const int nxt = choose_next_neighbor(g.adj[ev.at], ev.pkt);
@@ -391,58 +414,89 @@ static vector<pair<double, int>> run_simulation(Graph &g, int src, int tgt)
         }
     }
 
-    return kept_events;
+    sort(arrived_packets.begin(), arrived_packets.end(),
+         [](const auto &a, const auto &b)
+         { return make_tuple(a.time,a.source_node(),a.finished_at()) < make_tuple(b.time,b.source_node(),b.finished_at()); });
+
+    return arrived_packets;
 }
 
-void write_kept_events(const vector<pair<double, int>> &kept_events, const string &out_path)
+struct HopStats{
+    int min_hops = numeric_limits<int>::max();
+    int max_hops = numeric_limits<int>::min();
+    double mean_hops = 0.0;
+    int q1_hops = 0;
+    int q2_hops = 0;
+    int q3_hops = 0;
+};
+
+HopStats compute_hop_stats(const vector<ArrivedPacket> &arrived_packets)
 {
-    fs::create_directories(fs::path(out_path).parent_path());
-    ofstream out(out_path); assert(out);
-    for (const auto &[t, idx] : kept_events) {
-        out << fmt_2dp(t) << " " << idx << "\n";
-    }
-    cout<<"Wrote "<<out_path<<"\n";
+    assert(arrived_packets.size()>0);
+    HopStats stats;
+
+    vector<int> hops;
+
+    // first pass: compute min, max, mean
+    for(const auto &pkt : arrived_packets)
+        hops.push_back(static_cast<int>(pkt.history.size()) - 1);
+    stats.min_hops = *min_element(hops.begin(), hops.end());
+    stats.max_hops = *max_element(hops.begin(), hops.end());
+    double sum_hops = accumulate(hops.begin(), hops.end(), 0);
+    stats.mean_hops = sum_hops / arrived_packets.size();
+
+    // second pass: compute q1, q2, q3
+    sort(hops.begin(), hops.end());
+    stats.q1_hops = hops[static_cast<size_t>(0.25 * hops.size())];
+    stats.q2_hops = hops[static_cast<size_t>(0.50 * hops.size())];
+    stats.q3_hops = hops[static_cast<size_t>(0.75 * hops.size())];
+    return stats;
+}
+
+double compute_throughput(const vector<ArrivedPacket> &arrived_packets)
+{
+    return static_cast<double>(arrived_packets.size())/SIM_DURATION_S*(256.0/1000.0);
 }
 
 int main(int argc, char **argv)
 {
     try
     {
-        if (argc < 2)
+        if (argc < 3)
         {
-            cerr << "Usage: " << argv[0] << " <edge_list.csv>\n";
+            cerr << "Usage: " << argv[0] << " <walk_variant:{R,NB,LRV}> <edge_list.csv>\n";
             return 2;
         }
 
-        const string edges_path = argv[1];
+        RANDOM_WALK_VARIANT = parse_walk_variant(argv[1]);
+        const string edges_path = argv[2];
         auto g = to_graph(load_edges_csv(edges_path));
-        // int src = g.get_node_index(argv[2]);
-        // int tgt = g.get_node_index(argv[3]);
-        // auto kept_events = run_simulation(g, src, tgt);
-        // sort(kept_events.begin(), kept_events.end(),
-        //      [](const auto &a, const auto &b)
-        //      { return a.first < b.first; });
-            
-        // write_kept_events(kept_events, "out2/rcv.txt");
-        ofstream out("out2/throughput.csv"); assert(out);
-        out<<"source,target,r_throughput,r_tput_rev\n";
+
+        const string header_prefix = RANDOM_WALK_VARIANT == RandomWalkVariant::R ? "r" : RANDOM_WALK_VARIANT == RandomWalkVariant::NB ? "nb" : "lrv";
+        ofstream out("out2/hops.csv"); assert(out);
+        out<<"source,target";
+        vector<string> headers = {"min_hops", "max_hops", "mean_hops", "q1_hops", "q2_hops", "q3_hops"};
+        for(const string &header : headers)
+            out<<","<<header_prefix<<"_"<<header;
+        for(const string &header : headers)
+            out<<","<<header_prefix<<"_"<<header<<"_rev";
+        out<<"\n";
+        out.flush();
 
         int total_pairs = g.adj.size()*(g.adj.size()-1)/2;
         int processed_pairs = 0;
         for(size_t src = 0; src < g.adj.size(); src++){
             for(size_t tgt = 0; tgt < g.adj.size(); tgt++){
                 if(g.node_names[src] >= g.node_names[tgt]) continue;
-                auto kept_events = run_simulation(g, src, tgt);
-                sort(kept_events.begin(), kept_events.end(),
-                     [](const auto &a, const auto &b)
-                     { return a.first < b.first; });
-                const double throughput = (kept_events.size()/SIM_DURATION_S)*(256.0/1000.0);
-                auto kept_events_rev = run_simulation(g, tgt, src);
-                sort(kept_events_rev.begin(), kept_events_rev.end(),
-                     [](const auto &a, const auto &b)
-                     { return a.first < b.first; });
-                const double throughput_rev = (kept_events_rev.size()/SIM_DURATION_S)*(256.0/1000.0);
-                out<<g.node_names[src]<<","<<g.node_names[tgt]<<","<<fmt_3dp(throughput)<<","<<fmt_3dp(throughput_rev)<<"\n";
+                auto arrived_packets = run_simulation(g, src, tgt);
+                auto hop_stats = compute_hop_stats(arrived_packets);
+                auto arrived_packets_rev = run_simulation(g, tgt, src);
+                auto hop_stats_rev = compute_hop_stats(arrived_packets_rev);
+                out<<g.node_names[src]<<","<<g.node_names[tgt];
+                out<<","<<hop_stats.min_hops<<","<<hop_stats.max_hops<<","<<fmt_3dp(hop_stats.mean_hops)<<","<<hop_stats.q1_hops<<","<<hop_stats.q2_hops<<","<<hop_stats.q3_hops;
+                out<<","<<hop_stats_rev.min_hops<<","<<hop_stats_rev.max_hops<<","<<fmt_3dp(hop_stats_rev.mean_hops)<<","<<hop_stats_rev.q1_hops<<","<<hop_stats_rev.q2_hops<<","<<hop_stats_rev.q3_hops;
+                out<<"\n";
+                out.flush();
 
                 processed_pairs++;
                 cout<<"Processed "<<processed_pairs<<"/"<<total_pairs<<" pairs\r";

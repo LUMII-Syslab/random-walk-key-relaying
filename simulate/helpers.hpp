@@ -187,3 +187,10 @@ static EdgesCsvGraph load_edges_csv(const string &edges_path)
 
     return EdgesCsvGraph{move(node_names), move(adj)};
 }
+
+static string to_upper_ascii(string s)
+{
+    for (char &c : s)
+        c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+    return s;
+}
