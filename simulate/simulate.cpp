@@ -40,7 +40,7 @@ static constexpr double LATENCY_S = 0.05;
 static constexpr double SIM_DURATION_S = 1000.0;
 static constexpr int RELAY_BUFFER_CAPACITY = 100000; // per node, in chunks
 
-static constexpr RandomWalkVariant RANDOM_WALK_VARIANT = LRV;
+static constexpr RandomWalkVariant RANDOM_WALK_VARIANT = R;
 
 // proactive-specific knobs
 static constexpr int KEY_BUFFER_CAPACITY = 1000; // per node, in chunks
@@ -425,12 +425,12 @@ int main(int argc, char **argv)
             
         // write_kept_events(kept_events, "out2/rcv.txt");
         ofstream out("out2/throughput.csv"); assert(out);
-        out<<"source,target,lrv_throughput,lrv_tput_rev\n";
+        out<<"source,target,r_throughput,r_tput_rev\n";
 
         int total_pairs = g.adj.size()*(g.adj.size()-1)/2;
         int processed_pairs = 0;
-        for(int src = 0; src < g.adj.size(); src++){
-            for(int tgt = 0; tgt < g.adj.size(); tgt++){
+        for(size_t src = 0; src < g.adj.size(); src++){
+            for(size_t tgt = 0; tgt < g.adj.size(); tgt++){
                 if(g.node_names[src] >= g.node_names[tgt]) continue;
                 auto kept_events = run_simulation(g, src, tgt);
                 sort(kept_events.begin(), kept_events.end(),

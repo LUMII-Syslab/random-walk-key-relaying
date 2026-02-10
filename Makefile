@@ -6,7 +6,7 @@ BIN := $(BUILD_DIR)/simulate
 SRC := simulate/simulate.cpp
 
 # Default edge list (override: `make run EDGE=graphs/nsfnet/nsfnet_edges.csv`)
-EDGE ?= graphs/secoqc/edges.csv
+EDGE ?= graphs/geant/edges.csv
 
 .PHONY: all run clean
 
