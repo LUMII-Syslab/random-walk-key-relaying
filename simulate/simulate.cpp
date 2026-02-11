@@ -11,6 +11,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <queue>
 #include <random>
 #include <sstream>
@@ -458,6 +459,124 @@ double compute_throughput(const vector<ArrivedPacket> &arrived_packets)
     return static_cast<double>(arrived_packets.size())/SIM_DURATION_S*(256.0/1000.0);
 }
 
+struct ExposureStats{
+    double max_vis_prob = 0.0; // that is not source or target
+    int max_vis_node = -1;
+
+    double max_vis_prob_2 = 0.0; // second most visited node. that is not ...
+    int max_vis_node_2 = -1;
+
+    double average_vis_prob = 0.0;
+    double median_vis_prob = 0.0;
+
+    double stdev_vis_prob = 0.0; // standard deviation
+};
+
+static ExposureStats compute_exposure_stats(
+    const vector<ArrivedPacket> &arrived_packets,
+    int src,
+    int tgt,
+    int node_count)
+{
+    ExposureStats stats;
+    if (arrived_packets.empty() || node_count <= 2)
+        return stats;
+
+    vector<int> seen_count(node_count, 0);
+    vector<char> seen(node_count, 0);
+
+    for (const auto &pkt : arrived_packets)
+    {
+        fill(seen.begin(), seen.end(), 0);
+        for (int node : pkt.history)
+        {
+            if (node == src || node == tgt)
+                continue;
+            if (!seen[node])
+            {
+                seen[node] = 1;
+                seen_count[node]++;
+            }
+        }
+    }
+
+    vector<pair<double, int>> probs_with_node;
+    probs_with_node.reserve(static_cast<size_t>(max(0, node_count - 2)));
+
+    for (int node = 0; node < node_count; node++)
+    {
+        if (node == src || node == tgt)
+            continue;
+        const double p = static_cast<double>(seen_count[node]) /
+                         static_cast<double>(arrived_packets.size());
+        probs_with_node.emplace_back(p, node);
+    }
+
+    if (probs_with_node.empty())
+        return stats;
+
+    sort(probs_with_node.begin(), probs_with_node.end(),
+         [](const auto &a, const auto &b)
+         {
+             if (a.first != b.first)
+                 return a.first > b.first;
+             return a.second < b.second;
+         });
+
+    stats.max_vis_prob = probs_with_node[0].first;
+    stats.max_vis_node = probs_with_node[0].second;
+    for (size_t i = 1; i < probs_with_node.size(); i++)
+    {
+        if (probs_with_node[i].second != stats.max_vis_node)
+        {
+            stats.max_vis_prob_2 = probs_with_node[i].first;
+            stats.max_vis_node_2 = probs_with_node[i].second;
+            break;
+        }
+    }
+
+    vector<double> probs;
+    probs.reserve(probs_with_node.size());
+    for (const auto &item : probs_with_node)
+        probs.push_back(item.first);
+
+    const double sum = accumulate(probs.begin(), probs.end(), 0.0);
+    stats.average_vis_prob = sum / static_cast<double>(probs.size());
+
+    vector<double> sorted_probs = probs;
+    sort(sorted_probs.begin(), sorted_probs.end());
+    const size_t m = sorted_probs.size();
+    if (m % 2 == 1)
+    {
+        stats.median_vis_prob = sorted_probs[m / 2];
+    }
+    else
+    {
+        stats.median_vis_prob = (sorted_probs[m / 2 - 1] + sorted_probs[m / 2]) / 2.0;
+    }
+
+    double sq_sum = 0.0;
+    for (double p : probs)
+    {
+        const double d = p - stats.average_vis_prob;
+        sq_sum += d * d;
+    }
+    stats.stdev_vis_prob = sqrt(sq_sum / static_cast<double>(probs.size()));
+
+    return stats;
+}
+
+static string exposure_node_name(const Graph &g, int node, double vis_prob)
+{
+    if (vis_prob <= 0.0)
+        return "---";
+    if (node < 0 || node >= static_cast<int>(g.node_names.size()))
+        return "---";
+    return g.node_names[node];
+}
+
+
+
 int main(int argc, char **argv)
 {
     try
@@ -473,9 +592,17 @@ int main(int argc, char **argv)
         auto g = to_graph(load_edges_csv(edges_path));
 
         const string header_prefix = RANDOM_WALK_VARIANT == RandomWalkVariant::R ? "r" : RANDOM_WALK_VARIANT == RandomWalkVariant::NB ? "nb" : "lrv";
-        ofstream out("out2/hops.csv"); assert(out);
+        ofstream out("out2/exposure.csv"); assert(out);
         out<<"source,target";
-        vector<string> headers = {"min_hops", "max_hops", "mean_hops", "q1_hops", "q2_hops", "q3_hops"};
+        vector<string> headers = {
+            "max_vis_prob",
+            "max_vis_node",
+            "max_vis_prob_2",
+            "max_vis_node_2",
+            "average_vis_prob",
+            "median_vis_prob",
+            "stdev_vis_prob"
+        };
         for(const string &header : headers)
             out<<","<<header_prefix<<"_"<<header;
         for(const string &header : headers)
@@ -489,12 +616,32 @@ int main(int argc, char **argv)
             for(size_t tgt = 0; tgt < g.adj.size(); tgt++){
                 if(g.node_names[src] >= g.node_names[tgt]) continue;
                 auto arrived_packets = run_simulation(g, src, tgt);
-                auto hop_stats = compute_hop_stats(arrived_packets);
+                auto exposure_stats = compute_exposure_stats(
+                    arrived_packets,
+                    static_cast<int>(src),
+                    static_cast<int>(tgt),
+                    static_cast<int>(g.adj.size()));
                 auto arrived_packets_rev = run_simulation(g, tgt, src);
-                auto hop_stats_rev = compute_hop_stats(arrived_packets_rev);
+                auto exposure_stats_rev = compute_exposure_stats(
+                    arrived_packets_rev,
+                    static_cast<int>(tgt),
+                    static_cast<int>(src),
+                    static_cast<int>(g.adj.size()));
                 out<<g.node_names[src]<<","<<g.node_names[tgt];
-                out<<","<<hop_stats.min_hops<<","<<hop_stats.max_hops<<","<<fmt_3dp(hop_stats.mean_hops)<<","<<hop_stats.q1_hops<<","<<hop_stats.q2_hops<<","<<hop_stats.q3_hops;
-                out<<","<<hop_stats_rev.min_hops<<","<<hop_stats_rev.max_hops<<","<<fmt_3dp(hop_stats_rev.mean_hops)<<","<<hop_stats_rev.q1_hops<<","<<hop_stats_rev.q2_hops<<","<<hop_stats_rev.q3_hops;
+                out<<","<<fmt_3dp(exposure_stats.max_vis_prob)
+                   <<","<<exposure_node_name(g, exposure_stats.max_vis_node, exposure_stats.max_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats.max_vis_prob_2)
+                   <<","<<exposure_node_name(g, exposure_stats.max_vis_node_2, exposure_stats.max_vis_prob_2)
+                   <<","<<fmt_3dp(exposure_stats.average_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats.median_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats.stdev_vis_prob);
+                out<<","<<fmt_3dp(exposure_stats_rev.max_vis_prob)
+                   <<","<<exposure_node_name(g, exposure_stats_rev.max_vis_node, exposure_stats_rev.max_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats_rev.max_vis_prob_2)
+                   <<","<<exposure_node_name(g, exposure_stats_rev.max_vis_node_2, exposure_stats_rev.max_vis_prob_2)
+                   <<","<<fmt_3dp(exposure_stats_rev.average_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats_rev.median_vis_prob)
+                   <<","<<fmt_3dp(exposure_stats_rev.stdev_vis_prob);
                 out<<"\n";
                 out.flush();
 
