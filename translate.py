@@ -10,6 +10,7 @@ translations = {
     "target": "$t$",
     "lrv_q2_hops": "$\\widetilde{H}$",
     "lrv_inflation": "$\\phi$",
+    "lrv_infl_plus": "$\\phi^+$"
 }
 
 expansions = {
@@ -18,4 +19,5 @@ expansions = {
     "lrv_q2_hops": "median hop count",
     "lrv_tput": "estimated throughput",
     "lrv_inflation": "route inflation",
+    "lrv_infl_plus": "route inflation via median"
 }

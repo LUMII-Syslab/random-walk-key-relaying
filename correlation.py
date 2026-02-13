@@ -9,9 +9,9 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 GRAPH = "geant"
 data = pl.read_csv(f"data/{GRAPH}/pairs.csv")
 
-columns = ["lrv_q2_hops", "lrv_nc_eff"]
+columns = ["lrv_infl_plus", "lrv_tput"]
 data = data.select(columns)
-data = data.filter(pl.col("lrv_nc_eff") >= 0)
+# data = data.filter(pl.col("lrv_nc_eff") >= 0)
 
 correlation = data.select(pl.corr(data[columns[0]], data[columns[1]]))
 print(correlation)

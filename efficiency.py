@@ -15,7 +15,12 @@ for graph in ["secoqc", "nsfnet", "geant"]:
     rows2 = pairs_csv.select(["lrv_hops", "shortest"]).rows()
     inflation = [round(row[0] / row[1], 2) for row in rows2]
 
+    inflation_plus = []
+    rows3 = pairs_csv.select(["lrv_q2_hops", "shortest"]).rows()
+    inflation_plus = [round(row[0] / row[1], 2) for row in rows3]
+
     pairs_csv = pairs_csv.with_columns(pl.Series("lrv_mf_eff", mf_efficiency))
     pairs_csv = pairs_csv.with_columns(pl.Series("lrv_nc_eff", nc_efficiency))
     pairs_csv = pairs_csv.with_columns(pl.Series("lrv_inflation", inflation))
+    pairs_csv = pairs_csv.with_columns(pl.Series("lrv_infl_plus", inflation_plus))
     pairs_csv.write_csv(f"data/{graph}/pairs.csv")
