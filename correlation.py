@@ -9,7 +9,7 @@ signal.signal(signal.SIGINT, signal.SIG_DFL)
 GRAPH = "geant"
 data = pl.read_csv(f"data/{GRAPH}/pairs.csv")
 
-columns = ["lrv_infl_plus", "lrv_tput"]
+columns = ["lrv_hops", "lrv_tput"]
 data = data.select(columns)
 # data = data.filter(pl.col("lrv_nc_eff") >= 0)
 
