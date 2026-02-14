@@ -1,28 +1,13 @@
 #! /bin/bash
 
-make run EDGE=graphs/geant/edges.csv WALK=R
-mv out2/exposure.csv out2/geant_r_exposure.csv
-
-make run EDGE=graphs/nsfnet/edges.csv WALK=R
-mv out2/exposure.csv out2/nsfnet_r_exposure.csv
-
-make run EDGE=graphs/secoqc/edges.csv WALK=R
-mv out2/exposure.csv out2/secoqc_r_exposure.csv
-
-make run EDGE=graphs/geant/edges.csv WALK=NB
-mv out2/exposure.csv out2/geant_nb_exposure.csv
-
-make run EDGE=graphs/nsfnet/edges.csv WALK=NB
-mv out2/exposure.csv out2/nsfnet_nb_exposure.csv
-
-make run EDGE=graphs/secoqc/edges.csv WALK=NB
-mv out2/exposure.csv out2/secoqc_nb_exposure.csv
-
-make run EDGE=graphs/geant/edges.csv WALK=LRV
-mv out2/exposure.csv out2/geant_lrv_exposure.csv
-
-make run EDGE=graphs/nsfnet/edges.csv WALK=LRV
-mv out2/exposure.csv out2/nsfnet_lrv_exposure.csv
-
-make run EDGE=graphs/secoqc/edges.csv WALK=LRV
-mv out2/exposure.csv out2/secoqc_lrv_exposure.csv
+for NODES in $(seq 3 3 99); do
+    echo "processing $NODES nodes..."
+    for WALK in R NB LRV; do
+        python3 construct.py graphs/generated/edges.csv "$NODES"
+        make run EDGE=constructed.csv WALK=$WALK
+        python3 connectivity.py constructed.csv
+        mkdir -p ./out/"$NODES"/"$WALK"
+        mv ./out/*.csv ./out/"$NODES"/"$WALK"/
+        rm constructed.csv
+    done
+done

@@ -575,7 +575,127 @@ static string exposure_node_name(const Graph &g, int node, double vis_prob)
     return g.node_names[node];
 }
 
+static string walk_variant_prefix(RandomWalkVariant walk_variant)
+{
+    return walk_variant == RandomWalkVariant::R
+               ? "r"
+               : walk_variant == RandomWalkVariant::NB ? "nb" : "lrv";
+}
 
+void write_exposure_csv_header(ofstream &out, RandomWalkVariant walk_variant)
+{
+    const string header_prefix = walk_variant_prefix(walk_variant);
+    out << "source,target";
+    vector<string> headers = {
+        "max_vis_prob",
+        "max_vis_node",
+        "max_vis_prob_2",
+        "max_vis_node_2",
+        "average_vis_prob",
+        "median_vis_prob",
+        "stdev_vis_prob"};
+    for (const string &header : headers)
+        out << "," << header_prefix << "_" << header;
+    for (const string &header : headers)
+        out << "," << header_prefix << "_" << header << "_rev";
+    out << "\n";
+}
+
+void write_exposure_csv(
+    ofstream &out,
+    const Graph &g,
+    size_t src,
+    size_t tgt,
+    const vector<ArrivedPacket> &arrived_packets,
+    const vector<ArrivedPacket> &arrived_packets_rev)
+{
+    auto exposure_stats = compute_exposure_stats(
+        arrived_packets,
+        static_cast<int>(src),
+        static_cast<int>(tgt),
+        static_cast<int>(g.adj.size()));
+    auto exposure_stats_rev = compute_exposure_stats(
+        arrived_packets_rev,
+        static_cast<int>(tgt),
+        static_cast<int>(src),
+        static_cast<int>(g.adj.size()));
+
+    out << g.node_names[src] << "," << g.node_names[tgt];
+    out << "," << fmt_3dp(exposure_stats.max_vis_prob)
+        << "," << exposure_node_name(g, exposure_stats.max_vis_node, exposure_stats.max_vis_prob)
+        << "," << fmt_3dp(exposure_stats.max_vis_prob_2)
+        << "," << exposure_node_name(g, exposure_stats.max_vis_node_2, exposure_stats.max_vis_prob_2)
+        << "," << fmt_3dp(exposure_stats.average_vis_prob)
+        << "," << fmt_3dp(exposure_stats.median_vis_prob)
+        << "," << fmt_3dp(exposure_stats.stdev_vis_prob);
+    out << "," << fmt_3dp(exposure_stats_rev.max_vis_prob)
+        << "," << exposure_node_name(g, exposure_stats_rev.max_vis_node, exposure_stats_rev.max_vis_prob)
+        << "," << fmt_3dp(exposure_stats_rev.max_vis_prob_2)
+        << "," << exposure_node_name(g, exposure_stats_rev.max_vis_node_2, exposure_stats_rev.max_vis_prob_2)
+        << "," << fmt_3dp(exposure_stats_rev.average_vis_prob)
+        << "," << fmt_3dp(exposure_stats_rev.median_vis_prob)
+        << "," << fmt_3dp(exposure_stats_rev.stdev_vis_prob);
+    out << "\n";
+}
+
+void write_hops_csv_header(ofstream &out, RandomWalkVariant walk_variant)
+{
+    const string header_prefix = walk_variant_prefix(walk_variant);
+    out << "source,target";
+    vector<string> headers = {"min_hops", "max_hops", "mean_hops", "q1_hops", "q2_hops", "q3_hops"};
+    for (const string &header : headers)
+        out << "," << header_prefix << "_" << header;
+    for (const string &header : headers)
+        out << "," << header_prefix << "_" << header << "_rev";
+    out << "\n";
+}
+
+void write_hops_csv(
+    ofstream &out,
+    const Graph &g,
+    size_t src,
+    size_t tgt,
+    const vector<ArrivedPacket> &arrived_packets,
+    const vector<ArrivedPacket> &arrived_packets_rev)
+{
+    auto hop_stats = compute_hop_stats(arrived_packets);
+    auto hop_stats_rev = compute_hop_stats(arrived_packets_rev);
+    out << g.node_names[src] << "," << g.node_names[tgt];
+    out << "," << hop_stats.min_hops
+        << "," << hop_stats.max_hops
+        << "," << fmt_3dp(hop_stats.mean_hops)
+        << "," << hop_stats.q1_hops
+        << "," << hop_stats.q2_hops
+        << "," << hop_stats.q3_hops;
+    out << "," << hop_stats_rev.min_hops
+        << "," << hop_stats_rev.max_hops
+        << "," << fmt_3dp(hop_stats_rev.mean_hops)
+        << "," << hop_stats_rev.q1_hops
+        << "," << hop_stats_rev.q2_hops
+        << "," << hop_stats_rev.q3_hops;
+    out << "\n";
+}
+
+void write_throughput_csv_header(ofstream &out, RandomWalkVariant walk_variant)
+{
+    const string header_prefix = walk_variant_prefix(walk_variant);
+    out << "source,target," << header_prefix << "_throughput," << header_prefix << "_throughput_rev\n";
+}
+
+void write_throughput_csv(
+    ofstream &out,
+    const Graph &g,
+    size_t src,
+    size_t tgt,
+    const vector<ArrivedPacket> &arrived_packets,
+    const vector<ArrivedPacket> &arrived_packets_rev)
+{
+    const double throughput = compute_throughput(arrived_packets);
+    const double throughput_rev = compute_throughput(arrived_packets_rev);
+    out << g.node_names[src] << "," << g.node_names[tgt]
+        << "," << fmt_3dp(throughput)
+        << "," << fmt_3dp(throughput_rev) << "\n";
+}
 
 int main(int argc, char **argv)
 {
@@ -590,66 +710,43 @@ int main(int argc, char **argv)
         RANDOM_WALK_VARIANT = parse_walk_variant(argv[1]);
         const string edges_path = argv[2];
         auto g = to_graph(load_edges_csv(edges_path));
+        const string out_dir = "out";
+        fs::create_directories(out_dir);
+        ofstream out_exposure(out_dir + "/exposure.csv");
+        ofstream out_hops(out_dir + "/hops.csv");
+        ofstream out_throughput(out_dir + "/throughput.csv");
+        assert(out_exposure);
+        assert(out_hops);
+        assert(out_throughput);
+        write_exposure_csv_header(out_exposure, RANDOM_WALK_VARIANT);
+        write_hops_csv_header(out_hops, RANDOM_WALK_VARIANT);
+        write_throughput_csv_header(out_throughput, RANDOM_WALK_VARIANT);
 
-        const string header_prefix = RANDOM_WALK_VARIANT == RandomWalkVariant::R ? "r" : RANDOM_WALK_VARIANT == RandomWalkVariant::NB ? "nb" : "lrv";
-        ofstream out("out2/exposure.csv"); assert(out);
-        out<<"source,target";
-        vector<string> headers = {
-            "max_vis_prob",
-            "max_vis_node",
-            "max_vis_prob_2",
-            "max_vis_node_2",
-            "average_vis_prob",
-            "median_vis_prob",
-            "stdev_vis_prob"
-        };
-        for(const string &header : headers)
-            out<<","<<header_prefix<<"_"<<header;
-        for(const string &header : headers)
-            out<<","<<header_prefix<<"_"<<header<<"_rev";
-        out<<"\n";
-        out.flush();
-
-        int total_pairs = g.adj.size()*(g.adj.size()-1)/2;
+        int total_pairs = static_cast<int>(g.adj.size() * (g.adj.size() - 1) / 2);
         int processed_pairs = 0;
-        for(size_t src = 0; src < g.adj.size(); src++){
-            for(size_t tgt = 0; tgt < g.adj.size(); tgt++){
-                if(g.node_names[src] >= g.node_names[tgt]) continue;
-                auto arrived_packets = run_simulation(g, src, tgt);
-                auto exposure_stats = compute_exposure_stats(
-                    arrived_packets,
-                    static_cast<int>(src),
-                    static_cast<int>(tgt),
-                    static_cast<int>(g.adj.size()));
-                auto arrived_packets_rev = run_simulation(g, tgt, src);
-                auto exposure_stats_rev = compute_exposure_stats(
-                    arrived_packets_rev,
-                    static_cast<int>(tgt),
-                    static_cast<int>(src),
-                    static_cast<int>(g.adj.size()));
-                out<<g.node_names[src]<<","<<g.node_names[tgt];
-                out<<","<<fmt_3dp(exposure_stats.max_vis_prob)
-                   <<","<<exposure_node_name(g, exposure_stats.max_vis_node, exposure_stats.max_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats.max_vis_prob_2)
-                   <<","<<exposure_node_name(g, exposure_stats.max_vis_node_2, exposure_stats.max_vis_prob_2)
-                   <<","<<fmt_3dp(exposure_stats.average_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats.median_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats.stdev_vis_prob);
-                out<<","<<fmt_3dp(exposure_stats_rev.max_vis_prob)
-                   <<","<<exposure_node_name(g, exposure_stats_rev.max_vis_node, exposure_stats_rev.max_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats_rev.max_vis_prob_2)
-                   <<","<<exposure_node_name(g, exposure_stats_rev.max_vis_node_2, exposure_stats_rev.max_vis_prob_2)
-                   <<","<<fmt_3dp(exposure_stats_rev.average_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats_rev.median_vis_prob)
-                   <<","<<fmt_3dp(exposure_stats_rev.stdev_vis_prob);
-                out<<"\n";
-                out.flush();
+        for (size_t src = 0; src < g.adj.size(); src++)
+        {
+            for (size_t tgt = 0; tgt < g.adj.size(); tgt++)
+            {
+                if (g.node_names[src] >= g.node_names[tgt])
+                    continue;
+
+                auto arrived_packets = run_simulation(g, static_cast<int>(src), static_cast<int>(tgt));
+                auto arrived_packets_rev = run_simulation(g, static_cast<int>(tgt), static_cast<int>(src));
+
+                write_exposure_csv(out_exposure, g, src, tgt, arrived_packets, arrived_packets_rev);
+                write_hops_csv(out_hops, g, src, tgt, arrived_packets, arrived_packets_rev);
+                write_throughput_csv(out_throughput, g, src, tgt, arrived_packets, arrived_packets_rev);
 
                 processed_pairs++;
-                cout<<"Processed "<<processed_pairs<<"/"<<total_pairs<<" pairs\r";
+                cout << "Processed " << processed_pairs << "/" << total_pairs << " pairs\r";
                 cout.flush();
             }
         }
+        cout << endl;
+        cout << "Wrote " << out_dir << "/exposure.csv" << endl;
+        cout << "Wrote " << out_dir << "/hops.csv" << endl;
+        cout << "Wrote " << out_dir << "/throughput.csv" << endl;
         return 0;
     }
     catch (const exception &e)
