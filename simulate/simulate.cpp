@@ -701,16 +701,16 @@ int main(int argc, char **argv)
 {
     try
     {
-        if (argc < 3)
+        if (argc < 4)
         {
-            cerr << "Usage: " << argv[0] << " <walk_variant:{R,NB,LRV}> <edge_list.csv>\n";
+            cerr << "Usage: " << argv[0] << " <walk_variant:{R,NB,LRV}> <edge_list.csv> <out_dir>\n";
             return 2;
         }
 
         RANDOM_WALK_VARIANT = parse_walk_variant(argv[1]);
         const string edges_path = argv[2];
+        const string out_dir = argv[3];
         auto g = to_graph(load_edges_csv(edges_path));
-        const string out_dir = "out";
         fs::create_directories(out_dir);
         ofstream out_exposure(out_dir + "/exposure.csv");
         ofstream out_hops(out_dir + "/hops.csv");

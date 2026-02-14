@@ -11,6 +11,9 @@ EDGE ?= graphs/geant/edges.csv
 # Walk variant (REQUIRED, no default). Use: `make run WALK=R` (or NB, LRV)
 WALK ?=
 
+# Output directory (override: `make run OUT_DIR=./out/12/R`)
+OUT_DIR ?=
+
 .PHONY: all run clean
 
 all: $(BIN)
@@ -23,7 +26,8 @@ $(BIN): $(SRC) | $(BUILD_DIR)
 
 run: $(BIN)
 	@if [ -z "$(WALK)" ]; then echo "ERROR: WALK not set. Use: make run WALK=R|NB|LRV [EDGE=...]" >&2; exit 2; fi
-	./$(BIN) "$(WALK)" "$(EDGE)"
+	@if [ -z "$(OUT_DIR)" ]; then echo "ERROR: OUT_DIR not set. Use: make run OUT_DIR=./out/12/R [WALK=...] [EDGE=...]" >&2; exit 2; fi
+	./$(BIN) "$(WALK)" "$(EDGE)" "$(OUT_DIR)"
 
 clean:
 	rm -rf $(BUILD_DIR)
