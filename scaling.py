@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import translate
 import numpy as np
 import signal
+from pathlib import Path
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -16,6 +17,8 @@ def main():
     plot_hopcount_avg_and_median(ax2)
     plot_efficiency(ax3)
     plot_exposure(ax4)
+    plt.tight_layout()
+    save_plots_pdf()
     plt.tight_layout(pad=4)
     plt.show()
 
@@ -58,7 +61,7 @@ def plot_throughput_avg(ax: plt.Axes):
         ax.plot(x, y, **walk_styles[walk], markersize=4, label=walk.upper())
     ax.legend(fontsize=12)
     node_count_ticks(ax)
-    ax.set_ylabel(f"{translate.get_axis_label("tput")} avg", fontsize=12)
+    ax.set_ylabel(f"{translate.get_axis_label('tput')} avg", fontsize=12)
     yticks = np.arange(0,2.5,0.5)
     ax.set_yticks(yticks, labels=[f"{y:.1f}" for y in yticks], fontsize=12)
     ax.yaxis.grid(True, alpha=0.5)
@@ -135,6 +138,22 @@ def plot_exposure(ax: plt.Axes):
     ax.set_title("Max visit probability vs network size", fontsize=14)
     ax.set_ylim(0.5,1)
     ax.tick_params(axis="y", labelsize=12)
+
+def save_plots_pdf():
+    plots_dir = Path("plots")
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_specs = [
+        ("throughput.pdf", plot_throughput_avg),
+        ("hopcount.pdf", plot_hopcount_avg_and_median),
+        ("efficiency.pdf", plot_efficiency),
+        ("exposure.pdf", plot_exposure),
+    ]
+    for file_name, plot_fn in plot_specs:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        plot_fn(ax)
+        fig.tight_layout()
+        fig.savefig(plots_dir / file_name, format="pdf")
+        plt.close(fig)
 
 if __name__ == "__main__":
     main()
