@@ -4,6 +4,7 @@ import translate
 import numpy as np
 import signal
 from pathlib import Path
+from sklearn.linear_model import LinearRegression
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -12,11 +13,16 @@ walks = ["lrv", "nb", "r"]
 
 
 def main():
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2, figsize=(11, 8))
+    print_hopcount_regression()
+    print_lrv_hops_stats_96()
+    print_lrv_hopcount_series_corr()
+    fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2, figsize=(11, 12))
     plot_throughput_avg(ax1)
     plot_hopcount_avg_and_median(ax2)
     plot_efficiency(ax3)
     plot_exposure(ax4)
+    plot_connectivity(ax5)
+    plot_hopcount_q2(ax6)
     plt.tight_layout()
     save_plots_pdf()
     plt.tight_layout(pad=4)
@@ -90,9 +96,22 @@ def plot_hopcount_avg_and_median(ax: plt.Axes):
     node_count_ticks(ax)
     ax.set_ylabel(f"{translate.get_axis_label('hops')} avg",fontsize=12)
     ax.yaxis.grid(True, alpha=0.5)
-    ax.set_title("Hop count vs network size", fontsize=14)
+    ax.set_title("Mean hop count vs network size", fontsize=14)
     ax.set_ylim(0,100)
     ax.tick_params(axis="y", labelsize=12)
+
+def print_hopcount_regression():
+    x_values = np.array(x).reshape(-1, 1)
+    print("Hop count linear regression (y = slope * node_count + intercept):")
+    for walk in walks:
+        y_values = np.array([mean_metric(x_i, walk, "hops.csv", f"{walk}_mean_hops") for x_i in x])
+        model = LinearRegression(fit_intercept=False)
+        model.fit(x_values, y_values)
+        score = model.score(x_values, y_values)
+        print(
+            f"{walk.upper()}: slope={model.coef_[0]:.6f}, "
+            f"intercept={model.intercept_:.6f}, r2={score:.6f}"
+        )
 
 def nc_efficiency(tput: float, exposure: float, conn: int) -> float:
     return tput * (1 - exposure) / (conn - 1)
@@ -123,7 +142,7 @@ def plot_efficiency(ax: plt.Axes):
     node_count_ticks(ax)
     ax.set_ylabel(f"{translate.get_axis_label('nc_eff')} avg",fontsize=12)
     ax.yaxis.grid(True, alpha=0.5)
-    ax.set_title(f"T-put efficiency vs network size",fontsize=14)
+    ax.set_title(f"Secure t-put efficiency vs network size",fontsize=14)
     ax.set_ylim(0,1)
     ax.tick_params(axis="y", labelsize=12)
 
@@ -139,6 +158,56 @@ def plot_exposure(ax: plt.Axes):
     ax.set_ylim(0.5,1)
     ax.tick_params(axis="y", labelsize=12)
 
+def plot_connectivity(ax: plt.Axes):
+    mean_values = []
+    for x_i in x:
+        csv = pl.read_csv(f"out/{x_i}/LRV/connectivity.csv")
+        conn = csv["connectivity"]
+        mean_values.append(conn.mean())
+    mean_values = np.asarray(mean_values, dtype=float)
+    ax.plot(x, mean_values, color="C0", marker="o", markersize=4, linestyle="-", linewidth=1.5, label="Mean")
+    ax.legend(fontsize=12)
+    node_count_ticks(ax)
+    ax.set_ylabel(translate.get_axis_label("node_conn"), fontsize=12)
+    ax.yaxis.grid(True, alpha=0.5)
+    ax.set_title("Mean connectivity vs network size", fontsize=14)
+    ax.tick_params(axis="y", labelsize=12)
+
+def plot_hopcount_q2(ax: plt.Axes):
+    for walk in walks:
+        y = [mean_metric(x_i, walk, "hops.csv", f"{walk}_q2_hops") for x_i in x]
+        ax.plot(x, y, **walk_styles[walk], markersize=4, label=walk.upper())
+    ax.legend(fontsize=12)
+    node_count_ticks(ax)
+    ax.set_ylabel(translate.get_axis_label("lrv_q2_hops"), fontsize=12)
+    ax.yaxis.grid(True, alpha=0.5)
+    ax.set_title("Median hop count vs network size", fontsize=14)
+    ax.tick_params(axis="y", labelsize=12)
+
+def print_lrv_hops_stats_96():
+    for walk in walks:
+        csv = pl.read_csv(f"out/96/{walk.upper()}/hops.csv")
+        mean_col = f"{walk}_mean_hops"
+        q2_col = f"{walk}_q2_hops"
+        mean_hops = csv[mean_col].to_numpy()
+        q2_hops = csv[q2_col].to_numpy()
+        mean_of_mean_hops = csv[mean_col].mean()
+        mean_of_q2_hops = csv[q2_col].mean()
+        rel_diff = np.where(q2_hops != 0, (mean_hops - q2_hops) / q2_hops, np.nan)
+        pearson = csv.select(pl.corr(mean_col, q2_col)).item()
+        walk_upper = walk.upper()
+        print(f"{walk_upper} 96-node mean of mean_hops: {mean_of_mean_hops:.6f}")
+        print(f"{walk_upper} 96-node mean of q2_hops: {mean_of_q2_hops:.6f}")
+        print(f"{walk_upper} 96-node mean relative diff (mean_hops vs q2_hops): {np.nanmean(rel_diff):.6f}")
+        print(f"{walk_upper} 96-node Pearson corr (mean_hops vs q2_hops): {pearson:.6f}")
+
+def print_lrv_hopcount_series_corr():
+    y_mean = [mean_metric(x_i, "lrv", "hops.csv", "lrv_mean_hops") for x_i in x]
+    y_q2 = [mean_metric(x_i, "lrv", "hops.csv", "lrv_q2_hops") for x_i in x]
+    df = pl.DataFrame({"lrv_mean_hops": y_mean, "lrv_q2_hops": y_q2})
+    pearson = df.select(pl.corr("lrv_mean_hops", "lrv_q2_hops")).item()
+    print(f"LRV hop-count series Pearson corr (mean y vs q2 y across N): {pearson:.6f}")
+
 def save_plots_pdf():
     plots_dir = Path("plots")
     plots_dir.mkdir(parents=True, exist_ok=True)
@@ -147,6 +216,8 @@ def save_plots_pdf():
         ("hopcount.pdf", plot_hopcount_avg_and_median),
         ("efficiency.pdf", plot_efficiency),
         ("exposure.pdf", plot_exposure),
+        ("connectivity.pdf", plot_connectivity),
+        ("hopcount_q2.pdf", plot_hopcount_q2),
     ]
     for file_name, plot_fn in plot_specs:
         fig, ax = plt.subplots(figsize=(6, 4))
