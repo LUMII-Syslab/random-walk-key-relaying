@@ -1,0 +1,5 @@
+graph,nodes,edges,diameter,avg_deg,apl,biconnected_core_fraction,max_betweenness
+geant,43,59,12,2.74,4.682,0.837,0.4150
+generated,99,143,10,2.89,4.784,1.000,0.2896
+nsfnet,14,21,3,3.00,2.143,1.000,0.2201
+secoqc,6,8,3,2.67,1.533,0.667,0.4000
