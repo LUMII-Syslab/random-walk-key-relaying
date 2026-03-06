@@ -1,0 +1,5 @@
+graph,max_exposure_lrv,source,target,node
+secoqc,0.500,BRE,ERD,GUD
+nsfnet,0.811,ATL,LNK,HOU
+geant,0.950,MAR,TIR,MIL
+generated,0.975,39,91,16
