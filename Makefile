@@ -1,34 +1,22 @@
-CXX ?= g++
-CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -pedantic
-
 BUILD_DIR := build
-BIN := $(BUILD_DIR)/simulate
-SRC := simulate/simulate.cpp
+TARGET := $(BUILD_DIR)/hops
+SRC := cpp/hops.cpp
+HEADERS := $(wildcard cpp/*.hpp)
 
-# Default edge list (override: `make run EDGE=graphs/nsfnet/nsfnet_edges.csv`)
-EDGE ?= graphs/geant/edges.csv
+CXX := g++
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -pedantic
 
-# Walk variant (REQUIRED, no default). Use: `make run WALK=R` (or NB, LRV)
-WALK ?=
+.DEFAULT_GOAL := $(TARGET)
 
-# Output directory (override: `make run OUT_DIR=./out/12/R`)
-OUT_DIR ?=
+.PHONY: all clean
 
-.PHONY: all run clean
+all: $(TARGET)
 
-all: $(BIN)
+$(TARGET): $(SRC) $(HEADERS) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BIN): $(SRC) | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -o $@ $<
-
-run: $(BIN)
-	@if [ -z "$(WALK)" ]; then echo "ERROR: WALK not set. Use: make run WALK=R|NB|LRV [EDGE=...]" >&2; exit 2; fi
-	@if [ -z "$(OUT_DIR)" ]; then echo "ERROR: OUT_DIR not set. Use: make run OUT_DIR=./out/12/R [WALK=...] [EDGE=...]" >&2; exit 2; fi
-	./$(BIN) "$(WALK)" "$(EDGE)" "$(OUT_DIR)"
-
 clean:
 	rm -rf $(BUILD_DIR)
-

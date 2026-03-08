@@ -23,23 +23,6 @@ def read_edge_list_csv(edges_csv: Path) -> nx.Graph:
     return nx.Graph(edge_rows)
 
 
-@dataclass
-class FixedSrcTgtStats:
-    source_node: str
-    target_node: str
-    shortest_path: list[str]
-    connectivity: int
-    # approx_longest: list[str]
-
-
-def compute_src_tgt_stats(g: nx.Graph, src: str, tgt: str) -> FixedSrcTgtStats:
-    return FixedSrcTgtStats(
-        source_node=src,
-        target_node=tgt,
-        shortest_path=nx.shortest_path(g, src, tgt),
-        connectivity=nx.node_connectivity(g, src, tgt),
-    )
-
 
 def synthetic_graph_snapshot(nodes: int) -> nx.Graph:
     if nodes < 1 or nodes > 99:
@@ -56,6 +39,18 @@ def synthetic_graph_snapshot(nodes: int) -> nx.Graph:
     graph = nx.Graph(di_graph)
     return graph
 
+
+
+# value may be cached because it is expensive to compute
+def get_exposure(g: nx.Graph, src: str, tgt: str) -> float:
+    # TODO: implement
+    pass
+
+
+# value may be cached because it is expensive to compute
+def get_tput(g: nx.Graph, src: str, tgt: str) -> float:
+    # TODO: implement
+    pass
 
 
 if __name__ == "__main__":
