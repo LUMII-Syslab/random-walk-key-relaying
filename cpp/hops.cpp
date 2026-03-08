@@ -6,8 +6,7 @@
 #include <vector>
 #include <string_view>
 #include <set>
-#include "token.hpp"
-#include "lrv.hpp"
+#include "walk.hpp"
 #include "utils.hpp"
 using namespace std;
 
@@ -62,8 +61,14 @@ int main(int argc, char **argv) {
     hop_counts.reserve(opts.no_of_runs);
     for (int i = 0; i < opts.no_of_runs; i++) {
         unique_ptr<RwToken> token;
-        if (opts.rw_variant == "LRV") {
+        if (opts.rw_variant == "R") {
+            token = make_unique<RToken>(src_idx, tgt_idx, i);
+        } else if (opts.rw_variant == "NB") {
+            token = make_unique<NbToken>(src_idx, tgt_idx, i);
+        } else if (opts.rw_variant == "LRV") {
             token = make_unique<LrvToken>(src_idx, tgt_idx, i);
+        } else if (opts.rw_variant == "HS") {
+            token = make_unique<HsToken>(src_idx, tgt_idx, i);
         } else {
             cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
             return 1;

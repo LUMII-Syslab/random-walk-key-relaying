@@ -168,3 +168,8 @@ inline string fmt_3dp(double t)
     string s = oss.str();
     return s;
 }
+
+int choose_uniformly(const vector<int> &choices, mt19937 &rng){
+    int idx = rng() % choices.size();
+    return choices[idx];
+}

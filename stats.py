@@ -10,18 +10,48 @@ from utils import read_edge_list_csv, graphs_dir
 
 def main():
     g = read_edge_list_csv(graphs_dir / "geant" / "edges.csv")
-    hop_stats = compute_hop_stats(HopStats.HopSimParams(
-        g=g,
-        src="MAR",
-        tgt="TIR",
-        var="LRV",
-        no_of_runs=1000,
-    ))
-    hop_stats.print()
+    s,t="MAR","TIR"
+    # s,t="MIL","COP"
+    for var in ["R", "NB", "LRV", "HS"]:
+        hop_stats = compute_hop_stats(HopStats.HopSimParams(
+            g=g,
+            src=s,
+            tgt=t,
+            var=var,
+            no_of_runs=1000,
+        ))
+        hop_stats.print()
+    
+    node_connectivity_cache: dict[tuple[str, str], int] = {}
+    for walk_variant in ["R", "NB", "LRV", "HS"]:
+        max_hit_prob, max_hit_source, max_hit_target, max_hit_node = 0.0, "", "", ""
+        for (i, s) in enumerate(g.nodes()):
+            print(f"processing {i+1}/{len(g.nodes())} ({s})...", end="")
+            for t in g.nodes():
+                if s == t: continue
+                pair = (s, t)
+                if pair not in node_connectivity_cache:
+                    node_connectivity_cache[pair] = nx.node_connectivity(g, s, t)
+                if node_connectivity_cache[pair] == 1:
+                    continue
+                hop_stats = compute_hop_stats(HopStats.HopSimParams(
+                    g=g,
+                    src=s,
+                    tgt=t,
+                    var=walk_variant,
+                    no_of_runs=1000,
+                ))
+                if hop_stats.max_hit_prob > max_hit_prob :
+                    max_hit_prob = hop_stats.max_hit_prob
+                    max_hit_source = s
+                    max_hit_target = t
+                    max_hit_node = hop_stats.max_hit_node
+            print("\r", end="")
+        print(f"{walk_variant}: max_hit_prob={max_hit_prob:.3f} max_hit_source={max_hit_source} max_hit_target={max_hit_target} max_hit_node={max_hit_node}")
 
 
 # random walk variants
-VARS = Literal["R", "NB", "LRV"]
+VARS = Literal["R", "NB", "LRV", "HS"]
 
 @dataclass
 class HopStats:
@@ -120,6 +150,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        raise Exception(f"Failed to compute hop stats: {result.stderr}")
     for line in result.stdout.split("\n"):
         if line == "": break
         key = line.split(":")[0].strip()
