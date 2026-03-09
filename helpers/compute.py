@@ -1,5 +1,6 @@
 import networkx as nx
 import subprocess
+import ast
 from dataclasses import dataclass
 from typing import Literal
 
@@ -40,6 +41,7 @@ class HopStats:
 
 @dataclass
 class ThroughputStats:
+    @dataclass
     class TputSimParams:
         g: nx.Graph
         src: str
@@ -52,9 +54,11 @@ class ThroughputStats:
         latency_s: float = 0.05
         sim_duration_s: float = 1000.0
         relay_buffer_sz_chunks: int = 100000
+        print_arrival_times: bool = False
 
     context: TputSimParams
-    arrived_chunks: int
+    mean_tput: float # bits/s
+    arrival_times: list[float] # timestamps
     emitted_chunks: int  # may have not arrived yet
 
 
@@ -128,6 +132,71 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         q3_hops=q3_hops,
         max_hit_prob=max_hit_prob,
         max_hit_node=max_hit_node,
+    )
+
+
+def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats:
+    subprocess.run(["make", "build/tput"], stdout=subprocess.DEVNULL, cwd="cpp")
+    src = params.src
+    tgt = params.tgt
+    stdin_str = f"{params.g.number_of_nodes()} {params.g.number_of_edges()}\n"
+    for edge in params.g.edges():
+        stdin_str += f"{edge[0]} {edge[1]}\n"
+
+    cmd = [
+        "./cpp/build/tput",
+        "--src-node",
+        src,
+        "--tgt-node",
+        tgt,
+        "--rw-variant",
+        params.var,
+        "--chunk-size-bits",
+        str(params.chunk_size_bits),
+        "--link-buff-sz-bits",
+        str(params.link_buff_sz_bits),
+        "--qkd-skr-bits-per-s",
+        str(params.qkd_skr_bits_per_s),
+        "--latency-s",
+        str(params.latency_s),
+        "--sim-duration-s",
+        str(params.sim_duration_s),
+        "--relay-buffer-sz-chunks",
+        str(params.relay_buffer_sz_chunks),
+    ]
+    if params.print_arrival_times:
+        cmd.append("--print-arrival-times")
+
+    result = subprocess.run(
+        cmd,
+        input=stdin_str,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise Exception(f"Failed to compute throughput stats: {result.stderr}")
+
+    mean_tput = 0.0
+    emitted_chunks = 0
+    arrival_times: list[float] = []
+    for line in result.stdout.split("\n"):
+        if line == "":
+            break
+        key = line.split(":")[0].strip()
+        value = line.split(":", 1)[1].strip()
+        if key == "mean_tput":
+            mean_tput = float(value)
+        elif key == "emitted_chunks":
+            emitted_chunks = int(value)
+        elif key == "arrival_times":
+            parsed = ast.literal_eval(value)
+            arrival_times = [float(ts) for ts in parsed]
+
+    return ThroughputStats(
+        context=params,
+        mean_tput=mean_tput,
+        arrival_times=arrival_times,
+        emitted_chunks=emitted_chunks,
     )
 
 # def compute_src_tgt_stats(params: SrcTgtStats.Params) -> SrcTgtStats:
