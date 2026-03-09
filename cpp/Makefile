@@ -2,7 +2,7 @@ BUILD_DIR := build
 HEADERS := $(wildcard *.hpp)
 
 CXX := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -pedantic
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -pedantic -pthread
 
 .DEFAULT_GOAL := all
 

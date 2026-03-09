@@ -1,8 +1,8 @@
 #include <iostream>
 #include <algorithm>
-#include <map>
 #include <memory>
 #include <numeric>
+#include <thread>
 #include <vector>
 #include <string_view>
 #include <set>
@@ -41,7 +41,7 @@ Options parse_args(int argc, char **argv);
 void print_usage(const char *prog_name);
 HopStats compute_stats(
     const vector<int> &hop_counts,
-    const map<int, int> &hit_count,
+    const vector<int> &hit_count,
     const Graph &graph,
     int src_idx,
     int tgt_idx,
@@ -56,34 +56,65 @@ int main(int argc, char **argv) {
     int src_idx = graph.node_index(opts.src_node);
     int tgt_idx = graph.node_index(opts.tgt_node);
 
-    map<int, int> hit_count;
-    vector<int> hop_counts;
-    hop_counts.reserve(opts.no_of_runs);
-    for (int i = 0; i < opts.no_of_runs; i++) {
-        unique_ptr<RwToken> token;
-        if (opts.rw_variant == "R") {
-            token = make_unique<RToken>(src_idx, tgt_idx, i);
-        } else if (opts.rw_variant == "NB") {
-            token = make_unique<NbToken>(src_idx, tgt_idx, i);
-        } else if (opts.rw_variant == "LRV") {
-            token = make_unique<LrvToken>(src_idx, tgt_idx, i);
-        } else if (opts.rw_variant == "HS") {
-            token = make_unique<HsToken>(src_idx, tgt_idx, i);
-        } else {
-            cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
-            return 1;
-        }
+    const int node_count = static_cast<int>(adj.size());
+    vector<int> hop_counts(opts.no_of_runs, 0);
+    vector<int> hit_count(node_count, 0);
 
-        int position = src_idx;
-        vector<int> history = {position};
-        while (position != tgt_idx) {
-            position = token->choose_next_and_update(adj[position]);
-            history.push_back(position);
+    auto make_token = [&](int seed) -> unique_ptr<RwToken> {
+        if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+        return nullptr;
+    };
+    if (!make_token(0)) {
+        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
+        return 1;
+    }
+
+    unsigned int hw_threads = thread::hardware_concurrency();
+    int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
+    thread_count = min(thread_count, opts.no_of_runs);
+    vector<vector<int>> local_hit_counts(thread_count, vector<int>(node_count, 0));
+    vector<thread> workers;
+    workers.reserve(thread_count);
+
+    auto run_chunk = [&](int tid, int start_run, int end_run) -> void {
+        vector<int> &local_hits = local_hit_counts[tid];
+        for (int i = start_run; i < end_run; i++) {
+            unique_ptr<RwToken> token = make_token(i);
+            int position = src_idx;
+            int hops = 0;
+            set<int> seen_nodes = {position};
+            while (position != tgt_idx) {
+                position = token->choose_next_and_update(adj[position]);
+                seen_nodes.insert(position);
+                hops++;
+            }
+            hop_counts[i] = hops;
+            for (int node : seen_nodes) {
+                local_hits[node]++;
+            }
         }
-        hop_counts.push_back(static_cast<int>(history.size()) - 1);
-        set<int> seen_nodes(history.begin(), history.end());
-        for (int node : seen_nodes) {
-            hit_count[node]++;
+    };
+
+    int base_runs = opts.no_of_runs / thread_count;
+    int extra_runs = opts.no_of_runs % thread_count;
+    int next_start = 0;
+    for (int tid = 0; tid < thread_count; tid++) {
+        int chunk_size = base_runs + (tid < extra_runs ? 1 : 0);
+        int start_run = next_start;
+        int end_run = start_run + chunk_size;
+        workers.emplace_back(run_chunk, tid, start_run, end_run);
+        next_start = end_run;
+    }
+    for (thread &worker : workers) {
+        worker.join();
+    }
+
+    for (int tid = 0; tid < thread_count; tid++) {
+        for (int node = 0; node < node_count; node++) {
+            hit_count[node] += local_hit_counts[tid][node];
         }
     }
 
@@ -161,7 +192,7 @@ Options parse_args(int argc, char **argv){
 
 HopStats compute_stats(
     const vector<int> &hop_counts,
-    const map<int, int> &hit_count,
+    const vector<int> &hit_count,
     const Graph &graph,
     int src_idx,
     int tgt_idx,
@@ -184,7 +215,8 @@ HopStats compute_stats(
 
     int max_hit_count = 0;
     int max_hit_node = -1;
-    for (const auto &[node, count] : hit_count) {
+    for (int node = 0; node < static_cast<int>(hit_count.size()); node++) {
+        int count = hit_count[node];
         if (node == src_idx || node == tgt_idx) continue;
         if (count > max_hit_count) {
             max_hit_count = count;
