@@ -1,21 +1,23 @@
 from helpers.compute import compute_hop_stats, HopStats
-from helpers.utils import read_edge_list_csv, graphs_dir
+# from helpers.utils import read_edge_list_csv, graphs_dir
+from helpers.utils import synthetic_graph_snapshot
 import networkx as nx
 from statistics import median, mean
 
-g = read_edge_list_csv(graphs_dir / "geant" / "edges.csv")
-s,t="MAR","TIR"
+# g = read_edge_list_csv(graphs_dir / "generated" / "edges.csv")
+g = synthetic_graph_snapshot(99)
+# s,t="MAR","TIR"
 # s,t="MIL","COP"
 
-for var in ["R", "NB", "LRV", "HS"]:
-    hop_stats = compute_hop_stats(HopStats.HopSimParams(
-        g=g,
-        src=s,
-        tgt=t,
-        var=var,
-        no_of_runs=1000,
-    ))
-    hop_stats.print()
+# for var in ["R", "NB", "LRV", "HS"]:
+#     hop_stats = compute_hop_stats(HopStats.HopSimParams(
+#         g=g,
+#         src=s,
+#         tgt=t,
+#         var=var,
+#         no_of_runs=1000,
+#     ))
+#     hop_stats.print()
 
 for walk_variant in ["R", "NB", "LRV", "HS"]:
     max_hit_prob, max_hit_source, max_hit_target, max_hit_node = 0.0, "", "", ""
@@ -47,5 +49,5 @@ for walk_variant in ["R", "NB", "LRV", "HS"]:
     print(
         f"{walk_variant}: exposure={max_hit_prob:.3f} exposure_avg={avg_exposure:.3f} "
         f"exposure_median={median_exposure:.3f} s={max_hit_source} t={max_hit_target} "
-        f"v={max_hit_node} median_hops={median_hops}"
+        f"v={max_hit_node}"
     )

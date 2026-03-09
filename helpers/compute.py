@@ -90,8 +90,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
     if not built_hops_bin:
         subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL, cwd="cpp")
         built_hops_bin = True
-    src = params.src
-    tgt = params.tgt
+    src = str(params.src)
+    tgt = str(params.tgt)
     stdin_str = f"{params.g.number_of_nodes()} {params.g.number_of_edges()}\n"
     for edge in params.g.edges():
         stdin_str += f"{edge[0]} {edge[1]}\n"
