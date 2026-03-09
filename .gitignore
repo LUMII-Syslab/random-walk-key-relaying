@@ -9,3 +9,4 @@ plots/
 constructed.csv
 .venv/
 bkp/
+cpp/cache/

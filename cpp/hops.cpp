@@ -1,7 +1,11 @@
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <string_view>
@@ -63,6 +67,10 @@ HopStats compute_stats(
     int tgt_idx,
     int no_of_runs
 );
+filesystem::path cache_dir_from_argv0(const char *argv0);
+string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj);
+bool try_print_cached_output(const filesystem::path &cache_file);
+void write_cache_output(const filesystem::path &cache_file, const string &output);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
@@ -71,6 +79,12 @@ int main(int argc, char **argv) {
 
     int src_idx = graph.node_index(opts.src_node);
     int tgt_idx = graph.node_index(opts.tgt_node);
+    filesystem::path cache_dir = cache_dir_from_argv0(argv[0]);
+    string cache_key = cache_key_for_run(opts, graph, adj);
+    filesystem::path cache_file = cache_dir / (cache_key + ".txt");
+    if (try_print_cached_output(cache_file)) {
+        return 0;
+    }
 
     const int node_count = static_cast<int>(adj.size());
     vector<int> hop_counts(opts.no_of_runs, 0);
@@ -157,7 +171,11 @@ int main(int argc, char **argv) {
     if (opts.record_paths) {
         stats.paths = std::move(recorded_paths);
     }
-    stats.print(cout, opts);
+    ostringstream out;
+    stats.print(out, opts);
+    string output = out.str();
+    cout << output;
+    write_cache_output(cache_file, output);
     return 0;
 }
 
@@ -276,4 +294,69 @@ HopStats compute_stats(
     stats.max_hit_prob = static_cast<double>(max_hit_count) / no_of_runs;
     stats.max_hit_node = max_hit_node == -1 ? "N/A" : graph.node_name(max_hit_node);
     return stats;
+}
+
+filesystem::path cache_dir_from_argv0(const char *argv0) {
+    filesystem::path exe_path(argv0 == nullptr ? "" : argv0);
+    if (!exe_path.has_parent_path()) {
+        return filesystem::path("cache");
+    }
+    filesystem::path parent = exe_path.parent_path();
+    if (parent.filename() == "build") {
+        return parent.parent_path() / "cache";
+    }
+    return parent / "cache";
+}
+
+string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj) {
+    ostringstream fingerprint;
+    fingerprint << "hops-cache-v2";
+    fingerprint << "|runs=" << opts.no_of_runs;
+    fingerprint << "|src=" << opts.src_node;
+    fingerprint << "|tgt=" << opts.tgt_node;
+    fingerprint << "|variant=" << opts.rw_variant;
+    fingerprint << "|record_paths=" << (opts.record_paths ? 1 : 0);
+
+    vector<string> canonical_edges;
+    for (int u = 0; u < static_cast<int>(adj.size()); u++) {
+        string u_name = graph.node_name(u);
+        for (int v : adj[u]) {
+            if (u > v) continue;
+            string v_name = graph.node_name(v);
+            if (v_name < u_name) {
+                canonical_edges.push_back(v_name + "|" + u_name);
+            } else {
+                canonical_edges.push_back(u_name + "|" + v_name);
+            }
+        }
+    }
+    sort(canonical_edges.begin(), canonical_edges.end());
+    fingerprint << "|edge_count=" << canonical_edges.size();
+    for (const string &edge : canonical_edges) {
+        fingerprint << "|e=" << edge;
+    }
+    size_t key = hash<string>{}(fingerprint.str());
+    return to_string(key);
+}
+
+bool try_print_cached_output(const filesystem::path &cache_file) {
+    if (!filesystem::exists(cache_file)) {
+        return false;
+    }
+    ifstream in(cache_file);
+    if (!in.is_open()) {
+        return false;
+    }
+    cout << in.rdbuf();
+    return true;
+}
+
+void write_cache_output(const filesystem::path &cache_file, const string &output) {
+    error_code ec;
+    filesystem::create_directories(cache_file.parent_path(), ec);
+    ofstream out(cache_file);
+    if (!out.is_open()) {
+        return;
+    }
+    out << output;
 }

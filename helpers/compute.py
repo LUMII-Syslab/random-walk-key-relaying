@@ -84,8 +84,12 @@ class SrcTgtStats(HopStats, ThroughputStats):
 # - approx_logest: list[str]
 
 
+built_hops_bin = False
 def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
-    subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL, cwd="cpp")
+    global built_hops_bin
+    if not built_hops_bin:
+        subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL, cwd="cpp")
+        built_hops_bin = True
     src = params.src
     tgt = params.tgt
     stdin_str = f"{params.g.number_of_nodes()} {params.g.number_of_edges()}\n"
