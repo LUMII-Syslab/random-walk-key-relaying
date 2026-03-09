@@ -1,54 +1,7 @@
-from multiprocessing import Value
 import networkx as nx
-import numpy as np
 import subprocess
 from dataclasses import dataclass
-from collections import Counter
 from typing import Literal
-from utils import read_edge_list_csv, graphs_dir
-
-
-def main():
-    g = read_edge_list_csv(graphs_dir / "geant" / "edges.csv")
-    s,t="MAR","TIR"
-    # s,t="MIL","COP"
-    for var in ["R", "NB", "LRV", "HS"]:
-        hop_stats = compute_hop_stats(HopStats.HopSimParams(
-            g=g,
-            src=s,
-            tgt=t,
-            var=var,
-            no_of_runs=1000,
-        ))
-        hop_stats.print()
-    
-    node_connectivity_cache: dict[tuple[str, str], int] = {}
-    for walk_variant in ["R", "NB", "LRV", "HS"]:
-        max_hit_prob, max_hit_source, max_hit_target, max_hit_node = 0.0, "", "", ""
-        for (i, s) in enumerate(g.nodes()):
-            print(f"processing {i+1}/{len(g.nodes())} ({s})...", end="")
-            for t in g.nodes():
-                if s == t: continue
-                pair = (s, t)
-                if pair not in node_connectivity_cache:
-                    node_connectivity_cache[pair] = nx.node_connectivity(g, s, t)
-                if node_connectivity_cache[pair] == 1:
-                    continue
-                hop_stats = compute_hop_stats(HopStats.HopSimParams(
-                    g=g,
-                    src=s,
-                    tgt=t,
-                    var=walk_variant,
-                    no_of_runs=1000,
-                ))
-                if hop_stats.max_hit_prob > max_hit_prob :
-                    max_hit_prob = hop_stats.max_hit_prob
-                    max_hit_source = s
-                    max_hit_target = t
-                    max_hit_node = hop_stats.max_hit_node
-            print("\r", end="")
-        print(f"{walk_variant}: max_hit_prob={max_hit_prob:.3f} max_hit_source={max_hit_source} max_hit_target={max_hit_target} max_hit_node={max_hit_node}")
-
 
 # random walk variants
 VARS = Literal["R", "NB", "LRV", "HS"]
@@ -128,7 +81,7 @@ class SrcTgtStats(HopStats, ThroughputStats):
 
 
 def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
-    subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL)
+    subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL, cwd="cpp")
     src = params.src
     tgt = params.tgt
     stdin_str = f"{params.g.number_of_nodes()} {params.g.number_of_edges()}\n"
@@ -136,7 +89,7 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         stdin_str += f"{edge[0]} {edge[1]}\n"
     result = subprocess.run(
         [
-            "./build/hops",
+            "./cpp/build/hops",
             "--src-node",
             src,
             "--tgt-node",
@@ -193,6 +146,3 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
 #         max_flow_eff=tput / max_flow,
 #         node_conn_eff=tput * (1 - exp) / (node_conn - 1),
 #     )
-
-if __name__ == "__main__":
-    main()
