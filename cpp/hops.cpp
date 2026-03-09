@@ -28,6 +28,7 @@ struct HopStats {
     vector<vector<string>> paths;
 
     void print(ostream &out, Options opts) const {
+        out << "context: " << opts.src_node << " -> " << opts.tgt_node << " (" << opts.rw_variant << ", "<< opts.no_of_runs<< " runs)" << endl;
         out << "min_hops: " << min_hops << endl;
         out << "max_hops: " << max_hops << endl;
         out << "mean_hops: " << mean_hops << endl;
