@@ -73,7 +73,8 @@ class LrvToken: public RwToken{
     map<int,int> when_nbrs_last_seen(const vector<int> &nbrs) const {
         map<int,int> nbr_time;
         for(int nbr: nbrs){
-            if(last_seen.count(nbr) == 0) nbr_time[nbr] = 0;
+            // Unseen neighbors should be preferred over seen ones.
+            if(last_seen.count(nbr) == 0) nbr_time[nbr] = -1;
             else nbr_time[nbr] = last_seen.at(nbr);
         }
         return nbr_time;
