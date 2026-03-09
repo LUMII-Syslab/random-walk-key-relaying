@@ -57,7 +57,7 @@ class ThroughputStats:
         print_arrival_times: bool = False
 
     context: TputSimParams
-    mean_tput: float # bits/s
+    mean_tput_bits: int  # bits/s
     arrival_times: list[float] # timestamps
     emitted_chunks: int  # may have not arrived yet
 
@@ -75,9 +75,9 @@ class SrcTgtStats(HopStats, ThroughputStats):
     context: Params
 
     exposure: float
-    mean_tput: float  # = arrived_chunks * chunk_size_bits / sim_duration_s
-    max_flow_eff: float  # mean_tput / max_flow
-    node_conn_eff: float  # mean_tput*(1-exposure) / (node_conn-1)
+    mean_tput_bits: int  # = arrived_chunks * chunk_size_bits / sim_duration_s
+    max_flow_eff: float  # mean_tput_bits / max_flow
+    node_conn_eff: float  # mean_tput_bits*(1-exposure) / (node_conn-1)
 
 
 # for now exclude from stats:
@@ -176,7 +176,7 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
     if result.returncode != 0:
         raise Exception(f"Failed to compute throughput stats: {result.stderr}")
 
-    mean_tput = 0.0
+    mean_tput_bits = 0
     emitted_chunks = 0
     arrival_times: list[float] = []
     for line in result.stdout.split("\n"):
@@ -184,8 +184,8 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
             break
         key = line.split(":")[0].strip()
         value = line.split(":", 1)[1].strip()
-        if key == "mean_tput":
-            mean_tput = float(value)
+        if key == "mean_tput_bits":
+            mean_tput_bits = int(value)
         elif key == "emitted_chunks":
             emitted_chunks = int(value)
         elif key == "arrival_times":
@@ -194,7 +194,7 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
 
     return ThroughputStats(
         context=params,
-        mean_tput=mean_tput,
+        mean_tput_bits=mean_tput_bits,
         arrival_times=arrival_times,
         emitted_chunks=emitted_chunks,
     )

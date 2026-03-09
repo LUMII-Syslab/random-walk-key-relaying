@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -27,12 +28,12 @@ struct Options {
 };
 
 struct TputStats {
-    double mean_tput = 0.0;
+    int mean_tput_bits = 0;
     int emitted_chunks = 0;
     vector<double> arrival_times;
 
     void print(ostream &out, bool print_arrival_times) const {
-        out << "mean_tput: " << mean_tput << endl;
+        out << "mean_tput_bits: " << mean_tput_bits << endl;
         out << "emitted_chunks: " << emitted_chunks << endl;
         if (print_arrival_times) {
             out << "arrival_times: [";
@@ -348,8 +349,10 @@ RunResult run_single_simulation(
 
 TputStats compute_tput_stats(const RunResult &run, const Options &opts) {
     TputStats out;
-    out.mean_tput = static_cast<double>(run.arrived_chunks) / opts.sim_duration_s *
-                    (static_cast<double>(opts.chunk_size_bits) / 1000.0);
+    const double mean_tput_bits = static_cast<double>(run.arrived_chunks) *
+                                  static_cast<double>(opts.chunk_size_bits) /
+                                  opts.sim_duration_s;
+    out.mean_tput_bits = static_cast<int>(llround(mean_tput_bits));
     out.emitted_chunks = run.emitted_chunks;
     out.arrival_times = run.arrival_times;
     return out;
