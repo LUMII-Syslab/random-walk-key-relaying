@@ -109,7 +109,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         if line == "": break
         key = line.split(":")[0].strip()
         value = line.split(":")[1].strip()
-        if key == "min_hops": min_hops = int(value)
+        if key == "context": assert value==f"{params.src} -> {params.tgt} ({params.var}, {params.no_of_runs} runs)"
+        elif key == "min_hops": min_hops = int(value)
         elif key == "max_hops": max_hops = int(value)
         elif key == "mean_hops": mean_hops = float(value)
         elif key == "q1_hops": q1_hops = int(value)
