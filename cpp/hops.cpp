@@ -16,6 +16,7 @@ struct Options {
     string tgt_node = "";
     string rw_variant = "LRV";
     string edges_csv = "";
+    bool record_paths = false;
 };
 
 struct HopStats {
@@ -24,8 +25,9 @@ struct HopStats {
     int q1_hops, q2_hops, q3_hops;
     double max_hit_prob;
     string max_hit_node;
+    vector<vector<string>> paths;
 
-    void print(ostream &out) const {
+    void print(ostream &out, Options opts) const {
         out << "min_hops: " << min_hops << endl;
         out << "max_hops: " << max_hops << endl;
         out << "mean_hops: " << mean_hops << endl;
@@ -34,6 +36,19 @@ struct HopStats {
         out << "q3_hops: " << q3_hops << endl;
         out << "max_hit_prob: " << max_hit_prob << endl;
         out << "max_hit_node: " << max_hit_node << endl;
+        if(opts.record_paths){
+            out << "path_count: " << paths.size() << endl;
+            for(size_t i = 0; i < paths.size(); i++){
+                string zero_padded_i = to_string(i);
+                while(zero_padded_i.size()<to_string(paths.size()-1).size())
+                    zero_padded_i = "0" + zero_padded_i;
+                out << "path "<<zero_padded_i<<":";
+                for(const string &node : paths[i]){
+                    out << " " << node;
+                }
+                out << endl;
+            }
+        }
     }
 };
 
@@ -59,6 +74,10 @@ int main(int argc, char **argv) {
     const int node_count = static_cast<int>(adj.size());
     vector<int> hop_counts(opts.no_of_runs, 0);
     vector<int> hit_count(node_count, 0);
+    vector<vector<string>> recorded_paths;
+    if (opts.record_paths) {
+        recorded_paths.resize(opts.no_of_runs);
+    }
 
     auto make_token = [&](int seed) -> unique_ptr<RwToken> {
         if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
@@ -86,14 +105,29 @@ int main(int argc, char **argv) {
             int position = src_idx;
             int hops = 0;
             set<int> seen_nodes = {position};
+            vector<int> history;
+            if (opts.record_paths) {
+                history.push_back(position);
+            }
             while (position != tgt_idx) {
                 position = token->choose_next_and_update(adj[position]);
                 seen_nodes.insert(position);
+                if (opts.record_paths) {
+                    history.push_back(position);
+                }
                 hops++;
             }
             hop_counts[i] = hops;
             for (int node : seen_nodes) {
                 local_hits[node]++;
+            }
+            if (opts.record_paths) {
+                vector<string> path_names;
+                path_names.reserve(history.size());
+                for (int node : history) {
+                    path_names.push_back(graph.node_name(node));
+                }
+                recorded_paths[i] = std::move(path_names);
             }
         }
     };
@@ -119,14 +153,18 @@ int main(int argc, char **argv) {
     }
 
     HopStats stats = compute_stats(hop_counts, hit_count, graph, src_idx, tgt_idx, opts.no_of_runs);
-    stats.print(cout);
+    if (opts.record_paths) {
+        stats.paths = std::move(recorded_paths);
+    }
+    stats.print(cout, opts);
     return 0;
 }
 
 void print_usage(const char *prog_name) {
     cerr << "Usage: " << prog_name
-         << " --src-node <node> --tgt-node <node> "
-            "[--no-of-runs <int>] [--rw-variant <name>] [--edges-csv <path>]" << endl;
+         << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
+            "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>] "
+            "[(--edges-csv|-e) <path>] [--record-paths]" << endl;
 }
 
 Options parse_args(int argc, char **argv){
@@ -162,20 +200,23 @@ Options parse_args(int argc, char **argv){
         string_view flag = has_inline ? arg.substr(0, eq_pos) : arg;
         string_view inline_value = has_inline ? arg.substr(eq_pos + 1) : string_view{};
 
-        if(flag == "--no-of-runs"){
+        if(flag == "--no-of-runs" || flag == "-n"){
             opts.no_of_runs = stoi(require_value(i, flag, has_inline, inline_value));
         }
-        else if(flag == "--src-node"){
+        else if(flag == "--src-node" || flag == "-s"){
             opts.src_node = require_value(i, flag, has_inline, inline_value);
         }
-        else if(flag == "--tgt-node"){
+        else if(flag == "--tgt-node" || flag == "-t"){
             opts.tgt_node = require_value(i, flag, has_inline, inline_value);
         }
-        else if(flag == "--rw-variant"){
+        else if(flag == "--rw-variant" || flag == "-w"){
             opts.rw_variant = require_value(i, flag, has_inline, inline_value);
         }
-        else if(flag == "--edges-csv"){
+        else if(flag == "--edges-csv" || flag == "-e"){
             opts.edges_csv = require_value(i, flag, has_inline, inline_value);
+        }
+        else if(flag == "--record-paths"){
+            opts.record_paths = true;
         }
         else{
             fail("Unknown argument: " + string(arg));
