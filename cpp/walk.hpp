@@ -8,6 +8,10 @@
 #include <set>
 using namespace std;
 
+#ifndef HS_ENABLE_LRV_FALLBACK
+#define HS_ENABLE_LRV_FALLBACK 1
+#endif
+
 struct RwToken{
     virtual int choose_next_and_update(const vector<int> &nbrs) = 0;
 };
@@ -122,12 +126,20 @@ public:
 // vertex scores are predetermined at the start of the walk
 // the intuitive idea is that in one of the many walks
 // the "evil" vertex will be assigned a low value and therefore not visited
+// 
+// if all neighbors have been visited, we prefer the least recently visited neighbor
 class HsToken: public RwToken{
     int src_node_idx;
     int tgt_node_idx;
     set<int> visited;
+    map<int,int> last_seen;
+    int age;
     mt19937 rng;
     int walk_seed;
+    void append_to_history(int node_idx){
+        age++;
+        last_seen[node_idx] = age;
+    }
     uint64_t get_node_score(int node_idx) const {
         if(visited.count(node_idx) > 0) return 0;
         // Deterministic per-walk/per-node score without hard-coded constants.
@@ -141,12 +153,15 @@ public:
         src_node_idx = src;
         tgt_node_idx = tgt;
         walk_seed = seed;
+        age = 0;
         visited.insert(src_node_idx);
+        last_seen[src_node_idx] = age;
     }
     int choose_next_and_update(const vector<int> &nbrs){
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             visited.insert(chosen);
+            append_to_history(chosen);
             return chosen;
         }
 
@@ -154,7 +169,19 @@ public:
         for(int nbr: nbrs){
             if(visited.count(nbr) == 0) candidate_nbrs.push_back(nbr);
         }
-        if(candidate_nbrs.empty()) candidate_nbrs = nbrs;
+        if(candidate_nbrs.empty()) {
+#if HS_ENABLE_LRV_FALLBACK
+            int min_time = numeric_limits<int>::max();
+            for(int nbr: nbrs){
+                min_time = min(min_time, last_seen[nbr]);
+            }
+            for(int nbr: nbrs){
+                if(last_seen[nbr] == min_time) candidate_nbrs.push_back(nbr);
+            }
+#else
+            candidate_nbrs = nbrs;
+#endif
+        }
 
         uint64_t max_score = 0;
         vector<int> choices;
@@ -170,6 +197,7 @@ public:
 
         int chosen = choose_uniformly(choices, rng);
         visited.insert(chosen);
+        append_to_history(chosen);
         return chosen;
     }
 
