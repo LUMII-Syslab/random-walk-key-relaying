@@ -24,13 +24,13 @@ class HopStats:
     q1_hops: int
     q2_hops: int # median
     q3_hops: int
-    max_hit_prob: float
-    max_hit_node: str
+    exposure: float
+    exposure_relay: str
 
     def print(self):
         src, tgt, var = self.context.src, self.context.tgt, self.context.var
         print(f"{src} -> {tgt} ({var}):", end=" ")
-        print(f"exposure={self.max_hit_node},{self.max_hit_prob:.3f}", end=" ")
+        print(f"exposure={self.exposure_relay},{self.exposure:.3f}", end=" ")
         print(f"min={self.min_hops}", end=" ")
         print(f"mean={self.mean_hops:.3f}", end=" ")
         print(f"max={self.max_hops}", end=" ")
@@ -134,8 +134,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         q1_hops=q1_hops,
         q2_hops=q2_hops,
         q3_hops=q3_hops,
-        max_hit_prob=max_hit_prob,
-        max_hit_node=max_hit_node,
+        exposure=max_hit_prob,
+        exposure_relay=max_hit_node,
     )
 
 

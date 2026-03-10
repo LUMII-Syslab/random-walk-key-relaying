@@ -20,9 +20,8 @@ g = synthetic_graph_snapshot(99)
 #     hop_stats.print()
 
 for walk_variant in ["R", "NB", "LRV", "HS"]:
-    max_hit_prob, max_hit_source, max_hit_target, max_hit_node = 0.0, "", "", ""
-    pair_medians = []
-    pair_exposures = []
+    max_exposure, max_e_src, max_e_tgt, max_e_relay = 0.0, "", "", ""
+    exposure_sum, pair_count = 0.0, 0
     for (i, s) in enumerate(g.nodes()):
         print(f"processing {i+1}/{len(g.nodes())} ({s})...", end="")
         for t in g.nodes():
@@ -35,19 +34,13 @@ for walk_variant in ["R", "NB", "LRV", "HS"]:
                 var=walk_variant,
                 no_of_runs=1000,
             ))
-            pair_medians.append(hop_stats.q2_hops)
-            pair_exposures.append(hop_stats.max_hit_prob)
-            if hop_stats.max_hit_prob > max_hit_prob :
-                max_hit_prob = hop_stats.max_hit_prob
-                max_hit_source = s
-                max_hit_target = t
-                max_hit_node = hop_stats.max_hit_node
+            if hop_stats.exposure > max_exposure :
+                max_exposure = hop_stats.exposure
+                max_e_src = s
+                max_e_tgt = t
+                max_e_relay = hop_stats.exposure_relay
+            exposure_sum += hop_stats.exposure
+            pair_count += 1
         print("\r", end="")
-    median_hops = median(pair_medians) if pair_medians else float("nan")
-    avg_exposure = mean(pair_exposures) if pair_exposures else float("nan")
-    median_exposure = median(pair_exposures) if pair_exposures else float("nan")
-    print(
-        f"{walk_variant}: exposure={max_hit_prob:.3f} exposure_avg={avg_exposure:.3f} "
-        f"exposure_median={median_exposure:.3f} s={max_hit_source} t={max_hit_target} "
-        f"v={max_hit_node}"
-    )
+    print(f"{walk_variant}: max_exposure={max_exposure:.3f} s={max_e_src} t={max_e_tgt} v={max_e_relay}")
+    print(f"{walk_variant}: avg_exposure={exposure_sum/pair_count:.3f} over {pair_count} pairs")
