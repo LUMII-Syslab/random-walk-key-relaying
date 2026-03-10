@@ -1,0 +1,17 @@
+(randomwalks) kp:~/p/l/random-walk-key-relaying (main)> python3 script.py secoqc && python3 script.py nsfnet && python3 script.py geant && python3 script.py generated
+graph: secoqc                                                                                       
+HS: max_exposure=0.544 s=SIE t=ERD v=GUD
+HS: avg_exposure=0.516 median_exposure=0.514 over 12 pairs
+HS: avg_mean_hop_count=2 avg_max_hop_count=6
+graph: nsfnet                                                                                       
+HS: max_exposure=0.843 s=SLC t=ATL v=HOU
+HS: avg_exposure=0.639 median_exposure=0.647 over 182 pairs
+HS: avg_mean_hop_count=7 avg_max_hop_count=20
+graph: geant                                                                                        
+HS: max_exposure=0.932 s=DUB t=LJU v=PAR
+HS: avg_exposure=0.789 median_exposure=0.828 over 1266 pairs
+HS: avg_mean_hop_count=27 avg_max_hop_count=102
+graph: generated                                                                                    
+HS: max_exposure=0.962 s=38 t=24 v=16
+HS: avg_exposure=0.793 median_exposure=0.808 over 9702 pairs
+HS: avg_mean_hop_count=62 avg_max_hop_count=229

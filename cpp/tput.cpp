@@ -225,6 +225,7 @@ unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, in
     if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+    if (opts.rw_variant == "BHS") return make_unique<BhsToken>(src_idx, tgt_idx, seed);
     return nullptr;
 }
 
@@ -262,7 +263,7 @@ RunResult run_single_simulation(
         pkt->target = tgt_idx;
         pkt->token = make_token(opts, src_idx, tgt_idx, seed_offset * 100000000 + result.emitted_chunks);
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
-        int next = pkt->token->choose_next_and_update(adj[source_node]);
+        int next = pkt->token->choose_next_and_update(source_node, adj[source_node]);
         double wait = link_state(source_node, next).reserve(
             now,
             opts.chunk_size_bits,
@@ -331,7 +332,7 @@ RunResult run_single_simulation(
                 continue;
             }
 
-            int next = ev.pkt->token->choose_next_and_update(adj[ev.at]);
+            int next = ev.pkt->token->choose_next_and_update(ev.at, adj[ev.at]);
             double wait = link_state(ev.at, next).reserve(
                 ev.time,
                 opts.chunk_size_bits,

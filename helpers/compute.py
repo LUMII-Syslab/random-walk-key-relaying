@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 # random walk variants
-VARS = Literal["R", "NB", "LRV", "HS"]
+VARS = Literal["R", "NB", "LRV", "HS", "BHS"]
 
 @dataclass
 class HopStats:
@@ -112,7 +112,7 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         text=True,
     )
     if result.returncode != 0:
-        raise Exception(f"Failed to compute hop stats: {result.stderr}")
+        raise Exception(f"Failed to compute hop stats: {result.returncode} {result.stderr}")
     for line in result.stdout.split("\n"):
         if line == "": break
         key = line.split(":")[0].strip()

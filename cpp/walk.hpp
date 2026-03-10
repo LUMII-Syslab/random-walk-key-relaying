@@ -6,6 +6,7 @@
 #include <vector>
 #include "utils.hpp"
 #include <set>
+#include <cassert>
 using namespace std;
 
 #ifndef HS_ENABLE_LRV_FALLBACK
@@ -13,7 +14,7 @@ using namespace std;
 #endif
 
 struct RwToken{
-    virtual int choose_next_and_update(const vector<int> &nbrs) = 0;
+    virtual int choose_next_and_update(int v, const vector<int> &nbrs) = 0;
 };
 
 // simple random walk (R)
@@ -23,10 +24,10 @@ class RToken: public RwToken{
     mt19937 rng;
 public:
     RToken(int src, int tgt, int seed): rng(seed){
-        src_node_idx = src;
-        tgt_node_idx = tgt;
+        this->src_node_idx = src;
+        this->tgt_node_idx = tgt;
     }
-    int choose_next_and_update(const vector<int> &nbrs){
+    int choose_next_and_update(int __attribute__((unused)) v, const vector<int> &nbrs){
         return choose_uniformly(nbrs, rng);
     }
 };
@@ -40,12 +41,12 @@ class NbToken: public RwToken{
     int previous = -1;
 public:
     NbToken(int src, int tgt, int seed): rng(seed){
-        src_node_idx = src;
-        tgt_node_idx = tgt;
+        this->src_node_idx = src;
+        this->tgt_node_idx = tgt;
         current = src_node_idx;
         previous = -1;
     }
-    int choose_next_and_update(const vector<int> &nbrs){
+    int choose_next_and_update(int __attribute__((unused)) v, const vector<int> &nbrs){
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             previous = current;
@@ -94,7 +95,7 @@ public:
         age = 0;
         last_seen[src_node_idx]=0;
     }
-    int choose_next_and_update(const vector<int> &nbrs){
+    int choose_next_and_update(int __attribute__((unused)) v, const vector<int> &nbrs){
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             append_to_history(chosen);
@@ -157,7 +158,7 @@ public:
         visited.insert(src_node_idx);
         last_visited[src_node_idx] = age;
     }
-    int choose_next_and_update(const vector<int> &nbrs){
+    int choose_next_and_update(int __attribute__((unused)) v, const vector<int> &nbrs){
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             visited.insert(chosen);
@@ -201,4 +202,132 @@ public:
         return chosen;
     }
 
+};
+
+// bivalent-vertex-optimized HS walk (BHS)
+class BhsToken: public RwToken{
+    int src, tgt, seed;
+    mt19937 rng;
+
+    int age; // hop count since start
+    map<int,int> last_vis;
+    map<int,uint64_t> override_score;
+    uint64_t psi = 0; // highest unvisited neighbor score in last intersection
+
+    uint64_t _get_score(int v, int seed) const {
+        seed_seq seq{v, seed};
+        array<uint32_t, 2> words{};
+        seq.generate(words.begin(), words.end());
+        return (static_cast<uint64_t>(words[0]) << 32) | words[1];
+    }
+    uint64_t get_score(int u) const {
+        if(override_score.count(u) > 0) return override_score.at(u);
+        return _get_score(u, seed);
+    }
+    int get_last_vis_time(int v) const{
+        return last_vis.count(v) == 0 ? -1 : last_vis.at(v);
+    }
+    int pick_lrv(const vector<int> &nbrs, mt19937 &rng) const{
+        int min_time = numeric_limits<int>::max();
+        vector<int> choices;
+        for(int nbr: nbrs){
+            int nbr_time = get_last_vis_time(nbr);
+            if(nbr_time == min_time) choices.push_back(nbr);
+            else if(nbr_time < min_time) {
+                min_time = nbr_time;
+                choices.clear();
+                choices.push_back(nbr);
+            }
+        }
+        return choose_uniformly(choices, rng);
+    }
+    int pick_max_score(const vector<int> &choices, mt19937 &rng) const{
+        assert(choices.size()>0);
+        uint64_t max_score = 0;
+        vector<int> filtered_choices;
+        for (int c : choices) {
+            uint64_t score = get_score(c);
+            if (score == max_score) filtered_choices.push_back(c);
+            if (score > max_score) {
+                max_score = score;
+                filtered_choices.clear();
+                filtered_choices.push_back(c);
+            }
+        }
+        assert(filtered_choices.size()>0);
+        return choose_uniformly(filtered_choices, rng);
+    }
+    vector<int> filter_unvisited(const vector<int> &nbrs) const{
+        vector<int> unvisited_nbrs;
+        for(int nbr: nbrs){
+            if(last_vis.count(nbr) == 0) unvisited_nbrs.push_back(nbr);
+        }
+        return unvisited_nbrs;
+    }
+
+    bool visited(int u) const{
+        return last_vis.count(u) > 0;
+    }
+
+    int process_bivalent(int v, const vector<int> &nbrs, mt19937 &rng) {
+        assert(nbrs.size()==2);
+
+        if(filter_unvisited(nbrs).size()==2){
+            return pick_max_score(filter_unvisited(nbrs),rng);
+        }
+        if(filter_unvisited(nbrs).size()==0){
+            return pick_lrv(nbrs, rng);
+        }
+
+        int u = nbrs[0], p = nbrs[1];
+        if(visited(u)) swap(u, p);
+        // u is the unvisited neighbor
+        // p is the previous vertex
+
+        if(get_score(u) < psi) {
+            // we must start the backtracking process
+            override_score[v] = get_score(u);
+            last_vis.erase(v);
+            return p;
+        }
+        
+        return u;
+    }
+    
+    int process_intersection(int v, const vector<int> &nbrs, mt19937 &rng) {
+        assert(nbrs.size()>2);
+
+        vector<int> unvisited_nbrs = filter_unvisited(nbrs);
+        if(unvisited_nbrs.size()==0) {
+            psi = 0;
+            return pick_lrv(nbrs, rng);
+        }
+
+        int u = pick_max_score(unvisited_nbrs, rng);
+        psi = 0;
+        for(int nbr: unvisited_nbrs){
+            if(nbr == u) continue;
+            psi = max(psi, get_score(nbr)); // update psi
+        }
+        return u;
+    }
+public:
+    BhsToken(int src, int tgt, int seed){
+        this->src = src;
+        this->tgt = tgt;
+        this->seed = seed;
+        this->rng = mt19937(seed);
+        this->age = 0;
+        this->last_vis[this->src] = this->age;
+    }
+    int choose_next_and_update(int v, const vector<int> &nbrs){
+        int chosen;
+        if(nbrs.size()==1) chosen = nbrs[0];
+        else if(nbrs.size()==2) chosen = process_bivalent(v, nbrs, rng);
+        else chosen = process_intersection(v, nbrs, rng);
+
+        age++;
+        last_vis[chosen] = age;
+        return chosen;
+    }
 };

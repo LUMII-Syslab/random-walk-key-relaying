@@ -99,6 +99,7 @@ int main(int argc, char **argv) {
         if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "BHS") return make_unique<BhsToken>(src_idx, tgt_idx, seed);
         return nullptr;
     };
     if (!make_token(0)) {
@@ -125,7 +126,7 @@ int main(int argc, char **argv) {
                 history.push_back(position);
             }
             while (position != tgt_idx) {
-                position = token->choose_next_and_update(adj[position]);
+                position = token->choose_next_and_update(position, adj[position]);
                 seen_nodes.insert(position);
                 if (opts.record_paths) {
                     history.push_back(position);

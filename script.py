@@ -10,7 +10,7 @@ if sys.argv[1] == "generated":
 else:
     g = read_edge_list_csv(graphs_dir / sys.argv[1] / "edges.csv")
 
-for walk_variant in ["HS"]:#["R", "NB", "LRV", "HS"]:
+for walk_variant in ["BHS"]:#["R", "NB", "LRV", "HS"]:
     max_exposure, max_e_src, max_e_tgt, max_e_relay = 0.0, "", "", ""
     pair_exposures = []
     pair_mean_hop_counts = []
@@ -35,7 +35,7 @@ for walk_variant in ["HS"]:#["R", "NB", "LRV", "HS"]:
             pair_exposures.append(hop_stats.exposure)
             pair_mean_hop_counts.append(hop_stats.mean_hops)
             pair_max_hop_counts.append(hop_stats.max_hops)
-        print(f"\r{' '*100}\r", end="")
+        print(f"\r{' '*100}\r", end="", flush=True)
     avg_exposure = mean(pair_exposures) if pair_exposures else float('nan')
     median_exposure = median(pair_exposures) if pair_exposures else float('nan')
     print(f"graph: {sys.argv[1]}")
