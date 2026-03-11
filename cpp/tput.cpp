@@ -225,6 +225,7 @@ unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, in
     if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+    if (opts.rw_variant == "HSB") return make_unique<HsbToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "BHS") return make_unique<BhsToken>(src_idx, tgt_idx, seed);
     return nullptr;
 }
@@ -253,6 +254,8 @@ RunResult run_single_simulation(
     priority_queue<Event, vector<Event>, EventGreater> pq;
     vector<int> relay_free(static_cast<int>(adj.size()), opts.relay_buffer_sz_chunks);
     vector<queue<Event>> slot_polling_events(static_cast<int>(adj.size()));
+    vector<map<int, int>> sent_to_neighbor_count(static_cast<int>(adj.size()));
+    const bool uses_send_state = (opts.rw_variant == "HSB" || opts.rw_variant == "BHS");
 
     auto schedule_first_hop = [&](double now, int source_node) -> void {
         if (adj[source_node].empty()) return;
@@ -263,7 +266,16 @@ RunResult run_single_simulation(
         pkt->target = tgt_idx;
         pkt->token = make_token(opts, src_idx, tgt_idx, seed_offset * 100000000 + result.emitted_chunks);
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
-        int next = pkt->token->choose_next_and_update(source_node, adj[source_node]);
+        RwToken::WalkNodeState node_state;
+        node_state.node_idx = source_node;
+        node_state.no_of_runs = max(1, result.emitted_chunks + 1);
+        if (uses_send_state) {
+            node_state.sent_to_neighbor_count = &sent_to_neighbor_count[source_node];
+        }
+        int next = pkt->token->choose_next_and_update(node_state, adj[source_node]);
+        if (uses_send_state) {
+            sent_to_neighbor_count[source_node][next]++;
+        }
         double wait = link_state(source_node, next).reserve(
             now,
             opts.chunk_size_bits,
@@ -332,7 +344,16 @@ RunResult run_single_simulation(
                 continue;
             }
 
-            int next = ev.pkt->token->choose_next_and_update(ev.at, adj[ev.at]);
+            RwToken::WalkNodeState node_state;
+            node_state.node_idx = ev.at;
+            node_state.no_of_runs = max(1, result.emitted_chunks + 1);
+            if (uses_send_state) {
+                node_state.sent_to_neighbor_count = &sent_to_neighbor_count[ev.at];
+            }
+            int next = ev.pkt->token->choose_next_and_update(node_state, adj[ev.at]);
+            if (uses_send_state) {
+                sent_to_neighbor_count[ev.at][next]++;
+            }
             double wait = link_state(ev.at, next).reserve(
                 ev.time,
                 opts.chunk_size_bits,

@@ -99,6 +99,8 @@ int main(int argc, char **argv) {
         if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "HSB") return make_unique<HsbToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "BHS") return make_unique<BhsToken>(src_idx, tgt_idx, seed);
         return nullptr;
     };
     if (!make_token(0)) {
@@ -106,10 +108,16 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    const bool uses_send_state = (opts.rw_variant == "HSB" || opts.rw_variant == "BHS");
     unsigned int hw_threads = thread::hardware_concurrency();
     int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
     thread_count = min(thread_count, opts.no_of_runs);
+    if (uses_send_state) {
+        // HSB/BHS relies on shared per-node outgoing-send counters across runs.
+        thread_count = 1;
+    }
     vector<vector<int>> local_hit_counts(thread_count, vector<int>(node_count, 0));
+    vector<map<int, int>> sent_to_neighbor_count(node_count);
     vector<thread> workers;
     workers.reserve(thread_count);
 
@@ -125,7 +133,17 @@ int main(int argc, char **argv) {
                 history.push_back(position);
             }
             while (position != tgt_idx) {
-                position = token->choose_next_and_update(position, adj[position]);
+                RwToken::WalkNodeState node_state;
+                node_state.node_idx = position;
+                node_state.no_of_runs = opts.no_of_runs;
+                if (uses_send_state) {
+                    node_state.sent_to_neighbor_count = &sent_to_neighbor_count[position];
+                }
+                int next = token->choose_next_and_update(node_state, adj[position]);
+                if (uses_send_state) {
+                    sent_to_neighbor_count[position][next]++;
+                }
+                position = next;
                 seen_nodes.insert(position);
                 if (opts.record_paths) {
                     history.push_back(position);
