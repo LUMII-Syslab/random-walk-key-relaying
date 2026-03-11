@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <random>
+#include <stdexcept>
 #include <vector>
 #include "utils.hpp"
 #include <set>
@@ -160,6 +161,90 @@ public:
     }
 };
 
+// node-coloring (NC) random walk variant
+// acts like LRV, but each walk disables one node chosen from seed % node_count
+class NcToken: public RwToken{
+    int src_node_idx;
+    int tgt_node_idx;
+    int disabled_node_idx;
+    int age; // history length
+    map<int,int> last_seen;
+    mt19937 rng;
+
+    vector<int> enabled_neighbors(const vector<int> &nbrs) const {
+        vector<int> choices;
+        for(int nbr : nbrs){
+            if(nbr != disabled_node_idx) choices.push_back(nbr);
+        }
+        return choices;
+    }
+    map<int,int> when_nbrs_last_seen(const vector<int> &nbrs) const {
+        map<int,int> nbr_time;
+        for(int nbr: nbrs){
+            if(last_seen.count(nbr) == 0) nbr_time[nbr] = -1;
+            else nbr_time[nbr] = last_seen.at(nbr);
+        }
+        return nbr_time;
+    }
+    void append_to_history(int node_idx){
+        age++;
+        last_seen[node_idx] = age;
+    }
+public:
+    NcToken(int src, int tgt, int seed, int node_count): rng(seed){
+        if(node_count <= 0) throw runtime_error("NC walk requires positive node_count");
+        src_node_idx = src;
+        tgt_node_idx = tgt;
+        vector<int> eligible_disabled_nodes;
+        eligible_disabled_nodes.reserve(node_count);
+        for(int node_idx = 0; node_idx < node_count; node_idx++){
+            if(node_idx == src_node_idx || node_idx == tgt_node_idx) continue;
+            eligible_disabled_nodes.push_back(node_idx);
+        }
+        if(eligible_disabled_nodes.empty()) disabled_node_idx = -1;
+        else {
+            int disabled_offset = ((seed % static_cast<int>(eligible_disabled_nodes.size()))
+                                   + static_cast<int>(eligible_disabled_nodes.size()))
+                                  % static_cast<int>(eligible_disabled_nodes.size());
+            disabled_node_idx = eligible_disabled_nodes[disabled_offset];
+        }
+        age = 0;
+        last_seen[src_node_idx] = age;
+    }
+    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
+        (void)state;
+        vector<int> choices = enabled_neighbors(nbrs);
+        if(choices.empty()) {
+            throw runtime_error("NC walk reached a node whose only neighbors are disabled");
+        }
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(tgt_node_idx != disabled_node_idx && has_neighbor(choices, tgt_node_idx)) {
+            append_to_history(tgt_node_idx);
+            return tgt_node_idx;
+        }
+#endif
+        if(choices.size() == 1) {
+            int chosen = choices[0];
+            append_to_history(chosen);
+            return chosen;
+        }
+
+        map<int,int> nbr_time = when_nbrs_last_seen(choices);
+        int min_time = numeric_limits<int>::max();
+        for(auto [nbr, time] : nbr_time){
+            min_time = min(min_time, time);
+        }
+
+        vector<int> lrv_choices;
+        for(auto [nbr, time] : nbr_time){
+            if(time == min_time) lrv_choices.push_back(nbr);
+        }
+        int chosen = choose_uniformly(lrv_choices, rng);
+        append_to_history(chosen);
+        return chosen;
+    }
+};
+
 // highest-score vertex (HS) random walk variant
 // vertex scores are predetermined at the start of the walk
 // the intuitive idea is that in one of the many walks
@@ -255,3 +340,4 @@ public:
     }
 
 };
+

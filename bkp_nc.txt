@@ -1,0 +1,81 @@
+(randomwalks) kp:~/p/l/random-walk-key-relaying (main) [1]> python3 script.py secoqc && python3 script.py nsfnet && python3 script.py geant && python3 script.py generated
+graph: secoqc                                                                                       
+R: max_exposure=0.000 s= t= v=
+R: avg_exposure=0.000 median_exposure=0.000 over 12 pairs
+R: avg_mean_hop_count=1 avg_max_hop_count=1
+graph: secoqc                                                                                       
+NB: max_exposure=0.000 s= t= v=
+NB: avg_exposure=0.000 median_exposure=0.000 over 12 pairs
+NB: avg_mean_hop_count=1 avg_max_hop_count=1
+graph: secoqc                                                                                       
+LRV: max_exposure=0.000 s= t= v=
+LRV: avg_exposure=0.000 median_exposure=0.000 over 12 pairs
+LRV: avg_mean_hop_count=1 avg_max_hop_count=1
+graph: secoqc                                                                                       
+NC: max_exposure=0.000 s= t= v=
+NC: avg_exposure=0.000 median_exposure=0.000 over 12 pairs
+NC: avg_mean_hop_count=1 avg_max_hop_count=1
+graph: secoqc                                                                                       
+HS: max_exposure=0.000 s= t= v=
+HS: avg_exposure=0.000 median_exposure=0.000 over 12 pairs
+HS: avg_mean_hop_count=1 avg_max_hop_count=1
+graph: nsfnet                                                                                       
+R: max_exposure=0.810 s=ATL t=SAN v=HOU
+R: avg_exposure=0.473 median_exposure=0.605 over 182 pairs
+R: avg_mean_hop_count=6 avg_max_hop_count=41
+graph: nsfnet                                                                                       
+NB: max_exposure=0.785 s=ATL t=SAN v=HOU
+NB: avg_exposure=0.434 median_exposure=0.538 over 182 pairs
+NB: avg_mean_hop_count=4 avg_max_hop_count=22
+graph: nsfnet                                                                                       
+LRV: max_exposure=0.762 s=ATL t=SAN v=HOU
+LRV: avg_exposure=0.425 median_exposure=0.534 over 182 pairs
+LRV: avg_mean_hop_count=3 avg_max_hop_count=9
+graph: nsfnet                                                                                       
+NC: max_exposure=0.721 s=ATL t=SAN v=HOU
+NC: avg_exposure=0.415 median_exposure=0.520 over 182 pairs
+NC: avg_mean_hop_count=4 avg_max_hop_count=11
+graph: nsfnet                                                                                       
+HS: max_exposure=0.701 s=ATL t=SAN v=HOU
+HS: avg_exposure=0.414 median_exposure=0.520 over 182 pairs
+HS: avg_mean_hop_count=3 avg_max_hop_count=10
+graph: geant                                                                                        
+R: max_exposure=0.992 s=TIR t=LIS v=MIL
+R: avg_exposure=0.794 median_exposure=0.897 over 1266 pairs
+R: avg_mean_hop_count=64 avg_max_hop_count=535
+graph: geant                                                                                        
+NB: max_exposure=0.964 s=TIR t=LIS v=MIL
+NB: avg_exposure=0.741 median_exposure=0.835 over 1266 pairs
+NB: avg_mean_hop_count=32 avg_max_hop_count=234
+graph: geant                                                                                        
+LRV: max_exposure=0.961 s=TIR t=LIS v=MIL
+LRV: avg_exposure=0.725 median_exposure=0.811 over 1266 pairs
+LRV: avg_mean_hop_count=18 avg_max_hop_count=70
+graph: geant                                                                                        
+NC: max_exposure=0.937 s=POR t=COR v=PAR
+NC: avg_exposure=0.718 median_exposure=0.804 over 1266 pairs
+NC: avg_mean_hop_count=18 avg_max_hop_count=82
+graph: geant                                                                                        
+HS: max_exposure=0.926 s=MAD t=COR v=PAR
+HS: avg_exposure=0.694 median_exposure=0.772 over 1266 pairs
+HS: avg_mean_hop_count=25 avg_max_hop_count=236
+graph: generated                                                                                    
+R: max_exposure=0.985 s=75 t=69 v=18
+R: avg_exposure=0.805 median_exposure=0.848 over 9702 pairs
+R: avg_mean_hop_count=128 avg_max_hop_count=1027
+graph: generated                                                                                    
+NB: max_exposure=0.970 s=38 t=64 v=16
+NB: avg_exposure=0.747 median_exposure=0.785 over 9702 pairs
+NB: avg_mean_hop_count=68 avg_max_hop_count=516
+graph: generated                                                                                    
+LRV: max_exposure=0.964 s=39 t=64 v=16
+LRV: avg_exposure=0.737 median_exposure=0.772 over 9702 pairs
+LRV: avg_mean_hop_count=41 avg_max_hop_count=163
+graph: generated                                                                                    
+NC: max_exposure=0.952 s=64 t=39 v=16
+NC: avg_exposure=0.732 median_exposure=0.767 over 9702 pairs
+NC: avg_mean_hop_count=42 avg_max_hop_count=181
+graph: generated                                                                                    
+HS: max_exposure=0.933 s=38 t=64 v=16
+HS: avg_exposure=0.706 median_exposure=0.728 over 9702 pairs
+HS: avg_mean_hop_count=49 avg_max_hop_count=357

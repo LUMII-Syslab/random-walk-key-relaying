@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
         if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
         if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
+        if (opts.rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
         if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
         return nullptr;
     };
@@ -147,6 +148,9 @@ int main(int argc, char **argv) {
                     history.push_back(position);
                 }
                 hops++;
+                if (hops > 100000) {
+                    throw runtime_error("Random walk exceeded 100000 steps");
+                }
             }
             hop_counts[i] = hops;
             for (int node : seen_nodes) {

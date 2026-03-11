@@ -98,6 +98,7 @@ enum class EventType : uint8_t {
 struct Packet {
     int source = -1;
     int target = -1;
+    int hops = 0;
     unique_ptr<RwToken> token;
 };
 
@@ -124,7 +125,7 @@ struct RunResult {
 
 Options parse_args(int argc, char **argv);
 void print_usage(const char *prog_name);
-unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed);
+unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed, int node_count);
 RunResult run_single_simulation(const vector<vector<int>> &adj, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
@@ -220,10 +221,11 @@ Options parse_args(int argc, char **argv) {
     return opts;
 }
 
-unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed) {
+unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed, int node_count) {
     if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
+    if (opts.rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
     if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
     return nullptr;
 }
@@ -254,6 +256,7 @@ RunResult run_single_simulation(
     vector<queue<Event>> slot_polling_events(static_cast<int>(adj.size()));
     vector<map<int, int>> sent_to_neighbor_count(static_cast<int>(adj.size()));
     const bool uses_send_state = (opts.rw_variant == "HSB" || opts.rw_variant == "BHS");
+    const int node_count = static_cast<int>(adj.size());
 
     auto schedule_first_hop = [&](double now, int source_node) -> void {
         if (adj[source_node].empty()) return;
@@ -262,7 +265,7 @@ RunResult run_single_simulation(
         auto pkt = make_shared<Packet>();
         pkt->source = source_node;
         pkt->target = tgt_idx;
-        pkt->token = make_token(opts, src_idx, tgt_idx, seed_offset * 100000000 + result.emitted_chunks);
+        pkt->token = make_token(opts, src_idx, tgt_idx, seed_offset * 100000000 + result.emitted_chunks, node_count);
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
         RwToken::WalkNodeState node_state;
         node_state.node_idx = source_node;
@@ -274,6 +277,8 @@ RunResult run_single_simulation(
         if (uses_send_state) {
             sent_to_neighbor_count[source_node][next]++;
         }
+        pkt->hops = 1;
+        if (pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
         double wait = link_state(source_node, next).reserve(
             now,
             opts.chunk_size_bits,
@@ -352,6 +357,8 @@ RunResult run_single_simulation(
             if (uses_send_state) {
                 sent_to_neighbor_count[ev.at][next]++;
             }
+            ev.pkt->hops++;
+            if (ev.pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
             double wait = link_state(ev.at, next).reserve(
                 ev.time,
                 opts.chunk_size_bits,
