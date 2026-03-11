@@ -10,7 +10,7 @@ if sys.argv[1] == "generated":
 else:
     g = read_edge_list_csv(graphs_dir / sys.argv[1] / "edges.csv")
 
-for walk_variant in ["BHS"]:#["R", "NB", "LRV", "HS"]:
+for walk_variant in ["R", "NB", "LRV", "HS"]:
     max_exposure, max_e_src, max_e_tgt, max_e_relay = 0.0, "", "", ""
     pair_exposures = []
     pair_mean_hop_counts = []
