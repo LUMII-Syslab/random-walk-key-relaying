@@ -1,0 +1,15 @@
+
+    plt.rcParams.update(
+        {
+            "axes.labelsize": 16,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "legend.fontsize": 14,
+        }
+    )
+
+    plt.figure(figsize=(8, 5))
+
+    don't rely on color
+
+    set good ticks
