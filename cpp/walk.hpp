@@ -14,6 +14,17 @@ using namespace std;
 #define HS_ENABLE_LRV_FALLBACK 0
 #endif
 
+#ifndef RW_DIRECT_TO_VISIBLE_TARGET
+#define RW_DIRECT_TO_VISIBLE_TARGET 1
+#endif
+
+inline bool has_neighbor(const vector<int> &nbrs, int node_idx) {
+    for(int nbr : nbrs){
+        if(nbr == node_idx) return true;
+    }
+    return false;
+}
+
 struct RwToken{
     struct WalkNodeState {
         int node_idx = -1;
@@ -36,6 +47,9 @@ public:
     }
     int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
         (void)state;
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(has_neighbor(nbrs, tgt_node_idx)) return tgt_node_idx;
+#endif
         return choose_uniformly(nbrs, rng);
     }
 };
@@ -56,6 +70,13 @@ public:
     }
     int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
         (void)state;
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(has_neighbor(nbrs, tgt_node_idx)) {
+            previous = current;
+            current = tgt_node_idx;
+            return tgt_node_idx;
+        }
+#endif
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             previous = current;
@@ -106,6 +127,12 @@ public:
     }
     int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
         (void)state;
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(has_neighbor(nbrs, tgt_node_idx)) {
+            append_to_history(tgt_node_idx);
+            return tgt_node_idx;
+        }
+#endif
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             append_to_history(chosen);
@@ -177,6 +204,13 @@ public:
     }
     int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
         (void)state;
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(has_neighbor(nbrs, tgt_node_idx)) {
+            visited.insert(tgt_node_idx);
+            append_to_history(tgt_node_idx);
+            return tgt_node_idx;
+        }
+#endif
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             visited.insert(chosen);
@@ -266,6 +300,13 @@ public:
         last_visited[src_node_idx] = age;
     }
     int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
+#if RW_DIRECT_TO_VISIBLE_TARGET
+        if(has_neighbor(nbrs, tgt_node_idx)) {
+            visited.insert(tgt_node_idx);
+            append_to_history(tgt_node_idx);
+            return tgt_node_idx;
+        }
+#endif
         if(nbrs.size()==1) {
             int chosen = nbrs[0];
             visited.insert(chosen);
