@@ -26,6 +26,7 @@ for walk_variant in ['R', 'NB', 'LRV', 'NC', 'HS']:
                 tgt=t,
                 var=walk_variant,
                 no_of_runs=1000,
+                erase_loops=True,
             ))
             if hop_stats.exposure > max_exposure :
                 max_exposure = hop_stats.exposure

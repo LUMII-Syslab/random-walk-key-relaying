@@ -7,6 +7,7 @@
 #include <numeric>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include <string_view>
 #include <set>
@@ -21,6 +22,7 @@ struct Options {
     string rw_variant = "LRV";
     string edges_csv = "";
     bool record_paths = false;
+    bool erase_loops = false;
 };
 
 struct HopStats {
@@ -71,6 +73,7 @@ filesystem::path cache_dir_from_argv0(const char *argv0);
 string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj);
 bool try_print_cached_output(const filesystem::path &cache_file);
 void write_cache_output(const filesystem::path &cache_file, const string &output);
+vector<int> erase_loops_from_history(const vector<int> &history);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
@@ -89,6 +92,7 @@ int main(int argc, char **argv) {
     const int node_count = static_cast<int>(adj.size());
     vector<int> hop_counts(opts.no_of_runs, 0);
     vector<int> hit_count(node_count, 0);
+    const bool keep_history = opts.record_paths || opts.erase_loops;
     vector<vector<string>> recorded_paths;
     if (opts.record_paths) {
         recorded_paths.resize(opts.no_of_runs);
@@ -128,7 +132,7 @@ int main(int argc, char **argv) {
             int hops = 0;
             set<int> seen_nodes = {position};
             vector<int> history;
-            if (opts.record_paths) {
+            if (keep_history) {
                 history.push_back(position);
             }
             while (position != tgt_idx) {
@@ -144,13 +148,18 @@ int main(int argc, char **argv) {
                 }
                 position = next;
                 seen_nodes.insert(position);
-                if (opts.record_paths) {
+                if (keep_history) {
                     history.push_back(position);
                 }
                 hops++;
                 if (hops > 100000) {
                     throw runtime_error("Random walk exceeded 100000 steps");
                 }
+            }
+            if (opts.erase_loops) {
+                history = erase_loops_from_history(history);
+                hops = static_cast<int>(history.size()) - 1;
+                seen_nodes = set<int>(history.begin(), history.end());
             }
             hop_counts[i] = hops;
             for (int node : seen_nodes) {
@@ -203,7 +212,7 @@ void print_usage(const char *prog_name) {
     cerr << "Usage: " << prog_name
          << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
             "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>] "
-            "[(--edges-csv|-e) <path>] [--record-paths]" << endl;
+           "[(--edges-csv|-e) <path>] [--record-paths] [--erase-loops]" << endl;
 }
 
 Options parse_args(int argc, char **argv){
@@ -256,6 +265,9 @@ Options parse_args(int argc, char **argv){
         }
         else if(flag == "--record-paths"){
             opts.record_paths = true;
+        }
+        else if(flag == "--erase-loops"){
+            opts.erase_loops = true;
         }
         else{
             fail("Unknown argument: " + string(arg));
@@ -336,6 +348,7 @@ string cache_key_for_run(const Options &opts, const Graph &graph, const vector<v
     fingerprint << "|tgt=" << opts.tgt_node;
     fingerprint << "|variant=" << opts.rw_variant;
     fingerprint << "|record_paths=" << (opts.record_paths ? 1 : 0);
+    fingerprint << "|erase_loops=" << (opts.erase_loops ? 1 : 0);
 
     vector<string> canonical_edges;
     for (int u = 0; u < static_cast<int>(adj.size()); u++) {
@@ -379,4 +392,25 @@ void write_cache_output(const filesystem::path &cache_file, const string &output
         return;
     }
     out << output;
+}
+
+vector<int> erase_loops_from_history(const vector<int> &history) {
+    vector<int> loop_erased_history;
+    loop_erased_history.reserve(history.size());
+    unordered_map<int, size_t> first_pos;
+    for (int node : history) {
+        auto it = first_pos.find(node);
+        if (it == first_pos.end()) {
+            first_pos[node] = loop_erased_history.size();
+            loop_erased_history.push_back(node);
+            continue;
+        }
+
+        size_t keep_until = it->second;
+        for (size_t idx = keep_until + 1; idx < loop_erased_history.size(); idx++) {
+            first_pos.erase(loop_erased_history[idx]);
+        }
+        loop_erased_history.resize(keep_until + 1);
+    }
+    return loop_erased_history;
 }

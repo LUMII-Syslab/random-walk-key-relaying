@@ -16,6 +16,7 @@ class HopStats:
         tgt: str  # no that the order of src and tgt IS important
         var: VARS  # random walk variant
         no_of_runs: int
+        erase_loops: bool = False
 
     context: HopSimParams
     min_hops: int
@@ -95,18 +96,22 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
     stdin_str = f"{params.g.number_of_nodes()} {params.g.number_of_edges()}\n"
     for edge in params.g.edges():
         stdin_str += f"{edge[0]} {edge[1]}\n"
+    cmd = [
+        "./cpp/build/hops",
+        "--src-node",
+        src,
+        "--tgt-node",
+        tgt,
+        "--rw-variant",
+        params.var,
+        "--no-of-runs",
+        str(params.no_of_runs),
+    ]
+    if params.erase_loops:
+        cmd.append("--erase-loops")
+
     result = subprocess.run(
-        [
-            "./cpp/build/hops",
-            "--src-node",
-            src,
-            "--tgt-node",
-            tgt,
-            "--rw-variant",
-            params.var,
-            "--no-of-runs",
-            str(params.no_of_runs),
-        ],
+        cmd,
         input=stdin_str,
         capture_output=True,
         text=True,
