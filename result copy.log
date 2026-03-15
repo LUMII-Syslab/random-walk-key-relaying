@@ -1,0 +1,36 @@
+NSFNet NB assm_eff_dont_erase_loops=0.0100 true_eff_dont_erase_loops=0.2887
+NSFNet NB assm_eff_erase_loops=0.0111 true_eff_erase_loops=0.3048
+
+NSFNet LRV assm_eff_dont_erase_loops=0.0104 true_eff_dont_erase_loops=0.2970
+NSFNet LRV assm_eff_erase_loops=0.0107 true_eff_erase_loops=0.3006
+
+NSFNet NC assm_eff_dont_erase_loops=0.0103 true_eff_dont_erase_loops=0.2976
+NSFNet NC assm_eff_erase_loops=0.0109 true_eff_erase_loops=0.3054
+
+NSFNet HS assm_eff_dont_erase_loops=0.0105 true_eff_dont_erase_loops=0.2997
+NSFNet HS assm_eff_erase_loops=0.0106 true_eff_erase_loops=0.3018
+
+GÉANT NB assm_eff_dont_erase_loops=0.0034 true_eff_dont_erase_loops=0.0940
+GÉANT NB assm_eff_erase_loops=0.0058 true_eff_erase_loops=0.1097
+
+GÉANT LRV assm_eff_dont_erase_loops=0.0039 true_eff_dont_erase_loops=0.0980
+GÉANT LRV assm_eff_erase_loops=0.0053 true_eff_erase_loops=0.1082
+
+GÉANT NC assm_eff_dont_erase_loops=0.0038 true_eff_dont_erase_loops=0.0981
+GÉANT NC assm_eff_erase_loops=0.0054 true_eff_erase_loops=0.1096
+
+GÉANT HS assm_eff_dont_erase_loops=0.0035 true_eff_dont_erase_loops=0.0967
+GÉANT HS assm_eff_erase_loops=0.0051 true_eff_erase_loops=0.1093
+
+Generated NB assm_eff_dont_erase_loops=0.0013 true_eff_dont_erase_loops=0.0349
+Generated NB assm_eff_erase_loops=0.0028 true_eff_erase_loops=0.0462
+
+Generated LRV assm_eff_dont_erase_loops=0.0016 true_eff_dont_erase_loops=0.0368
+Generated LRV assm_eff_erase_loops=0.0025 true_eff_erase_loops=0.0438
+
+Generated NC assm_eff_dont_erase_loops=0.0016 true_eff_dont_erase_loops=0.0369
+Generated NC assm_eff_erase_loops=0.0025 true_eff_erase_loops=0.0441
+
+Generated HS assm_eff_dont_erase_loops=0.0015 true_eff_dont_erase_loops=0.0366
+Generated HS assm_eff_erase_loops=0.0023 true_eff_erase_loops=0.0437
+

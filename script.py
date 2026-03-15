@@ -3,57 +3,94 @@ from helpers.utils import read_edge_list_csv, graphs_dir
 from helpers.utils import synthetic_graph_snapshot
 import networkx as nx
 from statistics import median, mean
-# import sys
+from tqdm import tqdm
+from scipy.stats import binom
 
-# if sys.argv[1] == "generated":
-#     g= synthetic_graph_snapshot(99)
-# else:
-#     g = read_edge_list_csv(graphs_dir / sys.argv[1] / "edges.csv")
+GRAPH_SPECS = [
+    ("nsfnet", "NSFNet"),
+    ("geant", "GÉANT"),
+    ("generated", "Generated"),
+]
 
-for nodes in range(69, 100, 3):
-    g = synthetic_graph_snapshot(nodes)
-    for erase_loops in [False, True]:
-        print(f"Processing {nodes} nodes... with {erase_loops=}", flush=True)
-        skip = ['R']
-        for walk_variant in ['R', 'NB', 'LRV', 'NC', 'HS']:
-            if walk_variant in skip: continue
-            max_exposure, max_e_src, max_e_tgt, max_e_relay = 0.0, "", "", ""
-            pair_exposures = []
-            pair_mean_hop_counts = []
-            pair_max_hop_counts = []
-            pair_median_hop_counts = []
-            for (i, s) in enumerate(g.nodes()):
-                # print(f"Under {erase_loops=} {walk_variant}: processing {i+1}/{len(g.nodes())} ({s})...", end="",flush=True)
-                for t in g.nodes():
-                    if s == t: continue
-                    if nx.node_connectivity(g, s, t) == 1: continue
-                    hop_stats = compute_hop_stats(HopStats.HopSimParams(
-                        g=g,
-                        src=s,
-                        tgt=t,
-                        var=walk_variant,
-                        no_of_runs=1000,
-                        erase_loops=erase_loops,
-                    ))
-                    if hop_stats.exposure > max_exposure :
-                        max_exposure = hop_stats.exposure
-                        max_e_src = s
-                        max_e_tgt = t
-                        max_e_relay = hop_stats.exposure_relay
-                    pair_exposures.append(hop_stats.exposure)
-                    pair_mean_hop_counts.append(hop_stats.mean_hops)
-                    pair_max_hop_counts.append(hop_stats.max_hops)
-                    pair_median_hop_counts.append(hop_stats.q2_hops)
-                # print(f"\r{' '*100}\r", end="", flush=True)
-            avg_exposure = mean(pair_exposures) if pair_exposures else float('nan')
-            median_exposure = median(pair_exposures) if pair_exposures else float('nan')
-            # print(f"graph: {sys.argv[1]}")
-            print(f"{walk_variant}: max_exposure={max_exposure:.3f} s={max_e_src} t={max_e_tgt} v={max_e_relay}")
-            print(f"{walk_variant}: avg_exposure={avg_exposure:.3f} median_exposure={median_exposure:.3f} over {len(pair_exposures)} pairs")
-            print(f"{walk_variant}: avg_mean_hop_count={int(mean(pair_mean_hop_counts)):.0f} avg_median_hop_count={int(mean(pair_median_hop_counts)):.0f} avg_max_hop_count={int(mean(pair_max_hop_counts)):.0f}", flush=True)
-        print()
-        print()
-    print("--------------------------------")
-    print()
-    print()
-    
+result_log = open("result.log", "a")
+
+def prob(g, N, chi):
+    a = 1.0 - chi
+    # P[X >= g] for X ~ Binomial(N, a)
+    return binom.sf(g - 1, N, a)
+
+def find_g(N, chi, threshold):
+    for g in range(N, -1, -1):
+        if prob(g, N, chi) >= threshold: return g
+    return -1
+
+for graph_id, graph_label in GRAPH_SPECS[2:]:
+    g = read_edge_list_csv(graphs_dir / graph_id / "edges.csv")
+    for walk_variant in ['NB', 'LRV', 'NC', 'HS']:
+        biconnected_pairs = []
+        for src in tqdm(g.nodes(), desc=f"Finding biconnected pairs for {graph_label}"):
+            for tgt in g.nodes():
+                if src == tgt: continue
+                if nx.node_connectivity(g, src, tgt) == 1: continue
+                biconnected_pairs.append((src, tgt))
+        assm_efficiencies_dont_erase_loops = []
+        true_efficiencies_dont_erase_loops = []
+        assm_efficiencies_erase_loops = []
+        true_efficiencies_erase_loops = []
+        assm_rho_dont_erase_loops = []
+        true_rho_dont_erase_loops = []
+        assm_rho_erase_loops = []
+        true_rho_erase_loops = []
+
+        for src, tgt in tqdm(biconnected_pairs, desc=f"Computing hop stats for {graph_label}"):
+            hop_stats_no_erase_loops = compute_hop_stats(HopStats.HopSimParams(
+                g=g,
+                src=src,
+                tgt=tgt,
+                var=walk_variant,
+                no_of_runs=1000,
+                erase_loops=False,
+            ))
+            hop_stats_erase_loops = compute_hop_stats(HopStats.HopSimParams(
+                g=g,
+                src=src,
+                tgt=tgt,
+                var=walk_variant,
+                no_of_runs=1000,
+                erase_loops=True,
+            ))
+
+            mean_hops = hop_stats_no_erase_loops.mean_hops
+            exposure = hop_stats_no_erase_loops.exposure
+            FRAGMENTS, ALPHA = 1024, 0.9999
+            good_fragments = find_g(FRAGMENTS, exposure, ALPHA)
+            assert good_fragments > 0
+            assert good_fragments <= FRAGMENTS
+            assm_efficiency = (27/FRAGMENTS) / mean_hops
+            true_efficiency = (good_fragments/FRAGMENTS) / mean_hops
+            assm_efficiencies_dont_erase_loops.append(assm_efficiency)
+            true_efficiencies_dont_erase_loops.append(true_efficiency)
+            shortest_path = nx.shortest_path_length(g, src, tgt)
+            assm_rho_dont_erase_loops.append(assm_efficiency * shortest_path)
+            true_rho_dont_erase_loops.append(true_efficiency * shortest_path)
+
+            mean_hops = hop_stats_erase_loops.mean_hops
+            exposure = hop_stats_no_erase_loops.exposure # we still take exposure before erasing the loops
+            good_fragments = find_g(FRAGMENTS, exposure, ALPHA)
+            assert good_fragments > 0
+            assert good_fragments <= FRAGMENTS
+            assm_efficiency = (27/FRAGMENTS) / mean_hops
+            true_efficiency = (good_fragments/FRAGMENTS) / mean_hops
+            assm_efficiencies_erase_loops.append(assm_efficiency)
+            true_efficiencies_erase_loops.append(true_efficiency)
+            assm_rho_erase_loops.append(assm_efficiency * shortest_path)
+            true_rho_erase_loops.append(true_efficiency * shortest_path)
+        log_entry = f"{graph_label} {walk_variant} assm_eff_dont_erase_loops={mean(assm_efficiencies_dont_erase_loops):.4f} true_eff_dont_erase_loops={mean(true_efficiencies_dont_erase_loops):.4f}\n"
+        log_entry += f"{graph_label} {walk_variant} assm_eff_erase_loops={mean(assm_efficiencies_erase_loops):.4f} true_eff_erase_loops={mean(true_efficiencies_erase_loops):.4f}\n"
+        log_entry += f"{graph_label} {walk_variant} assm_rho_dont_erase_loops={mean(assm_rho_dont_erase_loops):.4f} true_rho_dont_erase_loops={mean(true_rho_dont_erase_loops):.4f}\n"
+        log_entry += f"{graph_label} {walk_variant} assm_rho_erase_loops={mean(assm_rho_erase_loops):.4f} true_rho_erase_loops={mean(true_rho_erase_loops):.4f}\n"
+        log_entry += "\n"
+        result_log.write(log_entry)
+        result_log.flush()
+        print(log_entry, flush=True)
+            

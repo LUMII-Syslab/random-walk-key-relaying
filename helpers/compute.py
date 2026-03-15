@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 # random walk variants
-VARS = Literal["R", "NB", "LRV", "HS", "BHS"]
+VARS = Literal["R", "NB", "LRV", "NC", "HS", "HSB", "BHS"]
 
 @dataclass
 class HopStats:
@@ -48,6 +48,7 @@ class ThroughputStats:
         src: str
         tgt: str  # no that the order of src and tgt IS important
         var: VARS  # random walk variant
+        erase_loops: bool = False
 
         chunk_size_bits: int = 256
         link_buff_sz_bits: int = 100000
@@ -173,6 +174,8 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
         "--relay-buffer-sz-chunks",
         str(params.relay_buffer_sz_chunks),
     ]
+    if params.erase_loops:
+        cmd.append("--erase-loops")
     if params.print_arrival_times:
         cmd.append("--print-arrival-times")
 

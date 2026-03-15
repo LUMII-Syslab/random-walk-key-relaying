@@ -17,6 +17,7 @@ struct Options {
     string tgt_node = "";
     string rw_variant = "LRV";
     string edges_csv = "";
+    bool erase_loops = false;
     bool print_arrival_times = false;
 
     int chunk_size_bits = 256;
@@ -125,7 +126,16 @@ struct RunResult {
 
 Options parse_args(int argc, char **argv);
 void print_usage(const char *prog_name);
-unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed, int node_count);
+unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count);
+vector<int> erase_loops_from_history(const vector<int> &history);
+vector<int> sample_loop_erased_path(
+    const vector<vector<int>> &adj,
+    const string &rw_variant,
+    int src_idx,
+    int tgt_idx,
+    int seed,
+    int node_count
+);
 RunResult run_single_simulation(const vector<vector<int>> &adj, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
@@ -151,7 +161,7 @@ void print_usage(const char *prog_name) {
             "[--chunk-size-bits <int>] [--link-buff-sz-bits <int>] "
             "[--qkd-skr-bits-per-s <float>] [--latency-s <float>] "
             "[--sim-duration-s <float>] [--relay-buffer-sz-chunks <int>] "
-            "[--print-arrival-times]" << endl;
+            "[--erase-loops] [--print-arrival-times]" << endl;
 }
 
 Options parse_args(int argc, char **argv) {
@@ -203,6 +213,8 @@ Options parse_args(int argc, char **argv) {
             opts.sim_duration_s = stod(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--relay-buffer-sz-chunks") {
             opts.relay_buffer_sz_chunks = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--erase-loops") {
+            opts.erase_loops = true;
         } else if (flag == "--print-arrival-times") {
             opts.print_arrival_times = true;
         } else {
@@ -221,13 +233,69 @@ Options parse_args(int argc, char **argv) {
     return opts;
 }
 
-unique_ptr<RwToken> make_token(const Options &opts, int src_idx, int tgt_idx, int seed, int node_count) {
-    if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
-    if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
-    if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
-    if (opts.rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
-    if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count) {
+    if (rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
+    if (rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
     return nullptr;
+}
+
+vector<int> erase_loops_from_history(const vector<int> &history) {
+    vector<int> loop_erased_history;
+    loop_erased_history.reserve(history.size());
+    map<int, size_t> first_pos;
+    for (int node : history) {
+        auto it = first_pos.find(node);
+        if (it == first_pos.end()) {
+            first_pos[node] = loop_erased_history.size();
+            loop_erased_history.push_back(node);
+            continue;
+        }
+
+        size_t keep_until = it->second;
+        for (size_t idx = keep_until + 1; idx < loop_erased_history.size(); idx++) {
+            first_pos.erase(loop_erased_history[idx]);
+        }
+        loop_erased_history.resize(keep_until + 1);
+    }
+    return loop_erased_history;
+}
+
+vector<int> sample_loop_erased_path(
+    const vector<vector<int>> &adj,
+    const string &rw_variant,
+    int src_idx,
+    int tgt_idx,
+    int seed,
+    int node_count
+) {
+    unique_ptr<RwToken> token = make_base_token(rw_variant, src_idx, tgt_idx, seed, node_count);
+    if (!token) throw runtime_error("Unknown random walk variant: " + rw_variant);
+
+    int position = src_idx;
+    int hops = 0;
+    vector<int> history = {src_idx};
+    while (position != tgt_idx) {
+        RwToken::WalkNodeState node_state;
+        node_state.node_idx = position;
+        int next = token->choose_next_and_update(node_state, adj[position]);
+        position = next;
+        history.push_back(position);
+        hops++;
+        if (hops > 100000) {
+            throw runtime_error("Random walk exceeded 100000 steps while sampling loop-erased path");
+        }
+    }
+    vector<int> loop_erased_path = erase_loops_from_history(history);
+    if (loop_erased_path.size() < 2) {
+        throw runtime_error("Loop-erased path must contain at least one hop");
+    }
+    if (loop_erased_path.front() != src_idx || loop_erased_path.back() != tgt_idx) {
+        throw runtime_error("Loop-erased path has invalid endpoints");
+    }
+    return loop_erased_path;
 }
 
 RunResult run_single_simulation(
@@ -265,7 +333,20 @@ RunResult run_single_simulation(
         auto pkt = make_shared<Packet>();
         pkt->source = source_node;
         pkt->target = tgt_idx;
-        pkt->token = make_token(opts, src_idx, tgt_idx, seed_offset * 100000000 + result.emitted_chunks, node_count);
+        const int seed = seed_offset * 100000000 + result.emitted_chunks;
+        if (opts.erase_loops) {
+            vector<int> loop_erased_path = sample_loop_erased_path(
+                adj,
+                opts.rw_variant,
+                source_node,
+                tgt_idx,
+                seed,
+                node_count
+            );
+            pkt->token = make_unique<FixedPathToken>(std::move(loop_erased_path));
+        } else {
+            pkt->token = make_base_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
+        }
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
         RwToken::WalkNodeState node_state;
         node_state.node_idx = source_node;
@@ -289,7 +370,7 @@ RunResult run_single_simulation(
         result.emitted_chunks++;
     };
 
-    for (int i = 0; i < opts.relay_buffer_sz_chunks; i++) {
+    for (int i = 0; i < opts.relay_buffer_sz_chunks && i < opts.sim_duration_s*adj[src_idx].size(); i++) {
         schedule_first_hop(0.0, src_idx);
     }
 

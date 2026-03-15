@@ -36,6 +36,31 @@ struct RwToken{
     virtual int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs) = 0;
 };
 
+class FixedPathToken: public RwToken{
+    vector<int> path;
+    size_t path_pos = 0;
+public:
+    explicit FixedPathToken(vector<int> fixed_path): path(std::move(fixed_path)){
+        if(path.size() < 2) throw runtime_error("Fixed path token requires at least two nodes");
+    }
+
+    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
+        (void)nbrs;
+        if(path_pos >= path.size() - 1) {
+            throw runtime_error("Fixed path token exhausted");
+        }
+        if(state.node_idx != path[path_pos]) {
+            throw runtime_error("Fixed path token used at unexpected node");
+        }
+        int next = path[path_pos + 1];
+        if(!has_neighbor(nbrs, next)) {
+            throw runtime_error("Fixed path token contains a non-edge hop");
+        }
+        path_pos++;
+        return next;
+    }
+};
+
 // simple random walk (R)
 class RToken: public RwToken{
     int src_node_idx;
