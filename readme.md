@@ -26,100 +26,82 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R_KM * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 ```
 
-## `Data` directory
+## Setup
 
-This data is light and can be stored in a Git version controlled directory.
-
-Currently `pairs.csv` contain the following columns:
-- `source`, `target`: node IDs
-- `shortest`: shortest path length
-- `max_flow`: max # of edge-disjoint paths
-
-We should add (TODO) the following info:
-1. expected number of hops per each random walk variant
-2. mean throughput over a simulation of 1000s duration
-3. longest possible path length?
-
-We approximate the longest path by a heuristic search bound by 0.1s per pair.
-
-## Throughput simulation
-
-Default configuration that was used to get data.
-
-```json
-{
-    "key_size": 256,
-    "node_buff_keys": 100000,
-    "link_buff_bits": 100000,
-    "links_empty_at_start": true,
-    "qkd_skr": 1000,
-    "latency": 0.05,
-    "sim_duration": 1000.0,
-    "random_seed": 2026
-}
-```
-
-## Usage
+Ubuntu + `pyenv` + `pyenv-virtualenv`:
 
 ```bash
-# Run all phases (simulation -> derivation -> visualization)
-python3 throughput.py
+sudo apt update
+sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev curl git libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
 
-# Run individual phases
-pypy3 throughput.py --mode sim      # Simulation (PyPy-compatible) -> raw/
-python3 throughput.py --mode info   # Derive info from raw data -> info/
-python3 throughput.py --mode charts # Generate visualizations -> charts/
+curl -fsSL https://pyenv.run | bash
 
-# Quick test run (shorter simulations, lower DPI)
-python3 throughput.py --quick
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init - bash)"' >> ~/.bashrc
+echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
+exec "$SHELL"
 
-# Control parallelism
-python3 throughput.py --workers 4      # Use 4 workers
-python3 throughput.py --no-parallel    # Sequential (for debugging)
+pyenv install 3.12.8
+pyenv virtualenv 3.12.8 random-walk-key-relaying
+pyenv local random-walk-key-relaying
+pyenv activate random-walk-key-relaying
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-## Output Structure
+## Plotting guidelines
 
-```
-out/<graph>/<variant>/
-├── raw/                    # Phase 1: Simulation (JSON)
-│   ├── config.json         # Simulation parameters
-│   ├── simulation_result.json
-│   ├── pairwise_results.json
-│   └── hop_results.json
-├── info/                   # Phase 2: Derivation (JSON, CSV, TXT)
-│   ├── throughput.json
-│   ├── throughput.txt
-│   ├── pairwise.json
-│   ├── pairwise.csv
-│   ├── pairwise.txt
-│   ├── hitting.json
-│   ├── hitting.txt
-│   ├── hops.json
-│   ├── hops.csv
-│   ├── hops.txt
-│   ├── visits.json
-│   └── visits.txt
-└── charts/                 # Phase 3: Visualization (PNG)
-    ├── throughput.png
-    ├── throughput_time_series.png
-    ├── throughput_freq_distribution.png
-    ├── throughput_heatmap.png
-    ├── hopcount_heatmap.png
-    ├── hitting_heatmap.png
-    ├── hop_counts.png
-    ├── edge_multiplicity.png
-    └── node_hitting.png
-```
+1. Start with figure size
+2. Override Matplotlib font sizes before plotting
+3. Do not rely on color alone for multi-series plots
+4. Use thicker lines for plotted series
+5. Always set `xlabel`, `ylabel`, and `title`.
+6. Prefer explicit `xticks`, `yticks`, and axis limits
+7. Add a major grid, place the legend explicitly
+8. call `plt.tight_layout()` before saving
+8. Save final figures into `plots/` as PDF files
 
-- `--quick` outputs to `quick/` instead of `out/`
-- Variants: `r` (random), `nb` (non-backtracking), `lrv` (least-recently-visited)
+```py
+from pathlib import Path
 
-## Graph Topologies
+plt.figure(figsize=(6, 4))
 
-## Other Tools
+plt.rcParams.update(
+    {
+        "axes.labelsize": 14,
+        "xtick.labelsize": 12, with
+   `bbox_inches="tight"`.
+        "ytick.labelsize": 12,
+        "legend.fontsize": 14,
+        "axes.titlesize": 16,
+    }
+)
 
-**Add edge weights from node coordinates:**
-```bash
-python3 distances.py nodes.csv edges.csv edges_weighted.csv
+colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+line_styles = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+
+for i, series in enumerate(series_list):
+    plt.plot(
+        x_values,
+        series.y_values,
+        color=colors[i % len(colors)],
+        linestyle=line_styles[i % len(line_styles)],
+        linewidth=2.0,
+        label=series.label,
+    )
+
+plt.xlabel("...")
+plt.ylabel("...")
+plt.title("...")
+plt.xticks([...])
+plt.yticks([...])
+plt.grid(True, which="major", linestyle="--", alpha=0.45)
+plt.legend(loc="upper right")
+plt.tight_layout()
+
+plots_dir = Path("plots")
+plots_dir.mkdir(parents=True, exist_ok=True)
+plt.savefig(plots_dir / "figure.pdf", format="pdf", bbox_inches="tight")
 ```

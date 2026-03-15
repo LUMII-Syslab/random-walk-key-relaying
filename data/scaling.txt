@@ -1,0 +1,1056 @@
+Processing 6 nodes... with erase_loops=False
+NB: max_exposure=0.764 s=4 t=3 v=2
+NB: avg_exposure=0.356 median_exposure=0.507 over 30 pairs
+NB: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+LRV: max_exposure=0.764 s=4 t=3 v=2
+LRV: avg_exposure=0.356 median_exposure=0.507 over 30 pairs
+LRV: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+NC: max_exposure=0.750 s=1 t=3 v=2
+NC: avg_exposure=0.318 median_exposure=0.502 over 30 pairs
+NC: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+HS: max_exposure=0.779 s=6 t=1 v=2
+HS: avg_exposure=0.353 median_exposure=0.505 over 30 pairs
+HS: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+
+
+Processing 6 nodes... with erase_loops=True
+NB: max_exposure=0.764 s=4 t=3 v=2
+NB: avg_exposure=0.356 median_exposure=0.507 over 30 pairs
+NB: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+LRV: max_exposure=0.764 s=4 t=3 v=2
+LRV: avg_exposure=0.356 median_exposure=0.507 over 30 pairs
+LRV: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+NC: max_exposure=0.750 s=1 t=3 v=2
+NC: avg_exposure=0.318 median_exposure=0.502 over 30 pairs
+NC: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+HS: max_exposure=0.779 s=6 t=1 v=2
+HS: avg_exposure=0.353 median_exposure=0.505 over 30 pairs
+HS: avg_mean_hop_count=1 avg_median_hop_count=1 avg_max_hop_count=2
+
+
+--------------------------------
+
+
+Processing 9 nodes... with erase_loops=False
+NB: max_exposure=0.749 s=1 t=3 v=2
+NB: avg_exposure=0.386 median_exposure=0.519 over 72 pairs
+NB: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=6
+LRV: max_exposure=0.749 s=1 t=3 v=2
+LRV: avg_exposure=0.384 median_exposure=0.520 over 72 pairs
+LRV: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=3
+NC: max_exposure=0.686 s=1 t=3 v=2
+NC: avg_exposure=0.372 median_exposure=0.504 over 72 pairs
+NC: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=5
+HS: max_exposure=0.698 s=7 t=3 v=2
+HS: avg_exposure=0.374 median_exposure=0.515 over 72 pairs
+HS: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=4
+
+
+Processing 9 nodes... with erase_loops=True
+NB: max_exposure=0.749 s=1 t=3 v=2
+NB: avg_exposure=0.383 median_exposure=0.519 over 72 pairs
+NB: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=3
+LRV: max_exposure=0.749 s=1 t=3 v=2
+LRV: avg_exposure=0.384 median_exposure=0.520 over 72 pairs
+LRV: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=3
+NC: max_exposure=0.686 s=1 t=3 v=2
+NC: avg_exposure=0.371 median_exposure=0.504 over 72 pairs
+NC: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=3
+HS: max_exposure=0.698 s=7 t=3 v=2
+HS: avg_exposure=0.374 median_exposure=0.515 over 72 pairs
+HS: avg_mean_hop_count=2 avg_median_hop_count=2 avg_max_hop_count=3
+
+
+--------------------------------
+
+
+Processing 12 nodes... with erase_loops=False
+NB: max_exposure=0.785 s=10 t=8 v=4
+NB: avg_exposure=0.426 median_exposure=0.528 over 132 pairs
+NB: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=15
+LRV: max_exposure=0.784 s=10 t=8 v=4
+LRV: avg_exposure=0.424 median_exposure=0.524 over 132 pairs
+LRV: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=6
+NC: max_exposure=0.756 s=10 t=8 v=4
+NC: avg_exposure=0.415 median_exposure=0.511 over 132 pairs
+NC: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=8
+HS: max_exposure=0.713 s=10 t=8 v=4
+HS: avg_exposure=0.410 median_exposure=0.520 over 132 pairs
+HS: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=8
+
+
+Processing 12 nodes... with erase_loops=True
+NB: max_exposure=0.785 s=10 t=8 v=4
+NB: avg_exposure=0.414 median_exposure=0.514 over 132 pairs
+NB: avg_mean_hop_count=3 avg_median_hop_count=2 avg_max_hop_count=5
+LRV: max_exposure=0.784 s=10 t=8 v=4
+LRV: avg_exposure=0.420 median_exposure=0.520 over 132 pairs
+LRV: avg_mean_hop_count=3 avg_median_hop_count=2 avg_max_hop_count=5
+NC: max_exposure=0.756 s=10 t=8 v=4
+NC: avg_exposure=0.411 median_exposure=0.511 over 132 pairs
+NC: avg_mean_hop_count=3 avg_median_hop_count=2 avg_max_hop_count=5
+HS: max_exposure=0.713 s=10 t=8 v=4
+HS: avg_exposure=0.405 median_exposure=0.518 over 132 pairs
+HS: avg_mean_hop_count=3 avg_median_hop_count=2 avg_max_hop_count=5
+
+
+--------------------------------
+
+
+Processing 15 nodes... with erase_loops=False
+NB: max_exposure=0.846 s=10 t=14 v=4
+NB: avg_exposure=0.487 median_exposure=0.569 over 210 pairs
+NB: avg_mean_hop_count=6 avg_median_hop_count=4 avg_max_hop_count=33
+LRV: max_exposure=0.846 s=10 t=14 v=4
+LRV: avg_exposure=0.486 median_exposure=0.567 over 210 pairs
+LRV: avg_mean_hop_count=4 avg_median_hop_count=4 avg_max_hop_count=11
+NC: max_exposure=0.821 s=10 t=14 v=4
+NC: avg_exposure=0.482 median_exposure=0.569 over 210 pairs
+NC: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=15
+HS: max_exposure=0.784 s=10 t=14 v=4
+HS: avg_exposure=0.469 median_exposure=0.538 over 210 pairs
+HS: avg_mean_hop_count=4 avg_median_hop_count=4 avg_max_hop_count=22
+
+
+Processing 15 nodes... with erase_loops=True
+NB: max_exposure=0.785 s=10 t=8 v=4
+NB: avg_exposure=0.462 median_exposure=0.547 over 210 pairs
+NB: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=8
+LRV: max_exposure=0.791 s=10 t=15 v=4
+LRV: avg_exposure=0.473 median_exposure=0.565 over 210 pairs
+LRV: avg_mean_hop_count=4 avg_median_hop_count=3 avg_max_hop_count=8
+NC: max_exposure=0.766 s=10 t=15 v=4
+NC: avg_exposure=0.470 median_exposure=0.560 over 210 pairs
+NC: avg_mean_hop_count=3 avg_median_hop_count=3 avg_max_hop_count=8
+HS: max_exposure=0.728 s=10 t=14 v=4
+HS: avg_exposure=0.456 median_exposure=0.536 over 210 pairs
+HS: avg_mean_hop_count=4 avg_median_hop_count=3 avg_max_hop_count=8
+
+
+--------------------------------
+
+
+Processing 18 nodes... with erase_loops=False
+NB: max_exposure=0.895 s=5 t=17 v=2
+NB: avg_exposure=0.547 median_exposure=0.622 over 306 pairs
+NB: avg_mean_hop_count=7 avg_median_hop_count=5 avg_max_hop_count=43
+LRV: max_exposure=0.912 s=4 t=17 v=2
+LRV: avg_exposure=0.549 median_exposure=0.622 over 306 pairs
+LRV: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=16
+NC: max_exposure=0.868 s=11 t=18 v=2
+NC: avg_exposure=0.538 median_exposure=0.618 over 306 pairs
+NC: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=23
+HS: max_exposure=0.861 s=12 t=17 v=2
+HS: avg_exposure=0.529 median_exposure=0.609 over 306 pairs
+HS: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=29
+
+
+Processing 18 nodes... with erase_loops=True
+NB: max_exposure=0.895 s=5 t=18 v=2
+NB: avg_exposure=0.516 median_exposure=0.585 over 306 pairs
+NB: avg_mean_hop_count=4 avg_median_hop_count=3 avg_max_hop_count=10
+LRV: max_exposure=0.912 s=4 t=18 v=2
+LRV: avg_exposure=0.530 median_exposure=0.598 over 306 pairs
+LRV: avg_mean_hop_count=4 avg_median_hop_count=4 avg_max_hop_count=10
+NC: max_exposure=0.868 s=11 t=18 v=2
+NC: avg_exposure=0.519 median_exposure=0.593 over 306 pairs
+NC: avg_mean_hop_count=4 avg_median_hop_count=3 avg_max_hop_count=10
+HS: max_exposure=0.861 s=12 t=18 v=2
+HS: avg_exposure=0.515 median_exposure=0.589 over 306 pairs
+HS: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=10
+
+
+--------------------------------
+
+
+Processing 21 nodes... with erase_loops=False
+NB: max_exposure=0.878 s=12 t=19 v=6
+NB: avg_exposure=0.551 median_exposure=0.623 over 420 pairs
+NB: avg_mean_hop_count=8 avg_median_hop_count=6 avg_max_hop_count=52
+LRV: max_exposure=0.896 s=12 t=19 v=6
+LRV: avg_exposure=0.554 median_exposure=0.622 over 420 pairs
+LRV: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=20
+NC: max_exposure=0.857 s=12 t=19 v=6
+NC: avg_exposure=0.547 median_exposure=0.618 over 420 pairs
+NC: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=27
+HS: max_exposure=0.832 s=11 t=19 v=6
+HS: avg_exposure=0.533 median_exposure=0.606 over 420 pairs
+HS: avg_mean_hop_count=7 avg_median_hop_count=5 avg_max_hop_count=34
+
+
+Processing 21 nodes... with erase_loops=True
+NB: max_exposure=0.878 s=12 t=19 v=6
+NB: avg_exposure=0.516 median_exposure=0.569 over 420 pairs
+NB: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=12
+LRV: max_exposure=0.896 s=12 t=19 v=6
+LRV: avg_exposure=0.530 median_exposure=0.589 over 420 pairs
+LRV: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=12
+NC: max_exposure=0.857 s=12 t=19 v=6
+NC: avg_exposure=0.524 median_exposure=0.586 over 420 pairs
+NC: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=12
+HS: max_exposure=0.832 s=11 t=19 v=6
+HS: avg_exposure=0.516 median_exposure=0.589 over 420 pairs
+HS: avg_mean_hop_count=5 avg_median_hop_count=5 avg_max_hop_count=12
+
+
+--------------------------------
+
+
+Processing 24 nodes... with erase_loops=False
+NB: max_exposure=0.910 s=10 t=22 v=4
+NB: avg_exposure=0.574 median_exposure=0.640 over 552 pairs
+NB: avg_mean_hop_count=10 avg_median_hop_count=7 avg_max_hop_count=64
+LRV: max_exposure=0.895 s=10 t=22 v=4
+LRV: avg_exposure=0.574 median_exposure=0.633 over 552 pairs
+LRV: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=24
+NC: max_exposure=0.882 s=10 t=22 v=4
+NC: avg_exposure=0.567 median_exposure=0.625 over 552 pairs
+NC: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=32
+HS: max_exposure=0.876 s=10 t=22 v=4
+HS: avg_exposure=0.557 median_exposure=0.621 over 552 pairs
+HS: avg_mean_hop_count=8 avg_median_hop_count=6 avg_max_hop_count=40
+
+
+Processing 24 nodes... with erase_loops=True
+NB: max_exposure=0.910 s=10 t=22 v=4
+NB: avg_exposure=0.538 median_exposure=0.586 over 552 pairs
+NB: avg_mean_hop_count=5 avg_median_hop_count=4 avg_max_hop_count=14
+LRV: max_exposure=0.895 s=10 t=22 v=4
+LRV: avg_exposure=0.546 median_exposure=0.599 over 552 pairs
+LRV: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=15
+NC: max_exposure=0.882 s=10 t=22 v=4
+NC: avg_exposure=0.541 median_exposure=0.596 over 552 pairs
+NC: avg_mean_hop_count=5 avg_median_hop_count=5 avg_max_hop_count=15
+HS: max_exposure=0.876 s=10 t=22 v=4
+HS: avg_exposure=0.538 median_exposure=0.607 over 552 pairs
+HS: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=15
+
+
+--------------------------------
+
+
+Processing 27 nodes... with erase_loops=False
+NB: max_exposure=0.904 s=10 t=22 v=4
+NB: avg_exposure=0.604 median_exposure=0.669 over 702 pairs
+NB: avg_mean_hop_count=12 avg_median_hop_count=9 avg_max_hop_count=81
+LRV: max_exposure=0.904 s=10 t=22 v=4
+LRV: avg_exposure=0.598 median_exposure=0.661 over 702 pairs
+LRV: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=28
+NC: max_exposure=0.886 s=10 t=22 v=4
+NC: avg_exposure=0.592 median_exposure=0.661 over 702 pairs
+NC: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=39
+HS: max_exposure=0.885 s=23 t=26 v=16
+HS: avg_exposure=0.587 median_exposure=0.651 over 702 pairs
+HS: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=52
+
+
+Processing 27 nodes... with erase_loops=True
+NB: max_exposure=0.904 s=10 t=22 v=4
+NB: avg_exposure=0.561 median_exposure=0.610 over 702 pairs
+NB: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=16
+LRV: max_exposure=0.904 s=10 t=22 v=4
+LRV: avg_exposure=0.566 median_exposure=0.623 over 702 pairs
+LRV: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=17
+NC: max_exposure=0.886 s=10 t=22 v=4
+NC: avg_exposure=0.561 median_exposure=0.623 over 702 pairs
+NC: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=17
+HS: max_exposure=0.885 s=23 t=27 v=16
+HS: avg_exposure=0.561 median_exposure=0.623 over 702 pairs
+HS: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=17
+
+
+--------------------------------
+
+
+Processing 30 nodes... with erase_loops=False
+NB: max_exposure=0.907 s=10 t=22 v=4
+NB: avg_exposure=0.637 median_exposure=0.710 over 870 pairs
+NB: avg_mean_hop_count=15 avg_median_hop_count=10 avg_max_hop_count=102
+LRV: max_exposure=0.919 s=10 t=22 v=4
+LRV: avg_exposure=0.630 median_exposure=0.704 over 870 pairs
+LRV: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=33
+NC: max_exposure=0.898 s=10 t=22 v=4
+NC: avg_exposure=0.623 median_exposure=0.694 over 870 pairs
+NC: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=45
+HS: max_exposure=0.871 s=10 t=22 v=4
+HS: avg_exposure=0.614 median_exposure=0.686 over 870 pairs
+HS: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=67
+
+
+Processing 30 nodes... with erase_loops=True
+NB: max_exposure=0.907 s=10 t=22 v=4
+NB: avg_exposure=0.588 median_exposure=0.639 over 870 pairs
+NB: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=18
+LRV: max_exposure=0.919 s=10 t=22 v=4
+LRV: avg_exposure=0.594 median_exposure=0.651 over 870 pairs
+LRV: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=19
+NC: max_exposure=0.898 s=10 t=22 v=4
+NC: avg_exposure=0.589 median_exposure=0.648 over 870 pairs
+NC: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=19
+HS: max_exposure=0.871 s=10 t=22 v=4
+HS: avg_exposure=0.585 median_exposure=0.648 over 870 pairs
+HS: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=20
+
+
+--------------------------------
+
+
+Processing 33 nodes... with erase_loops=False
+NB: max_exposure=0.935 s=24 t=31 v=4
+NB: avg_exposure=0.666 median_exposure=0.739 over 1056 pairs
+NB: avg_mean_hop_count=17 avg_median_hop_count=12 avg_max_hop_count=116
+LRV: max_exposure=0.932 s=10 t=22 v=4
+LRV: avg_exposure=0.658 median_exposure=0.729 over 1056 pairs
+LRV: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=38
+NC: max_exposure=0.908 s=10 t=23 v=4
+NC: avg_exposure=0.650 median_exposure=0.720 over 1056 pairs
+NC: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=51
+HS: max_exposure=0.935 s=23 t=31 v=4
+HS: avg_exposure=0.648 median_exposure=0.718 over 1056 pairs
+HS: avg_mean_hop_count=13 avg_median_hop_count=10 avg_max_hop_count=74
+
+
+Processing 33 nodes... with erase_loops=True
+NB: max_exposure=0.935 s=24 t=31 v=4
+NB: avg_exposure=0.613 median_exposure=0.657 over 1056 pairs
+NB: avg_mean_hop_count=6 avg_median_hop_count=5 avg_max_hop_count=19
+LRV: max_exposure=0.932 s=10 t=22 v=4
+LRV: avg_exposure=0.618 median_exposure=0.675 over 1056 pairs
+LRV: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=21
+NC: max_exposure=0.906 s=10 t=22 v=4
+NC: avg_exposure=0.612 median_exposure=0.670 over 1056 pairs
+NC: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=20
+HS: max_exposure=0.935 s=23 t=31 v=4
+HS: avg_exposure=0.612 median_exposure=0.669 over 1056 pairs
+HS: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=21
+
+
+--------------------------------
+
+
+Processing 36 nodes... with erase_loops=False
+NB: max_exposure=0.938 s=33 t=22 v=4
+NB: avg_exposure=0.671 median_exposure=0.742 over 1260 pairs
+NB: avg_mean_hop_count=19 avg_median_hop_count=13 avg_max_hop_count=130
+LRV: max_exposure=0.925 s=10 t=31 v=4
+LRV: avg_exposure=0.662 median_exposure=0.733 over 1260 pairs
+LRV: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=41
+NC: max_exposure=0.908 s=22 t=31 v=4
+NC: avg_exposure=0.655 median_exposure=0.728 over 1260 pairs
+NC: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=57
+HS: max_exposure=0.924 s=23 t=31 v=4
+HS: avg_exposure=0.651 median_exposure=0.719 over 1260 pairs
+HS: avg_mean_hop_count=14 avg_median_hop_count=11 avg_max_hop_count=80
+
+
+Processing 36 nodes... with erase_loops=True
+NB: max_exposure=0.938 s=33 t=22 v=4
+NB: avg_exposure=0.619 median_exposure=0.655 over 1260 pairs
+NB: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=21
+LRV: max_exposure=0.925 s=10 t=31 v=4
+LRV: avg_exposure=0.622 median_exposure=0.672 over 1260 pairs
+LRV: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=24
+NC: max_exposure=0.908 s=22 t=31 v=4
+NC: avg_exposure=0.618 median_exposure=0.671 over 1260 pairs
+NC: avg_mean_hop_count=8 avg_median_hop_count=6 avg_max_hop_count=23
+HS: max_exposure=0.924 s=23 t=31 v=4
+HS: avg_exposure=0.615 median_exposure=0.669 over 1260 pairs
+HS: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=24
+
+
+--------------------------------
+
+
+Processing 39 nodes... with erase_loops=False
+NB: max_exposure=0.950 s=23 t=38 v=16
+NB: avg_exposure=0.697 median_exposure=0.772 over 1482 pairs
+NB: avg_mean_hop_count=21 avg_median_hop_count=15 avg_max_hop_count=145
+LRV: max_exposure=0.944 s=37 t=23 v=16
+LRV: avg_exposure=0.688 median_exposure=0.760 over 1482 pairs
+LRV: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=48
+NC: max_exposure=0.927 s=38 t=24 v=16
+NC: avg_exposure=0.679 median_exposure=0.750 over 1482 pairs
+NC: avg_mean_hop_count=15 avg_median_hop_count=12 avg_max_hop_count=64
+HS: max_exposure=0.938 s=38 t=23 v=16
+HS: avg_exposure=0.677 median_exposure=0.746 over 1482 pairs
+HS: avg_mean_hop_count=16 avg_median_hop_count=12 avg_max_hop_count=97
+
+
+Processing 39 nodes... with erase_loops=True
+NB: max_exposure=0.950 s=23 t=39 v=16
+NB: avg_exposure=0.643 median_exposure=0.687 over 1482 pairs
+NB: avg_mean_hop_count=7 avg_median_hop_count=6 avg_max_hop_count=22
+LRV: max_exposure=0.944 s=37 t=24 v=16
+LRV: avg_exposure=0.645 median_exposure=0.694 over 1482 pairs
+LRV: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=25
+NC: max_exposure=0.927 s=38 t=24 v=16
+NC: avg_exposure=0.639 median_exposure=0.691 over 1482 pairs
+NC: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=24
+HS: max_exposure=0.938 s=38 t=24 v=16
+HS: avg_exposure=0.639 median_exposure=0.689 over 1482 pairs
+HS: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=25
+
+
+--------------------------------
+
+
+Processing 42 nodes... with erase_loops=False
+NB: max_exposure=0.956 s=22 t=38 v=16
+NB: avg_exposure=0.709 median_exposure=0.782 over 1722 pairs
+NB: avg_mean_hop_count=24 avg_median_hop_count=17 avg_max_hop_count=170
+LRV: max_exposure=0.955 s=24 t=38 v=16
+LRV: avg_exposure=0.698 median_exposure=0.771 over 1722 pairs
+LRV: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=54
+NC: max_exposure=0.936 s=24 t=38 v=16
+NC: avg_exposure=0.690 median_exposure=0.761 over 1722 pairs
+NC: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=73
+HS: max_exposure=0.935 s=24 t=31 v=4
+HS: avg_exposure=0.683 median_exposure=0.751 over 1722 pairs
+HS: avg_mean_hop_count=18 avg_median_hop_count=14 avg_max_hop_count=122
+
+
+Processing 42 nodes... with erase_loops=True
+NB: max_exposure=0.956 s=22 t=39 v=16
+NB: avg_exposure=0.650 median_exposure=0.690 over 1722 pairs
+NB: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=24
+LRV: max_exposure=0.955 s=24 t=39 v=16
+LRV: avg_exposure=0.649 median_exposure=0.694 over 1722 pairs
+LRV: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=27
+NC: max_exposure=0.936 s=24 t=39 v=16
+NC: avg_exposure=0.644 median_exposure=0.692 over 1722 pairs
+NC: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=26
+HS: max_exposure=0.935 s=24 t=31 v=4
+HS: avg_exposure=0.639 median_exposure=0.685 over 1722 pairs
+HS: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=28
+
+
+--------------------------------
+
+
+Processing 45 nodes... with erase_loops=False
+NB: max_exposure=0.959 s=24 t=38 v=16
+NB: avg_exposure=0.714 median_exposure=0.785 over 1980 pairs
+NB: avg_mean_hop_count=26 avg_median_hop_count=18 avg_max_hop_count=186
+LRV: max_exposure=0.951 s=22 t=38 v=16
+LRV: avg_exposure=0.703 median_exposure=0.777 over 1980 pairs
+LRV: avg_mean_hop_count=17 avg_median_hop_count=15 avg_max_hop_count=57
+NC: max_exposure=0.934 s=22 t=38 v=16
+NC: avg_exposure=0.694 median_exposure=0.766 over 1980 pairs
+NC: avg_mean_hop_count=17 avg_median_hop_count=15 avg_max_hop_count=78
+HS: max_exposure=0.925 s=22 t=38 v=16
+HS: avg_exposure=0.688 median_exposure=0.756 over 1980 pairs
+HS: avg_mean_hop_count=19 avg_median_hop_count=15 avg_max_hop_count=125
+
+
+Processing 45 nodes... with erase_loops=True
+NB: max_exposure=0.959 s=24 t=39 v=16
+NB: avg_exposure=0.654 median_exposure=0.689 over 1980 pairs
+NB: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=25
+LRV: max_exposure=0.951 s=22 t=39 v=16
+LRV: avg_exposure=0.654 median_exposure=0.698 over 1980 pairs
+LRV: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=29
+NC: max_exposure=0.934 s=22 t=39 v=16
+NC: avg_exposure=0.648 median_exposure=0.692 over 1980 pairs
+NC: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=28
+HS: max_exposure=0.925 s=22 t=39 v=16
+HS: avg_exposure=0.643 median_exposure=0.686 over 1980 pairs
+HS: avg_mean_hop_count=10 avg_median_hop_count=8 avg_max_hop_count=30
+
+
+--------------------------------
+
+
+Processing 48 nodes... with erase_loops=False
+NB: max_exposure=0.959 s=39 t=23 v=16
+NB: avg_exposure=0.711 median_exposure=0.781 over 2256 pairs
+NB: avg_mean_hop_count=28 avg_median_hop_count=19 avg_max_hop_count=202
+LRV: max_exposure=0.946 s=27 t=23 v=16
+LRV: avg_exposure=0.699 median_exposure=0.770 over 2256 pairs
+LRV: avg_mean_hop_count=18 avg_median_hop_count=16 avg_max_hop_count=62
+NC: max_exposure=0.931 s=38 t=24 v=16
+NC: avg_exposure=0.691 median_exposure=0.759 over 2256 pairs
+NC: avg_mean_hop_count=19 avg_median_hop_count=16 avg_max_hop_count=83
+HS: max_exposure=0.918 s=23 t=31 v=4
+HS: avg_exposure=0.682 median_exposure=0.745 over 2256 pairs
+HS: avg_mean_hop_count=21 avg_median_hop_count=16 avg_max_hop_count=140
+
+
+Processing 48 nodes... with erase_loops=True
+NB: max_exposure=0.959 s=39 t=24 v=16
+NB: avg_exposure=0.649 median_exposure=0.683 over 2256 pairs
+NB: avg_mean_hop_count=8 avg_median_hop_count=7 avg_max_hop_count=26
+LRV: max_exposure=0.946 s=27 t=24 v=16
+LRV: avg_exposure=0.649 median_exposure=0.685 over 2256 pairs
+LRV: avg_mean_hop_count=10 avg_median_hop_count=8 avg_max_hop_count=31
+NC: max_exposure=0.931 s=38 t=24 v=16
+NC: avg_exposure=0.644 median_exposure=0.683 over 2256 pairs
+NC: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=30
+HS: max_exposure=0.918 s=23 t=31 v=4
+HS: avg_exposure=0.636 median_exposure=0.673 over 2256 pairs
+HS: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=31
+
+
+--------------------------------
+
+
+Processing 51 nodes... with erase_loops=False
+NB: max_exposure=0.961 s=24 t=38 v=16
+NB: avg_exposure=0.711 median_exposure=0.773 over 2550 pairs
+NB: avg_mean_hop_count=31 avg_median_hop_count=21 avg_max_hop_count=230
+LRV: max_exposure=0.953 s=27 t=23 v=16
+LRV: avg_exposure=0.697 median_exposure=0.758 over 2550 pairs
+LRV: avg_mean_hop_count=20 avg_median_hop_count=17 avg_max_hop_count=69
+NC: max_exposure=0.930 s=24 t=38 v=16
+NC: avg_exposure=0.690 median_exposure=0.751 over 2550 pairs
+NC: avg_mean_hop_count=20 avg_median_hop_count=17 avg_max_hop_count=88
+HS: max_exposure=0.935 s=24 t=31 v=4
+HS: avg_exposure=0.681 median_exposure=0.737 over 2550 pairs
+HS: avg_mean_hop_count=23 avg_median_hop_count=17 avg_max_hop_count=152
+
+
+Processing 51 nodes... with erase_loops=True
+NB: max_exposure=0.961 s=24 t=39 v=16
+NB: avg_exposure=0.640 median_exposure=0.670 over 2550 pairs
+NB: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=27
+LRV: max_exposure=0.953 s=27 t=24 v=16
+LRV: avg_exposure=0.641 median_exposure=0.671 over 2550 pairs
+LRV: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=33
+NC: max_exposure=0.929 s=24 t=39 v=16
+NC: avg_exposure=0.636 median_exposure=0.666 over 2550 pairs
+NC: avg_mean_hop_count=10 avg_median_hop_count=8 avg_max_hop_count=32
+HS: max_exposure=0.935 s=24 t=31 v=4
+HS: avg_exposure=0.631 median_exposure=0.664 over 2550 pairs
+HS: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=34
+
+
+--------------------------------
+
+
+Processing 54 nodes... with erase_loops=False
+NB: max_exposure=0.962 s=39 t=23 v=16
+NB: avg_exposure=0.715 median_exposure=0.776 over 2862 pairs
+NB: avg_mean_hop_count=32 avg_median_hop_count=22 avg_max_hop_count=235
+LRV: max_exposure=0.939 s=23 t=38 v=16
+LRV: avg_exposure=0.704 median_exposure=0.768 over 2862 pairs
+LRV: avg_mean_hop_count=21 avg_median_hop_count=18 avg_max_hop_count=73
+NC: max_exposure=0.934 s=23 t=38 v=16
+NC: avg_exposure=0.696 median_exposure=0.759 over 2862 pairs
+NC: avg_mean_hop_count=21 avg_median_hop_count=18 avg_max_hop_count=94
+HS: max_exposure=0.919 s=23 t=38 v=16
+HS: avg_exposure=0.686 median_exposure=0.744 over 2862 pairs
+HS: avg_mean_hop_count=24 avg_median_hop_count=18 avg_max_hop_count=156
+
+
+Processing 54 nodes... with erase_loops=True
+NB: max_exposure=0.962 s=39 t=24 v=16
+NB: avg_exposure=0.642 median_exposure=0.670 over 2862 pairs
+NB: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=28
+LRV: max_exposure=0.939 s=23 t=39 v=16
+LRV: avg_exposure=0.645 median_exposure=0.673 over 2862 pairs
+LRV: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=34
+NC: max_exposure=0.930 s=23 t=39 v=16
+NC: avg_exposure=0.640 median_exposure=0.669 over 2862 pairs
+NC: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=33
+HS: max_exposure=0.919 s=23 t=39 v=16
+HS: avg_exposure=0.632 median_exposure=0.660 over 2862 pairs
+HS: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=35
+
+
+--------------------------------
+
+
+Processing 57 nodes... with erase_loops=False
+NB: max_exposure=0.964 s=24 t=38 v=16
+NB: avg_exposure=0.711 median_exposure=0.775 over 3192 pairs
+NB: avg_mean_hop_count=34 avg_median_hop_count=23 avg_max_hop_count=241
+LRV: max_exposure=0.936 s=23 t=38 v=16
+LRV: avg_exposure=0.701 median_exposure=0.767 over 3192 pairs
+LRV: avg_mean_hop_count=22 avg_median_hop_count=18 avg_max_hop_count=77
+NC: max_exposure=0.929 s=24 t=39 v=16
+NC: avg_exposure=0.694 median_exposure=0.759 over 3192 pairs
+NC: avg_mean_hop_count=22 avg_median_hop_count=19 avg_max_hop_count=97
+HS: max_exposure=0.923 s=22 t=38 v=16
+HS: avg_exposure=0.681 median_exposure=0.741 over 3192 pairs
+HS: avg_mean_hop_count=25 avg_median_hop_count=19 avg_max_hop_count=160
+
+
+Processing 57 nodes... with erase_loops=True
+NB: max_exposure=0.964 s=24 t=39 v=16
+NB: avg_exposure=0.634 median_exposure=0.661 over 3192 pairs
+NB: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=29
+LRV: max_exposure=0.936 s=23 t=39 v=16
+LRV: avg_exposure=0.640 median_exposure=0.664 over 3192 pairs
+LRV: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=35
+NC: max_exposure=0.929 s=24 t=39 v=16
+NC: avg_exposure=0.635 median_exposure=0.660 over 3192 pairs
+NC: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=34
+HS: max_exposure=0.923 s=22 t=39 v=16
+HS: avg_exposure=0.628 median_exposure=0.655 over 3192 pairs
+HS: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=37
+
+
+--------------------------------
+
+
+Processing 60 nodes... with erase_loops=False
+NB: max_exposure=0.962 s=24 t=38 v=16
+NB: avg_exposure=0.715 median_exposure=0.773 over 3540 pairs
+NB: avg_mean_hop_count=37 avg_median_hop_count=25 avg_max_hop_count=265
+LRV: max_exposure=0.942 s=23 t=38 v=16
+LRV: avg_exposure=0.705 median_exposure=0.767 over 3540 pairs
+LRV: avg_mean_hop_count=23 avg_median_hop_count=20 avg_max_hop_count=86
+NC: max_exposure=0.938 s=39 t=23 v=16
+NC: avg_exposure=0.699 median_exposure=0.760 over 3540 pairs
+NC: avg_mean_hop_count=24 avg_median_hop_count=20 avg_max_hop_count=104
+HS: max_exposure=0.924 s=23 t=38 v=16
+HS: avg_exposure=0.684 median_exposure=0.742 over 3540 pairs
+HS: avg_mean_hop_count=27 avg_median_hop_count=20 avg_max_hop_count=184
+
+
+Processing 60 nodes... with erase_loops=True
+NB: max_exposure=0.962 s=24 t=39 v=16
+NB: avg_exposure=0.632 median_exposure=0.658 over 3540 pairs
+NB: avg_mean_hop_count=9 avg_median_hop_count=8 avg_max_hop_count=30
+LRV: max_exposure=0.942 s=23 t=39 v=16
+LRV: avg_exposure=0.639 median_exposure=0.661 over 3540 pairs
+LRV: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=36
+NC: max_exposure=0.933 s=27 t=24 v=16
+NC: avg_exposure=0.636 median_exposure=0.657 over 3540 pairs
+NC: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=36
+HS: max_exposure=0.924 s=23 t=39 v=16
+HS: avg_exposure=0.626 median_exposure=0.654 over 3540 pairs
+HS: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=38
+
+
+--------------------------------
+
+
+Processing 63 nodes... with erase_loops=False
+NB: max_exposure=0.958 s=24 t=38 v=16
+NB: avg_exposure=0.708 median_exposure=0.759 over 3906 pairs
+NB: avg_mean_hop_count=38 avg_median_hop_count=26 avg_max_hop_count=278
+LRV: max_exposure=0.946 s=23 t=38 v=16
+LRV: avg_exposure=0.700 median_exposure=0.754 over 3906 pairs
+LRV: avg_mean_hop_count=25 avg_median_hop_count=21 avg_max_hop_count=92
+NC: max_exposure=0.934 s=23 t=39 v=16
+NC: avg_exposure=0.694 median_exposure=0.746 over 3906 pairs
+NC: avg_mean_hop_count=25 avg_median_hop_count=21 avg_max_hop_count=110
+HS: max_exposure=0.919 s=22 t=38 v=16
+HS: avg_exposure=0.673 median_exposure=0.726 over 3906 pairs
+HS: avg_mean_hop_count=28 avg_median_hop_count=21 avg_max_hop_count=190
+
+
+Processing 63 nodes... with erase_loops=True
+NB: max_exposure=0.958 s=24 t=39 v=16
+NB: avg_exposure=0.621 median_exposure=0.645 over 3906 pairs
+NB: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=32
+LRV: max_exposure=0.946 s=23 t=39 v=16
+LRV: avg_exposure=0.631 median_exposure=0.654 over 3906 pairs
+LRV: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=39
+NC: max_exposure=0.934 s=23 t=39 v=16
+NC: avg_exposure=0.626 median_exposure=0.649 over 3906 pairs
+NC: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=38
+HS: max_exposure=0.919 s=22 t=39 v=16
+HS: avg_exposure=0.616 median_exposure=0.642 over 3906 pairs
+HS: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=41
+
+
+--------------------------------
+
+
+Processing 66 nodes... with erase_loops=False
+NB: max_exposure=0.958 s=24 t=38 v=16
+NB: avg_exposure=0.700 median_exposure=0.745 over 4290 pairs
+NB: avg_mean_hop_count=39 avg_median_hop_count=27 avg_max_hop_count=281
+LRV: max_exposure=0.946 s=24 t=38 v=16
+LRV: avg_exposure=0.694 median_exposure=0.741 over 4290 pairs
+LRV: avg_mean_hop_count=26 avg_median_hop_count=22 avg_max_hop_count=100
+NC: max_exposure=0.935 s=24 t=38 v=16
+NC: avg_exposure=0.688 median_exposure=0.735 over 4290 pairs
+NC: avg_mean_hop_count=26 avg_median_hop_count=22 avg_max_hop_count=119
+HS: max_exposure=0.912 s=37 t=65 v=16
+HS: avg_exposure=0.662 median_exposure=0.706 over 4290 pairs
+HS: avg_mean_hop_count=29 avg_median_hop_count=22 avg_max_hop_count=203
+
+
+Processing 66 nodes... with erase_loops=True
+NB: max_exposure=0.958 s=24 t=39 v=16
+NB: avg_exposure=0.608 median_exposure=0.622 over 4290 pairs
+NB: avg_mean_hop_count=10 avg_median_hop_count=9 avg_max_hop_count=34
+LRV: max_exposure=0.946 s=24 t=39 v=16
+LRV: avg_exposure=0.623 median_exposure=0.644 over 4290 pairs
+LRV: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=40
+NC: max_exposure=0.931 s=24 t=39 v=16
+NC: avg_exposure=0.618 median_exposure=0.641 over 4290 pairs
+NC: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=40
+HS: max_exposure=0.908 s=64 t=39 v=16
+HS: avg_exposure=0.603 median_exposure=0.624 over 4290 pairs
+HS: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=43
+
+
+--------------------------------
+
+
+Processing 69 nodes... with erase_loops=False
+NB: max_exposure=0.973 s=24 t=38 v=16
+NB: avg_exposure=0.718 median_exposure=0.758 over 4692 pairs
+NB: avg_mean_hop_count=42 avg_median_hop_count=29 avg_max_hop_count=321
+LRV: max_exposure=0.965 s=23 t=38 v=16
+LRV: avg_exposure=0.711 median_exposure=0.754 over 4692 pairs
+LRV: avg_mean_hop_count=28 avg_median_hop_count=23 avg_max_hop_count=106
+NC: max_exposure=0.954 s=23 t=39 v=16
+NC: avg_exposure=0.705 median_exposure=0.747 over 4692 pairs
+NC: avg_mean_hop_count=28 avg_median_hop_count=23 avg_max_hop_count=124
+HS: max_exposure=0.947 s=23 t=38 v=16
+HS: avg_exposure=0.687 median_exposure=0.718 over 4692 pairs
+HS: avg_mean_hop_count=31 avg_median_hop_count=23 avg_max_hop_count=210
+
+
+Processing 69 nodes... with erase_loops=True
+NB: max_exposure=0.973 s=24 t=39 v=16
+NB: avg_exposure=0.630 median_exposure=0.643 over 4692 pairs
+NB: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=34
+LRV: max_exposure=0.965 s=23 t=39 v=16
+LRV: avg_exposure=0.645 median_exposure=0.666 over 4692 pairs
+LRV: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=40
+NC: max_exposure=0.954 s=23 t=39 v=16
+NC: avg_exposure=0.640 median_exposure=0.663 over 4692 pairs
+NC: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=40
+HS: max_exposure=0.947 s=23 t=39 v=16
+HS: avg_exposure=0.631 median_exposure=0.643 over 4692 pairs
+HS: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=43
+
+
+--------------------------------
+
+
+Processing 72 nodes... with erase_loops=False
+NB: max_exposure=0.970 s=24 t=38 v=16
+NB: avg_exposure=0.712 median_exposure=0.750 over 5112 pairs
+NB: avg_mean_hop_count=43 avg_median_hop_count=29 avg_max_hop_count=318
+LRV: max_exposure=0.973 s=24 t=38 v=16
+LRV: avg_exposure=0.704 median_exposure=0.744 over 5112 pairs
+LRV: avg_mean_hop_count=28 avg_median_hop_count=24 avg_max_hop_count=109
+NC: max_exposure=0.959 s=23 t=38 v=16
+NC: avg_exposure=0.699 median_exposure=0.738 over 5112 pairs
+NC: avg_mean_hop_count=29 avg_median_hop_count=24 avg_max_hop_count=127
+HS: max_exposure=0.953 s=64 t=38 v=16
+HS: avg_exposure=0.679 median_exposure=0.709 over 5112 pairs
+HS: avg_mean_hop_count=32 avg_median_hop_count=24 avg_max_hop_count=217
+
+
+Processing 72 nodes... with erase_loops=True
+NB: max_exposure=0.970 s=24 t=39 v=16
+NB: avg_exposure=0.623 median_exposure=0.625 over 5112 pairs
+NB: avg_mean_hop_count=11 avg_median_hop_count=9 avg_max_hop_count=35
+LRV: max_exposure=0.973 s=24 t=39 v=16
+LRV: avg_exposure=0.637 median_exposure=0.648 over 5112 pairs
+LRV: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=42
+NC: max_exposure=0.959 s=23 t=39 v=16
+NC: avg_exposure=0.633 median_exposure=0.646 over 5112 pairs
+NC: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=41
+HS: max_exposure=0.953 s=64 t=39 v=16
+HS: avg_exposure=0.623 median_exposure=0.631 over 5112 pairs
+HS: avg_mean_hop_count=14 avg_median_hop_count=13 avg_max_hop_count=45
+
+
+--------------------------------
+
+
+Processing 75 nodes... with erase_loops=False
+NB: max_exposure=0.968 s=24 t=38 v=16
+NB: avg_exposure=0.713 median_exposure=0.750 over 5550 pairs
+NB: avg_mean_hop_count=45 avg_median_hop_count=31 avg_max_hop_count=333
+LRV: max_exposure=0.967 s=24 t=38 v=16
+LRV: avg_exposure=0.705 median_exposure=0.743 over 5550 pairs
+LRV: avg_mean_hop_count=30 avg_median_hop_count=25 avg_max_hop_count=115
+NC: max_exposure=0.955 s=24 t=39 v=16
+NC: avg_exposure=0.699 median_exposure=0.737 over 5550 pairs
+NC: avg_mean_hop_count=30 avg_median_hop_count=25 avg_max_hop_count=133
+HS: max_exposure=0.957 s=64 t=38 v=16
+HS: avg_exposure=0.679 median_exposure=0.704 over 5550 pairs
+HS: avg_mean_hop_count=34 avg_median_hop_count=25 avg_max_hop_count=228
+
+
+Processing 75 nodes... with erase_loops=True
+NB: max_exposure=0.968 s=24 t=39 v=16
+NB: avg_exposure=0.620 median_exposure=0.623 over 5550 pairs
+NB: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=36
+LRV: max_exposure=0.967 s=24 t=39 v=16
+LRV: avg_exposure=0.634 median_exposure=0.646 over 5550 pairs
+LRV: avg_mean_hop_count=13 avg_median_hop_count=12 avg_max_hop_count=44
+NC: max_exposure=0.955 s=24 t=39 v=16
+NC: avg_exposure=0.630 median_exposure=0.643 over 5550 pairs
+NC: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=43
+HS: max_exposure=0.957 s=64 t=39 v=16
+HS: avg_exposure=0.619 median_exposure=0.627 over 5550 pairs
+HS: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=47
+
+
+--------------------------------
+
+
+Processing 78 nodes... with erase_loops=False
+NB: max_exposure=0.965 s=30 t=38 v=16
+NB: avg_exposure=0.719 median_exposure=0.760 over 6006 pairs
+NB: avg_mean_hop_count=47 avg_median_hop_count=32 avg_max_hop_count=347
+LRV: max_exposure=0.974 s=24 t=38 v=16
+LRV: avg_exposure=0.712 median_exposure=0.752 over 6006 pairs
+LRV: avg_mean_hop_count=31 avg_median_hop_count=26 avg_max_hop_count=119
+NC: max_exposure=0.965 s=24 t=38 v=16
+NC: avg_exposure=0.707 median_exposure=0.748 over 6006 pairs
+NC: avg_mean_hop_count=31 avg_median_hop_count=26 avg_max_hop_count=139
+HS: max_exposure=0.961 s=66 t=38 v=16
+HS: avg_exposure=0.686 median_exposure=0.719 over 6006 pairs
+HS: avg_mean_hop_count=34 avg_median_hop_count=26 avg_max_hop_count=231
+
+
+Processing 78 nodes... with erase_loops=True
+NB: max_exposure=0.965 s=30 t=39 v=16
+NB: avg_exposure=0.627 median_exposure=0.635 over 6006 pairs
+NB: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=37
+LRV: max_exposure=0.974 s=24 t=39 v=16
+LRV: avg_exposure=0.640 median_exposure=0.654 over 6006 pairs
+LRV: avg_mean_hop_count=13 avg_median_hop_count=12 avg_max_hop_count=44
+NC: max_exposure=0.962 s=24 t=39 v=16
+NC: avg_exposure=0.637 median_exposure=0.652 over 6006 pairs
+NC: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=44
+HS: max_exposure=0.961 s=66 t=39 v=16
+HS: avg_exposure=0.624 median_exposure=0.639 over 6006 pairs
+HS: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=48
+
+
+--------------------------------
+
+
+Processing 81 nodes... with erase_loops=False
+NB: max_exposure=0.968 s=38 t=65 v=16
+NB: avg_exposure=0.726 median_exposure=0.769 over 6480 pairs
+NB: avg_mean_hop_count=50 avg_median_hop_count=34 avg_max_hop_count=374
+LRV: max_exposure=0.966 s=24 t=39 v=16
+LRV: avg_exposure=0.719 median_exposure=0.762 over 6480 pairs
+LRV: avg_mean_hop_count=32 avg_median_hop_count=27 avg_max_hop_count=126
+NC: max_exposure=0.957 s=24 t=39 v=16
+NC: avg_exposure=0.713 median_exposure=0.757 over 6480 pairs
+NC: avg_mean_hop_count=33 avg_median_hop_count=27 avg_max_hop_count=145
+HS: max_exposure=0.933 s=23 t=39 v=16
+HS: avg_exposure=0.693 median_exposure=0.723 over 6480 pairs
+HS: avg_mean_hop_count=37 avg_median_hop_count=27 avg_max_hop_count=254
+
+
+Processing 81 nodes... with erase_loops=True
+NB: max_exposure=0.964 s=51 t=39 v=16
+NB: avg_exposure=0.632 median_exposure=0.642 over 6480 pairs
+NB: avg_mean_hop_count=11 avg_median_hop_count=10 avg_max_hop_count=38
+LRV: max_exposure=0.966 s=24 t=39 v=16
+LRV: avg_exposure=0.647 median_exposure=0.664 over 6480 pairs
+LRV: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=45
+NC: max_exposure=0.957 s=24 t=39 v=16
+NC: avg_exposure=0.643 median_exposure=0.663 over 6480 pairs
+NC: avg_mean_hop_count=13 avg_median_hop_count=12 avg_max_hop_count=44
+HS: max_exposure=0.933 s=23 t=39 v=16
+HS: avg_exposure=0.629 median_exposure=0.646 over 6480 pairs
+HS: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=49
+
+
+--------------------------------
+
+
+Processing 84 nodes... with erase_loops=False
+NB: max_exposure=0.969 s=38 t=83 v=16
+NB: avg_exposure=0.734 median_exposure=0.778 over 6972 pairs
+NB: avg_mean_hop_count=53 avg_median_hop_count=36 avg_max_hop_count=392
+LRV: max_exposure=0.960 s=24 t=39 v=16
+LRV: avg_exposure=0.725 median_exposure=0.769 over 6972 pairs
+LRV: avg_mean_hop_count=34 avg_median_hop_count=28 avg_max_hop_count=132
+NC: max_exposure=0.955 s=38 t=83 v=16
+NC: avg_exposure=0.720 median_exposure=0.763 over 6972 pairs
+NC: avg_mean_hop_count=34 avg_median_hop_count=28 avg_max_hop_count=150
+HS: max_exposure=0.942 s=38 t=83 v=16
+HS: avg_exposure=0.702 median_exposure=0.731 over 6972 pairs
+HS: avg_mean_hop_count=39 avg_median_hop_count=29 avg_max_hop_count=267
+
+
+Processing 84 nodes... with erase_loops=True
+NB: max_exposure=0.965 s=23 t=39 v=16
+NB: avg_exposure=0.639 median_exposure=0.653 over 6972 pairs
+NB: avg_mean_hop_count=12 avg_median_hop_count=10 avg_max_hop_count=38
+LRV: max_exposure=0.960 s=24 t=39 v=16
+LRV: avg_exposure=0.651 median_exposure=0.669 over 6972 pairs
+LRV: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=46
+NC: max_exposure=0.947 s=24 t=39 v=16
+NC: avg_exposure=0.648 median_exposure=0.667 over 6972 pairs
+NC: avg_mean_hop_count=14 avg_median_hop_count=12 avg_max_hop_count=46
+HS: max_exposure=0.938 s=64 t=39 v=16
+HS: avg_exposure=0.640 median_exposure=0.660 over 6972 pairs
+HS: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=50
+
+
+--------------------------------
+
+
+Processing 87 nodes... with erase_loops=False
+NB: max_exposure=0.962 s=24 t=39 v=16
+NB: avg_exposure=0.730 median_exposure=0.773 over 7482 pairs
+NB: avg_mean_hop_count=55 avg_median_hop_count=37 avg_max_hop_count=415
+LRV: max_exposure=0.958 s=23 t=39 v=16
+LRV: avg_exposure=0.720 median_exposure=0.759 over 7482 pairs
+LRV: avg_mean_hop_count=35 avg_median_hop_count=29 avg_max_hop_count=137
+NC: max_exposure=0.945 s=23 t=39 v=16
+NC: avg_exposure=0.716 median_exposure=0.755 over 7482 pairs
+NC: avg_mean_hop_count=35 avg_median_hop_count=29 avg_max_hop_count=155
+HS: max_exposure=0.933 s=38 t=64 v=16
+HS: avg_exposure=0.697 median_exposure=0.722 over 7482 pairs
+HS: avg_mean_hop_count=40 avg_median_hop_count=30 avg_max_hop_count=278
+
+
+Processing 87 nodes... with erase_loops=True
+NB: max_exposure=0.962 s=24 t=39 v=16
+NB: avg_exposure=0.633 median_exposure=0.647 over 7482 pairs
+NB: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=39
+LRV: max_exposure=0.958 s=23 t=39 v=16
+LRV: avg_exposure=0.645 median_exposure=0.661 over 7482 pairs
+LRV: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=48
+NC: max_exposure=0.945 s=23 t=39 v=16
+NC: avg_exposure=0.642 median_exposure=0.659 over 7482 pairs
+NC: avg_mean_hop_count=14 avg_median_hop_count=13 avg_max_hop_count=47
+HS: max_exposure=0.927 s=23 t=39 v=16
+HS: avg_exposure=0.633 median_exposure=0.647 over 7482 pairs
+HS: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=52
+
+
+--------------------------------
+
+
+Processing 90 nodes... with erase_loops=False
+NB: max_exposure=0.972 s=38 t=64 v=16
+NB: avg_exposure=0.737 median_exposure=0.780 over 8010 pairs
+NB: avg_mean_hop_count=60 avg_median_hop_count=41 avg_max_hop_count=459
+LRV: max_exposure=0.963 s=87 t=39 v=16
+LRV: avg_exposure=0.728 median_exposure=0.766 over 8010 pairs
+LRV: avg_mean_hop_count=37 avg_median_hop_count=31 avg_max_hop_count=145
+NC: max_exposure=0.950 s=87 t=39 v=16
+NC: avg_exposure=0.723 median_exposure=0.761 over 8010 pairs
+NC: avg_mean_hop_count=37 avg_median_hop_count=31 avg_max_hop_count=164
+HS: max_exposure=0.941 s=23 t=89 v=16
+HS: avg_exposure=0.705 median_exposure=0.728 over 8010 pairs
+HS: avg_mean_hop_count=43 avg_median_hop_count=31 avg_max_hop_count=319
+
+
+Processing 90 nodes... with erase_loops=True
+NB: max_exposure=0.966 s=64 t=39 v=16
+NB: avg_exposure=0.637 median_exposure=0.655 over 8010 pairs
+NB: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=40
+LRV: max_exposure=0.963 s=87 t=39 v=16
+LRV: avg_exposure=0.649 median_exposure=0.669 over 8010 pairs
+LRV: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=50
+NC: max_exposure=0.950 s=87 t=39 v=16
+NC: avg_exposure=0.645 median_exposure=0.667 over 8010 pairs
+NC: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=49
+HS: max_exposure=0.921 s=23 t=39 v=16
+HS: avg_exposure=0.638 median_exposure=0.657 over 8010 pairs
+HS: avg_mean_hop_count=17 avg_median_hop_count=15 avg_max_hop_count=54
+
+
+--------------------------------
+
+
+Processing 93 nodes... with erase_loops=False
+NB: max_exposure=0.969 s=24 t=39 v=16
+NB: avg_exposure=0.740 median_exposure=0.783 over 8556 pairs
+NB: avg_mean_hop_count=63 avg_median_hop_count=43 avg_max_hop_count=478
+LRV: max_exposure=0.960 s=23 t=39 v=16
+LRV: avg_exposure=0.732 median_exposure=0.770 over 8556 pairs
+LRV: avg_mean_hop_count=38 avg_median_hop_count=32 avg_max_hop_count=152
+NC: max_exposure=0.952 s=39 t=93 v=16
+NC: avg_exposure=0.727 median_exposure=0.765 over 8556 pairs
+NC: avg_mean_hop_count=39 avg_median_hop_count=32 avg_max_hop_count=169
+HS: max_exposure=0.937 s=23 t=89 v=16
+HS: avg_exposure=0.707 median_exposure=0.732 over 8556 pairs
+HS: avg_mean_hop_count=46 avg_median_hop_count=33 avg_max_hop_count=328
+
+
+Processing 93 nodes... with erase_loops=True
+NB: max_exposure=0.969 s=24 t=39 v=16
+NB: avg_exposure=0.638 median_exposure=0.654 over 8556 pairs
+NB: avg_mean_hop_count=12 avg_median_hop_count=11 avg_max_hop_count=41
+LRV: max_exposure=0.960 s=23 t=39 v=16
+LRV: avg_exposure=0.650 median_exposure=0.670 over 8556 pairs
+LRV: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=51
+NC: max_exposure=0.950 s=24 t=39 v=16
+NC: avg_exposure=0.645 median_exposure=0.667 over 8556 pairs
+NC: avg_mean_hop_count=15 avg_median_hop_count=13 avg_max_hop_count=50
+HS: max_exposure=0.930 s=22 t=39 v=16
+HS: avg_exposure=0.638 median_exposure=0.654 over 8556 pairs
+HS: avg_mean_hop_count=17 avg_median_hop_count=15 avg_max_hop_count=55
+
+
+--------------------------------
+
+
+Processing 96 nodes... with erase_loops=False
+NB: max_exposure=0.969 s=38 t=64 v=16
+NB: avg_exposure=0.739 median_exposure=0.779 over 9120 pairs
+NB: avg_mean_hop_count=66 avg_median_hop_count=45 avg_max_hop_count=511
+LRV: max_exposure=0.961 s=87 t=39 v=16
+LRV: avg_exposure=0.730 median_exposure=0.767 over 9120 pairs
+LRV: avg_mean_hop_count=40 avg_median_hop_count=33 avg_max_hop_count=157
+NC: max_exposure=0.960 s=65 t=39 v=16
+NC: avg_exposure=0.726 median_exposure=0.762 over 9120 pairs
+NC: avg_mean_hop_count=40 avg_median_hop_count=33 avg_max_hop_count=175
+HS: max_exposure=0.946 s=38 t=83 v=16
+HS: avg_exposure=0.701 median_exposure=0.721 over 9120 pairs
+HS: avg_mean_hop_count=47 avg_median_hop_count=34 avg_max_hop_count=343
+
+
+Processing 96 nodes... with erase_loops=True
+NB: max_exposure=0.966 s=24 t=39 v=16
+NB: avg_exposure=0.634 median_exposure=0.648 over 9120 pairs
+NB: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=41
+LRV: max_exposure=0.961 s=87 t=39 v=16
+LRV: avg_exposure=0.647 median_exposure=0.662 over 9120 pairs
+LRV: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=53
+NC: max_exposure=0.960 s=65 t=39 v=16
+NC: avg_exposure=0.643 median_exposure=0.659 over 9120 pairs
+NC: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=52
+HS: max_exposure=0.937 s=65 t=39 v=16
+HS: avg_exposure=0.632 median_exposure=0.645 over 9120 pairs
+HS: avg_mean_hop_count=18 avg_median_hop_count=16 avg_max_hop_count=58
+
+
+--------------------------------
+
+
+Processing 99 nodes... with erase_loops=False
+NB: max_exposure=0.970 s=38 t=64 v=16
+NB: avg_exposure=0.747 median_exposure=0.785 over 9702 pairs
+NB: avg_mean_hop_count=68 avg_median_hop_count=46 avg_max_hop_count=516
+LRV: max_exposure=0.964 s=39 t=64 v=16
+LRV: avg_exposure=0.737 median_exposure=0.772 over 9702 pairs
+LRV: avg_mean_hop_count=41 avg_median_hop_count=34 avg_max_hop_count=163
+NC: max_exposure=0.952 s=64 t=39 v=16
+NC: avg_exposure=0.732 median_exposure=0.767 over 9702 pairs
+NC: avg_mean_hop_count=42 avg_median_hop_count=35 avg_max_hop_count=181
+HS: max_exposure=0.933 s=38 t=64 v=16
+HS: avg_exposure=0.706 median_exposure=0.728 over 9702 pairs
+HS: avg_mean_hop_count=49 avg_median_hop_count=36 avg_max_hop_count=357
+
+
+Processing 99 nodes... with erase_loops=True
+NB: max_exposure=0.964 s=86 t=39 v=16
+NB: avg_exposure=0.641 median_exposure=0.655 over 9702 pairs
+NB: avg_mean_hop_count=13 avg_median_hop_count=11 avg_max_hop_count=42
+LRV: max_exposure=0.962 s=64 t=39 v=16
+LRV: avg_exposure=0.652 median_exposure=0.667 over 9702 pairs
+LRV: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=54
+NC: max_exposure=0.952 s=64 t=39 v=16
+NC: avg_exposure=0.648 median_exposure=0.666 over 9702 pairs
+NC: avg_mean_hop_count=16 avg_median_hop_count=14 avg_max_hop_count=53
+HS: max_exposure=0.927 s=23 t=39 v=16
+HS: avg_exposure=0.637 median_exposure=0.654 over 9702 pairs
+HS: avg_mean_hop_count=18 avg_median_hop_count=16 avg_max_hop_count=58
+
+
+--------------------------------
+
+
