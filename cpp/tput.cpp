@@ -100,6 +100,7 @@ struct Packet {
     int source = -1;
     int target = -1;
     int hops = 0;
+    int creation_seq = -1;
     unique_ptr<RwToken> token;
 };
 
@@ -115,6 +116,21 @@ struct Event {
 struct EventGreater {
     bool operator()(const Event &a, const Event &b) const {
         return a.time > b.time;
+    }
+};
+
+struct WaitingEventGreater {
+    bool operator()(const Event &a, const Event &b) const {
+        if (a.pkt->creation_seq != b.pkt->creation_seq) {
+            return a.pkt->creation_seq > b.pkt->creation_seq;
+        }
+        if (a.time != b.time) {
+            return a.time > b.time;
+        }
+        if (a.from != b.from) {
+            return a.from > b.from;
+        }
+        return a.at > b.at;
     }
 };
 
@@ -321,7 +337,7 @@ RunResult run_single_simulation(
     RunResult result;
     priority_queue<Event, vector<Event>, EventGreater> pq;
     vector<int> relay_free(static_cast<int>(adj.size()), opts.relay_buffer_sz_chunks);
-    vector<queue<Event>> slot_polling_events(static_cast<int>(adj.size()));
+    vector<priority_queue<Event, vector<Event>, WaitingEventGreater>> slot_polling_events(static_cast<int>(adj.size()));
     vector<map<int, int>> sent_to_neighbor_count(static_cast<int>(adj.size()));
     const bool uses_send_state = (opts.rw_variant == "HSB" || opts.rw_variant == "BHS");
     const int node_count = static_cast<int>(adj.size());
@@ -333,6 +349,7 @@ RunResult run_single_simulation(
         auto pkt = make_shared<Packet>();
         pkt->source = source_node;
         pkt->target = tgt_idx;
+        pkt->creation_seq = result.emitted_chunks;
         const int seed = seed_offset * 100000000 + result.emitted_chunks;
         if (opts.erase_loops) {
             vector<int> loop_erased_path = sample_loop_erased_path(
@@ -374,14 +391,15 @@ RunResult run_single_simulation(
         schedule_first_hop(0.0, src_idx);
     }
 
-    auto try_admit = [&](double now, int node) -> void {
+    auto release_slot = [&](double now, int node) -> void {
+        relay_free[node]++;
         if (!slot_polling_events[node].empty()) {
+            relay_free[node]--;
             if (relay_free[node] != 0) throw runtime_error("slot queue non-empty while relay_free != 0");
-            Event og_ev = slot_polling_events[node].front();
+            Event og_ev = slot_polling_events[node].top();
             slot_polling_events[node].pop();
             pq.push(Event{now + opts.latency_s, EventType::SLOT_ACQUIRED, node, og_ev.from, -1, og_ev.pkt});
         } else {
-            relay_free[node]++;
             if (relay_free[node] > opts.relay_buffer_sz_chunks) {
                 throw runtime_error("relay buffer accounting overflow");
             }
@@ -411,20 +429,21 @@ RunResult run_single_simulation(
 
         if (ev.type == EventType::SLOT_ACQUIRED) {
             pq.push(Event{ev.time + opts.latency_s, EventType::KEY_ARRIVED, ev.at, ev.from, -1, ev.pkt});
-            try_admit(ev.time, ev.at);
             continue;
         }
 
         if (ev.type == EventType::KEY_ARRIVED) {
+            release_slot(ev.time, ev.from);
+
             if (ev.at == ev.pkt->target) {
                 result.arrived_chunks++;
                 result.arrival_times.push_back(ev.time);
-                try_admit(ev.time, ev.at);
+                release_slot(ev.time, ev.at);
                 continue;
             }
 
             if (adj[ev.at].empty()) {
-                try_admit(ev.time, ev.at);
+                release_slot(ev.time, ev.at);
                 continue;
             }
 

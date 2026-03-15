@@ -18,13 +18,13 @@ for s in tqdm(geant.nodes()):
             print_arrival_times=False,
             qkd_skr_bits_per_s=1000,
             relay_buffer_sz_chunks=1,
-            sim_duration_s=1000,
+            sim_duration_s=100000,
             src=s,
             tgt=t,
             var="HS",
             erase_loops=False,
         ))
         tputs.append(res.mean_tput_bits)
-        print(f"{s} {t} {res.mean_tput_bits}", flush=True)
+        print(f"{s} {t} {res.mean_tput_bits} {res.emitted_chunks}", flush=True)
     print(f"{s} {mean(tputs)}", flush=True)
     exit(0)
