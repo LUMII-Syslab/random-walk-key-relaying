@@ -57,13 +57,13 @@ def parse_scaling(path: Path) -> dict[bool, dict[str, dict[int, float]]]:
 
 def plot_max_exposure(
     series_by_variant: dict[str, dict[int, float]],
-    erase_loops: bool,
     output_path: Path,
     min_node_count: int,
+    show_plot: bool,
 ) -> None:
     plt.rcParams.update(
         {
-            "axes.labelsize": 14,
+            "axes.labelsize": 16,
             "xtick.labelsize": 12,
             "ytick.labelsize": 12,
             "legend.fontsize": 14,
@@ -71,7 +71,7 @@ def plot_max_exposure(
         }
     )
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(5.25, 3.5))
     style_map = {
         "NB": {"color": "tab:blue", "linestyle": "-"},
         "LRV": {"color": "tab:orange", "linestyle": "--"},
@@ -106,29 +106,33 @@ def plot_max_exposure(
             if node_count >= min_node_count
         }
     )
-    if all_node_counts:
-        major_xticks = [node_count for node_count in all_node_counts if node_count % 9 == 0]
-        minor_xticks = [
-            node_count
-            for node_count in all_node_counts
-            if node_count % 3 == 0 and node_count % 9 != 0
-        ]
-        ax.set_xticks(major_xticks)
-        if minor_xticks:
-            ax.set_xticks(minor_xticks, minor=True)
-        ax.set_xlim(left=min_node_count)
+    if not all_node_counts:
+        raise ValueError(f"No data points found at or above {min_node_count=}.")
+
+    major_xticks = [node_count for node_count in all_node_counts if node_count % 9 == 0]
+    minor_xticks = [
+        node_count
+        for node_count in all_node_counts
+        if node_count % 3 == 0 and node_count % 9 != 0
+    ]
+    ax.set_xticks(major_xticks)
+    if minor_xticks:
+        ax.set_xticks(minor_xticks, minor=True)
+    ax.set_xlim(min_node_count, all_node_counts[-1])
 
     ax.set_xlabel(r"Number of nodes, $|V|$")
-    ax.set_ylabel(r"Worst-case exposure (\%)")
+    ax.set_ylabel(r"Worst-case exposure [%]")
     ax.set_yticks([0.91, 0.93, 0.95, 0.97], labels=["91", "93", "95", "97"])
+    ax.set_ylim(0.90, 0.98)
     ax.set_title("Worst-case exposure vs. network size")
     ax.grid(True, which="major", linestyle="--", alpha=0.45)
-    ax.legend(loc="lower right")
+    ax.legend(loc="lower right",ncols=2)
     fig.tight_layout()
 
-    plt.show()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, format="pdf", bbox_inches="tight")
+    if show_plot:
+        plt.show()
     plt.close(fig)
 
 
@@ -159,6 +163,11 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MIN_NODE_COUNT,
         help="Smallest node count to include in the plot.",
     )
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="Save the figure without opening an interactive plot window.",
+    )
     return parser.parse_args()
 
 
@@ -167,9 +176,9 @@ def main() -> None:
     data = parse_scaling(args.data)
     plot_max_exposure(
         series_by_variant=data[args.erase_loops],
-        erase_loops=args.erase_loops,
         output_path=args.output,
         min_node_count=args.min_node_count,
+        show_plot=not args.no_show,
     )
 
 

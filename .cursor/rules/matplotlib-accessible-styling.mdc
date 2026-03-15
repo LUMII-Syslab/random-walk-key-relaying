@@ -7,8 +7,8 @@ alwaysApply: false
 # Matplotlib Accessible Plot Styling
 
 - Do not rely on color alone. Use distinct line styles (`'-'`, `'--'`, `':'`, `'-.'`) in addition to colors for multi-series plots.
-- Default figure size should be `(6, 4)` for publication-style plots unless the caller explicitly chooses another size.
-- Default axis label font size should be `14`.
+- Default figure size should be `(5.25, 3.5)` for publication-style plots unless the caller explicitly chooses another size.
+- Default axis label font size should be `16`.
 - Default tick label font size should be `12`.
 - Default legend font size should be `14`.
 - Default title font size should be `16`.
@@ -22,16 +22,16 @@ alwaysApply: false
 Use this pattern when applying defaults:
 
 ```python
-fig, ax = plt.subplots(figsize=figsize or (6, 4))
+fig, ax = plt.subplots(figsize=figsize or (5.25, 3.5))
 
 line_kwargs.setdefault("linestyle", "-")
 line_kwargs.setdefault("color", "C0")
 line_kwargs.setdefault("linewidth", 2.0)
 
 if "fontsize" not in xlabel_kwargs:
-    xlabel_kwargs["fontsize"] = 14
+    xlabel_kwargs["fontsize"] = 16
 if "fontsize" not in ylabel_kwargs:
-    ylabel_kwargs["fontsize"] = 14
+    ylabel_kwargs["fontsize"] = 16
 if "fontsize" not in title_kwargs:
     title_kwargs["fontsize"] = 16
 if "labelsize" not in tick_kwargs:

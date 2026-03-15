@@ -66,13 +66,12 @@ pip install -r requirements.txt
 ```py
 from pathlib import Path
 
-plt.figure(figsize=(6, 4))
+plt.figure(figsize=(5.25, 3.5))
 
 plt.rcParams.update(
     {
-        "axes.labelsize": 14,
-        "xtick.labelsize": 12, with
-   `bbox_inches="tight"`.
+        "axes.labelsize": 16,
+        "xtick.labelsize": 12,
         "ytick.labelsize": 12,
         "legend.fontsize": 14,
         "axes.titlesize": 16,
