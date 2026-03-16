@@ -156,9 +156,9 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
     cmd = [
         "./cpp/build/tput",
         "--src-node",
-        src,
+        str(src),
         "--tgt-node",
-        tgt,
+        str(tgt),
         "--rw-variant",
         params.var,
         "--chunk-size-bits",

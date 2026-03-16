@@ -1,4 +1,4 @@
-from helpers.compute import compute_hop_stats, HopStats
+from helpers.compute import compute_hop_stats, HopStats, compute_tput_stats, ThroughputStats
 from helpers.utils import read_edge_list_csv, graphs_dir
 from helpers.utils import synthetic_graph_snapshot
 import networkx as nx
@@ -12,6 +12,13 @@ GRAPH_SPECS = [
     ("generated", "Generated"),
 ]
 
+ASSUMED_WORST_EXPOSURE = {
+    "HS": 0.961,
+    "LRV": 0.974,
+    "NB": 0.973,
+    "NC": 0.965,
+}
+
 result_log = open("result.log", "a")
 
 def prob(g, N, chi):
@@ -24,6 +31,15 @@ def find_g(N, chi, threshold):
         if prob(g, N, chi) >= threshold: return g
     return -1
 
+
+def summarize_metric(name, values):
+    return (
+        f"{name}_min={min(values):.4f} "
+        f"{name}_median={median(values):.4f} "
+        f"{name}_mean={mean(values):.4f} "
+        f"{name}_max={max(values):.4f}"
+    )
+
 for graph_id, graph_label in GRAPH_SPECS[2:]:
     g = read_edge_list_csv(graphs_dir / graph_id / "edges.csv")
     for walk_variant in ['NB', 'LRV', 'NC', 'HS']:
@@ -33,14 +49,22 @@ for graph_id, graph_label in GRAPH_SPECS[2:]:
                 if src == tgt: continue
                 if nx.node_connectivity(g, src, tgt) == 1: continue
                 biconnected_pairs.append((src, tgt))
-        assm_efficiencies_dont_erase_loops = []
-        true_efficiencies_dont_erase_loops = []
         assm_efficiencies_erase_loops = []
         true_efficiencies_erase_loops = []
-        assm_rho_dont_erase_loops = []
-        true_rho_dont_erase_loops = []
-        assm_rho_erase_loops = []
-        true_rho_erase_loops = []
+        assm_efficiencies_dont_erase_loops = []
+        true_efficiencies_dont_erase_loops = []
+
+        tputs = []
+        extracted_tputs_assm = []
+        extracted_tputs_true = []
+        FRAGMENTS, ALPHA = 1024, 0.9999
+        assumed_good_fragments = find_g(
+            FRAGMENTS,
+            ASSUMED_WORST_EXPOSURE[walk_variant],
+            ALPHA,
+        )
+        assert assumed_good_fragments > 0
+        assert assumed_good_fragments <= FRAGMENTS
 
         for src, tgt in tqdm(biconnected_pairs, desc=f"Computing hop stats for {graph_label}"):
             hop_stats_no_erase_loops = compute_hop_stats(HopStats.HopSimParams(
@@ -60,35 +84,64 @@ for graph_id, graph_label in GRAPH_SPECS[2:]:
                 erase_loops=True,
             ))
 
-            mean_hops = hop_stats_no_erase_loops.mean_hops
             exposure = hop_stats_no_erase_loops.exposure
-            FRAGMENTS, ALPHA = 1024, 0.9999
             good_fragments = find_g(FRAGMENTS, exposure, ALPHA)
             assert good_fragments > 0
             assert good_fragments <= FRAGMENTS
-            assm_efficiency = (27/FRAGMENTS) / mean_hops
-            true_efficiency = (good_fragments/FRAGMENTS) / mean_hops
+
+            mean_hops = hop_stats_no_erase_loops.mean_hops
+            assm_efficiency = (assumed_good_fragments / FRAGMENTS) / mean_hops
+            true_efficiency = (good_fragments / FRAGMENTS) / mean_hops
             assm_efficiencies_dont_erase_loops.append(assm_efficiency)
             true_efficiencies_dont_erase_loops.append(true_efficiency)
-            shortest_path = nx.shortest_path_length(g, src, tgt)
-            assm_rho_dont_erase_loops.append(assm_efficiency * shortest_path)
-            true_rho_dont_erase_loops.append(true_efficiency * shortest_path)
 
             mean_hops = hop_stats_erase_loops.mean_hops
-            exposure = hop_stats_no_erase_loops.exposure # we still take exposure before erasing the loops
-            good_fragments = find_g(FRAGMENTS, exposure, ALPHA)
-            assert good_fragments > 0
-            assert good_fragments <= FRAGMENTS
-            assm_efficiency = (27/FRAGMENTS) / mean_hops
-            true_efficiency = (good_fragments/FRAGMENTS) / mean_hops
+            assm_efficiency = (assumed_good_fragments / FRAGMENTS) / mean_hops
+            true_efficiency = (good_fragments / FRAGMENTS) / mean_hops
             assm_efficiencies_erase_loops.append(assm_efficiency)
             true_efficiencies_erase_loops.append(true_efficiency)
-            assm_rho_erase_loops.append(assm_efficiency * shortest_path)
-            true_rho_erase_loops.append(true_efficiency * shortest_path)
-        log_entry = f"{graph_label} {walk_variant} assm_eff_dont_erase_loops={mean(assm_efficiencies_dont_erase_loops):.4f} true_eff_dont_erase_loops={mean(true_efficiencies_dont_erase_loops):.4f}\n"
-        log_entry += f"{graph_label} {walk_variant} assm_eff_erase_loops={mean(assm_efficiencies_erase_loops):.4f} true_eff_erase_loops={mean(true_efficiencies_erase_loops):.4f}\n"
-        log_entry += f"{graph_label} {walk_variant} assm_rho_dont_erase_loops={mean(assm_rho_dont_erase_loops):.4f} true_rho_dont_erase_loops={mean(true_rho_dont_erase_loops):.4f}\n"
-        log_entry += f"{graph_label} {walk_variant} assm_rho_erase_loops={mean(assm_rho_erase_loops):.4f} true_rho_erase_loops={mean(true_rho_erase_loops):.4f}\n"
+
+            tput_stats = compute_tput_stats(ThroughputStats.TputSimParams(
+                g=g,
+                chunk_size_bits=256,
+                latency_s=0.05,
+                link_buff_sz_bits=10**9,
+                print_arrival_times=False,
+                qkd_skr_bits_per_s=1000,
+                relay_buffer_sz_chunks=10**9,
+                sim_duration_s=1000,
+                src=src,
+                tgt=tgt,
+                var=walk_variant,
+                erase_loops=True,
+            ))
+            tputs.append(tput_stats.mean_tput_bits)
+            
+            extracted_tput_assm = (
+                tput_stats.mean_tput_bits * assumed_good_fragments / FRAGMENTS
+            )
+            extracted_tput_true = (
+                tput_stats.mean_tput_bits * good_fragments / FRAGMENTS
+            )
+            extracted_tputs_assm.append(extracted_tput_assm)
+            extracted_tputs_true.append(extracted_tput_true)
+
+        log_entry = (
+            f"{graph_label} {walk_variant} "
+            f"{summarize_metric('assm_eff_dont_erase_loops', assm_efficiencies_dont_erase_loops)} "
+            f"{summarize_metric('true_eff_dont_erase_loops', true_efficiencies_dont_erase_loops)}\n"
+        )
+        log_entry += (
+            f"{graph_label} {walk_variant} "
+            f"{summarize_metric('assm_eff_erase_loops', assm_efficiencies_erase_loops)} "
+            f"{summarize_metric('true_eff_erase_loops', true_efficiencies_erase_loops)}\n"
+        )
+        log_entry += (
+            f"{graph_label} {walk_variant} "
+            f"{summarize_metric('tput', tputs)} "
+            f"{summarize_metric('extracted_tput_assm', extracted_tputs_assm)} "
+            f"{summarize_metric('extracted_tput_true', extracted_tputs_true)}\n"
+        )
         log_entry += "\n"
         result_log.write(log_entry)
         result_log.flush()
