@@ -40,7 +40,7 @@ def summarize_metric(name, values):
         f"{name}_max={max(values):.4f}"
     )
 
-for graph_id, graph_label in GRAPH_SPECS[2:]:
+for graph_id, graph_label in GRAPH_SPECS:
     g = read_edge_list_csv(graphs_dir / graph_id / "edges.csv")
     for walk_variant in ['NB', 'LRV', 'NC', 'HS']:
         biconnected_pairs = []

@@ -1,11 +1,3 @@
-NSFNet NB mean_tput=2025.7363 extracted_tput_assm=53.4130 extracted_tput_true=931.0896
-
-NSFNet LRV mean_tput=2020.4725 extracted_tput_assm=53.2742 extracted_tput_true=948.2066
-
-NSFNet NC mean_tput=2051.1868 extracted_tput_assm=54.0840 extracted_tput_true=983.0458
-
-NSFNet HS mean_tput=2028.3846 extracted_tput_assm=53.4828 extracted_tput_true=976.8647
-
 NSFNet NB assm_eff_dont_erase_loops_min=0.0012 assm_eff_dont_erase_loops_median=0.0022 assm_eff_dont_erase_loops_mean=0.0041 assm_eff_dont_erase_loops_max=0.0107 true_eff_dont_erase_loops_min=0.0295 true_eff_dont_erase_loops_median=0.0768 true_eff_dont_erase_loops_mean=0.2887 true_eff_dont_erase_loops_max=1.0000
 NSFNet NB assm_eff_erase_loops_min=0.0020 assm_eff_erase_loops_median=0.0028 assm_eff_erase_loops_mean=0.0045 assm_eff_erase_loops_max=0.0107 true_eff_erase_loops_min=0.0452 true_eff_erase_loops_median=0.1011 true_eff_erase_loops_mean=0.3048 true_eff_erase_loops_max=1.0000
 NSFNet NB tput_min=1000.0000 tput_median=2084.5000 tput_mean=2025.7363 tput_max=3577.0000 extracted_tput_assm_min=10.7422 extracted_tput_assm_median=22.3921 extracted_tput_assm_mean=21.7608 extracted_tput_assm_max=38.4248 extracted_tput_true_min=251.7285 extracted_tput_true_median=983.1836 extracted_tput_true_mean=931.0896 extracted_tput_true_max=2221.6523
