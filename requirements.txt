@@ -4,3 +4,4 @@ numpy
 pandas
 polars
 scipy
+tqdm

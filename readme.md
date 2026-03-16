@@ -42,8 +42,8 @@ echo 'eval "$(pyenv init - bash)"' >> ~/.bashrc
 echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
 exec "$SHELL"
 
-pyenv install 3.12.8
-pyenv virtualenv 3.12.8 random-walk-key-relaying
+pyenv install 3.12.11
+pyenv virtualenv 3.12.11 random-walk-key-relaying
 pyenv local random-walk-key-relaying
 pyenv activate random-walk-key-relaying
 
