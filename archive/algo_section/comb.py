@@ -45,17 +45,16 @@ if __name__ == "__main__":
 
     print_threshold_table(N_values, chi_values, threshold)
 
+    plt.figure(figsize=(5.25, 3.5))
     plt.rcParams.update(
         {
-            "axes.labelsize": 14,
+            "axes.labelsize": 15,
             "xtick.labelsize": 12,
             "ytick.labelsize": 12,
             "legend.fontsize": 14,
-            "axes.titlesize": 16,
+            "axes.titlesize": 14,
         }
     )
-
-    plt.figure(figsize=(6, 4))
     line_styles = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
     colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
     for i, chi in enumerate(chi_values):
@@ -69,8 +68,8 @@ if __name__ == "__main__":
             label=rf"$\chi={chi:.2f}$",
         )
 
-    plt.xlabel(r'No. of good fragments ($g$) out of $N=1024$')
-    plt.ylabel(r'Prob. of $\geq g$ good fragments')
+    plt.xlabel(r'No. of good fragments ($g$) out of $1024$')
+    plt.ylabel(r'Prob. of $\mathrm{\geq g}$ fragments')
     plt.title(r'Binomial tail probability for good fragments')
 
 # 27 & 69 & 113 & 159 & 206
@@ -78,6 +77,7 @@ if __name__ == "__main__":
     # plt.minorticks_on()
     plt.xlim(0, 256+128)
     plt.yticks([0, 0.5, 1.0])
+    # plt.ylim(0, 1.0)
 
     plt.grid(True, which="major", linestyle="--", alpha=0.45)
     plt.legend(loc="upper right")
