@@ -1,5 +1,0 @@
-graph: nsfnet
-source: SEA
-target: PAO
-length: 13
-path: SEA CMI LNK BOU SLC ARB ITH CPK PRI PIT ATL HOU SAN PAO

@@ -1,5 +1,0 @@
-graph: secoqc
-source: FRM
-target: STP
-length: 5
-path: FRM ERD SIE GUD BRE STP
