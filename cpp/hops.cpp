@@ -1,5 +1,6 @@
 #include <iostream>
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -329,15 +330,18 @@ HopStats compute_stats(
 }
 
 filesystem::path cache_dir_from_argv0(const char *argv0) {
-    filesystem::path exe_path(argv0 == nullptr ? "" : argv0);
-    if (!exe_path.has_parent_path()) {
-        return filesystem::path("cache");
+    (void)argv0;
+
+    if (const char *cache_dir = getenv("RWKR_CACHE_DIR"); cache_dir != nullptr && cache_dir[0] != '\0') {
+        return filesystem::path(cache_dir);
     }
-    filesystem::path parent = exe_path.parent_path();
-    if (parent.filename() == "build") {
-        return parent.parent_path() / "cache";
+
+    error_code ec;
+    filesystem::path temp_dir = filesystem::temp_directory_path(ec);
+    if (!ec && !temp_dir.empty()) {
+        return temp_dir / "random-walk-key-relaying-cache";
     }
-    return parent / "cache";
+    return filesystem::path("/tmp/random-walk-key-relaying-cache");
 }
 
 string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj) {
