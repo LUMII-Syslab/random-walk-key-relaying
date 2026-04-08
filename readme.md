@@ -26,9 +26,11 @@ def haversine_km(lat1, lon1, lat2, lon2):
     return 2 * R_KM * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 ```
 
-## Setup
+## Python prerequisites
 
-Ubuntu + `pyenv` + `pyenv-virtualenv`:
+Ubuntu + `pyenv` + `pyenv-virtualenv` setup:
+
+Pyenv version manager installation
 
 ```bash
 sudo apt update
@@ -41,11 +43,20 @@ echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bas
 echo 'eval "$(pyenv init - bash)"' >> ~/.bashrc
 echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
 exec "$SHELL"
+```
 
+Create and enable a new 3.12 venv
+
+```bash
 pyenv install 3.12.11
 pyenv virtualenv 3.12.11 random-walk-key-relaying
 pyenv local random-walk-key-relaying
 pyenv activate random-walk-key-relaying
+```
+
+Python package requirement installation
+
+```bash
 
 python -m pip install --upgrade pip
 pip install -r requirements.txt
