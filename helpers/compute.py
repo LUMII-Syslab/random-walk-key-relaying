@@ -10,14 +10,14 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 # random walk variants
-VARS = Literal["R", "NB", "LRV", "NC", "HS"]
+RW_VARIANTS = Literal["R", "NB", "LRV", "NC", "HS"]
 
 @dataclass
 class HopSimParams:
     g: nx.Graph
     src: str
     tgt: str  # no that the order of src and tgt IS important
-    var: VARS  # random walk variant
+    var: RW_VARIANTS  # random walk variant
     no_of_runs: int
     erase_loops: bool = False
     record_paths: bool = False
@@ -51,7 +51,7 @@ class TputSimParams:
     g: nx.Graph
     src: str
     tgt: str  # no that the order of src and tgt IS important
-    var: VARS  # random walk variant
+    var: RW_VARIANTS  # random walk variant
     erase_loops: bool = False
 
     chunk_size_bits: int = 256
