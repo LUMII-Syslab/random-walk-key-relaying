@@ -1,23 +1,24 @@
 import networkx as nx
 import subprocess
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 # random walk variants
-VARS = Literal["R", "NB", "LRV", "NC", "HS", "HSB", "BHS"]
+VARS = Literal["R", "NB", "LRV", "NC", "HS"]
 
 @dataclass
+class HopSimParams:
+    g: nx.Graph
+    src: str
+    tgt: str  # no that the order of src and tgt IS important
+    var: VARS  # random walk variant
+    no_of_runs: int
+    erase_loops: bool = False
+    record_paths: bool = False
+    
+@dataclass
 class HopStats:
-    @dataclass
-    class HopSimParams:
-        g: nx.Graph
-        src: str
-        tgt: str  # no that the order of src and tgt IS important
-        var: VARS  # random walk variant
-        no_of_runs: int
-        erase_loops: bool = False
-
     context: HopSimParams
     min_hops: int
     max_hops: int
@@ -27,6 +28,7 @@ class HopStats:
     q3_hops: int
     exposure: float
     exposure_relay: str
+    paths: list[list[str]] = field(default_factory=list)
 
     def print(self):
         src, tgt, var = self.context.src, self.context.tgt, self.context.var
@@ -39,52 +41,28 @@ class HopStats:
         print(f"q2={self.q2_hops}", end=" ")
         print(f"q3={self.q3_hops}")
 
+@dataclass
+class TputSimParams:
+    g: nx.Graph
+    src: str
+    tgt: str  # no that the order of src and tgt IS important
+    var: VARS  # random walk variant
+    erase_loops: bool = False
+
+    chunk_size_bits: int = 256
+    link_buff_sz_bits: int = 100000
+    qkd_skr_bits_per_s: float = 1000.0
+    latency_s: float = 0.05
+    sim_duration_s: float = 1000.0
+    relay_buffer_sz_chunks: int = 100000
+    print_arrival_times: bool = False
 
 @dataclass
 class ThroughputStats:
-    @dataclass
-    class TputSimParams:
-        g: nx.Graph
-        src: str
-        tgt: str  # no that the order of src and tgt IS important
-        var: VARS  # random walk variant
-        erase_loops: bool = False
-
-        chunk_size_bits: int = 256
-        link_buff_sz_bits: int = 100000
-        qkd_skr_bits_per_s: float = 1000.0
-        latency_s: float = 0.05
-        sim_duration_s: float = 1000.0
-        relay_buffer_sz_chunks: int = 100000
-        print_arrival_times: bool = False
-
     context: TputSimParams
     mean_tput_bits: int  # bits/s
     arrival_times: list[float] # timestamps
     emitted_chunks: int  # may have not arrived yet
-
-
-@dataclass
-class SrcTgtStats(HopStats, ThroughputStats):
-    @dataclass
-    class Params:
-        g: nx.Graph
-        src: str
-        tgt: str  # tgt > src
-        var: VARS  # random walk variant
-        rev: bool  # start from target and go to source?
-
-    context: Params
-
-    exposure: float
-    mean_tput_bits: int  # = arrived_chunks * chunk_size_bits / sim_duration_s
-    max_flow_eff: float  # mean_tput_bits / max_flow
-    node_conn_eff: float  # mean_tput_bits*(1-exposure) / (node_conn-1)
-
-
-# for now exclude from stats:
-# - approx_logest: list[str]
-
 
 built_hops_bin = False
 def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
@@ -110,6 +88,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
     ]
     if params.erase_loops:
         cmd.append("--erase-loops")
+    if params.record_paths:
+        cmd.append("--record-paths")
 
     result = subprocess.run(
         cmd,
@@ -119,10 +99,12 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
     )
     if result.returncode != 0:
         raise Exception(f"Failed to compute hop stats: {result.returncode} {result.stderr}")
+    recorded_paths: list[list[str]] = []
     for line in result.stdout.split("\n"):
         if line == "": break
-        key = line.split(":")[0].strip()
-        value = line.split(":")[1].strip()
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
         if key == "context": assert value==f"{params.src} -> {params.tgt} ({params.var}, {params.no_of_runs} runs)"
         elif key == "min_hops": min_hops = int(value)
         elif key == "max_hops": max_hops = int(value)
@@ -132,6 +114,8 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         elif key == "q3_hops": q3_hops = int(value)
         elif key == "max_hit_prob": max_hit_prob = float(value)
         elif key == "max_hit_node": max_hit_node = value
+        elif key == "path_count": recorded_paths = []
+        elif key.startswith("path "): recorded_paths.append(value.split())
     return HopStats(
         context=params,
         min_hops=min_hops,
@@ -142,6 +126,7 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
         q3_hops=q3_hops,
         exposure=max_hit_prob,
         exposure_relay=max_hit_node,
+        paths=recorded_paths,
     )
 
 
@@ -210,21 +195,3 @@ def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats
         arrival_times=arrival_times,
         emitted_chunks=emitted_chunks,
     )
-
-# def compute_src_tgt_stats(params: SrcTgtStats.Params) -> SrcTgtStats:
-#     return SrcTgtStats(
-#         context=params,
-#         hop_stats=compute_hop_stats(params.variant),
-#         shortest_path=nx.shortest_path(g, src, tgt),
-#         connectivity=nx.node_connectivity(g, src, tgt),
-#         hop_stats=compute_hop_stats(variant),
-#     )
-
-
-# def calc_efficiency(src_tgt: SrcTgt, exp: float, tput: float) -> TputEfficiency:
-#     max_flow = nx.maximum_flow_value(src_tgt.g, src_tgt.src, src_tgt.tgt)
-#     node_conn = nx.node_connectivity(src_tgt.g, src_tgt.src, src_tgt.tgt)
-#     return TputEfficiency(
-#         max_flow_eff=tput / max_flow,
-#         node_conn_eff=tput * (1 - exp) / (node_conn - 1),
-#     )
