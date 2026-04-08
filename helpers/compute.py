@@ -35,7 +35,7 @@ class HopStats:
     exposure_relay: str
     paths: list[list[str]] = field(default_factory=list)
 
-    def print(self):
+    def print_summary(self):
         src, tgt, var = self.context.src, self.context.tgt, self.context.var
         print(f"{src} -> {tgt} ({var}):", end=" ")
         print(f"exposure={self.exposure_relay},{self.exposure:.3f}", end=" ")
@@ -70,7 +70,7 @@ class ThroughputStats:
     emitted_chunks: int  # may have not arrived yet
 
 built_hops_bin = False
-def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
+def compute_hop_stats(params: HopSimParams) -> HopStats:
     global built_hops_bin
     if not built_hops_bin:
         subprocess.run(["make", "build/hops"], stdout=subprocess.DEVNULL, cwd="cpp")
@@ -135,7 +135,7 @@ def compute_hop_stats(params: HopStats.HopSimParams) -> HopStats:
     )
 
 
-def compute_tput_stats(params: ThroughputStats.TputSimParams) -> ThroughputStats:
+def compute_tput_stats(params: TputSimParams) -> ThroughputStats:
     subprocess.run(["make", "build/tput"], stdout=subprocess.DEVNULL, cwd="cpp")
     src = params.src
     tgt = params.tgt
