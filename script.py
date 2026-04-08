@@ -1,6 +1,6 @@
 from helpers.compute import compute_hop_stats, HopStats, compute_tput_stats, ThroughputStats
+from helpers.graphs import synthetic_graph_snapshot
 from helpers.utils import read_edge_list_csv, graphs_dir
-from helpers.utils import synthetic_graph_snapshot
 import networkx as nx
 from statistics import median, mean
 from tqdm import tqdm
