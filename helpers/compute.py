@@ -1,3 +1,8 @@
+"""
+Helper module to build and call C++ simulations for
+computing fixed source-target hop trajectory and throughput statistics.
+"""
+
 import networkx as nx
 import subprocess
 import ast
