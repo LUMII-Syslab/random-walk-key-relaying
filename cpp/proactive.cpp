@@ -4,10 +4,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <algorithm>
-#include <queue>
 
-#include "utils.hpp"
+#include "graph.hpp"
 using namespace std;
 
 /**
@@ -28,77 +26,6 @@ void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
 static void print_placeholder_stats(const Options &opts, ostream &out);
 
-struct RcvChunkEvent {
-    string src;
-    string tgt;
-    vector<string> path; // if recording is enabled
-};
-
-struct KeyEstabEvent {
-    string src;
-    string tgt;
-    int key_count;
-};
-
-struct ReportedEvent {
-    double time;
-    RcvChunkEvent* rcv_chunk_event;
-    KeyEstabEvent* key_estab_event;
-};
-
-struct LinkState {
-    double bit_balance = 0.0;
-    double last_request = 0.0;
-
-    double reserve(
-        double current_time,
-        int necessary_bits,
-        int link_buff_sz_bits,
-        double qkd_skr_bits_per_s
-    ) {
-        if (necessary_bits > link_buff_sz_bits) {
-            throw runtime_error("chunk_size_bits > link_buff_sz_bits");
-        }
-        if (current_time < last_request) {
-            throw runtime_error("current_time < last_request");
-        }
-
-        const double dt = current_time - last_request;
-        bit_balance = min(static_cast<double>(link_buff_sz_bits), bit_balance + dt * qkd_skr_bits_per_s);
-        const double waiting = max(0.0, (necessary_bits - bit_balance) / qkd_skr_bits_per_s);
-        last_request = current_time;
-        bit_balance -= necessary_bits;
-        return waiting;
-    }
-};
-
-enum class EventType : uint8_t {
-    OTP_AVAILABLE = 0, // reserved bits on the link are now available
-    KEY_ARRIVED = 1, // key has been transferred to the neighboring node
-};
-
-struct Event {
-    double time;
-
-
-};
-
-struct EventGreater {
-    bool operator()(const Event &a, const Event &b) const {
-        return a.time > b.time;
-    }
-};
-
-vector<ReportedEvent> run_proactive_simulation(const Options &opts, const Graph &graph) {
-    vector<ReportedEvent> events;
-    vector<Event> internal_events;
-
-    priority_queue<Event, vector<Event>, EventGreater> pq;
-
-
-    return events;
-}
-
 int main(int argc, char **argv) {
     try {
         Options opts = parse_args(argc, argv);
@@ -106,6 +33,7 @@ int main(int argc, char **argv) {
         for (const string &name : opts.src_nodes) {
             graph.node_index(name);
         }
+        // Per-edge QKD buffers: graph.link_state(u, v).reserve(...) — same semantics as tput.cpp
         print_placeholder_stats(opts, cout);
         return 0;
     } catch (const exception &e) {

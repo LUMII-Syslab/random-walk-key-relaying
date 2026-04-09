@@ -12,6 +12,7 @@
 #include <vector>
 #include <string_view>
 #include <set>
+#include "graph.hpp"
 #include "walk.hpp"
 #include "utils.hpp"
 using namespace std;

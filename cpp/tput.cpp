@@ -7,6 +7,7 @@
 #include <queue>
 #include <string_view>
 #include <vector>
+#include "graph.hpp"
 #include "walk.hpp"
 #include "utils.hpp"
 
@@ -46,49 +47,6 @@ struct TputStats {
         }
     }
 };
-
-struct LinkState {
-    double bit_balance = 0.0;
-    double last_request = 0.0;
-
-    // returns waiting time in seconds
-    double reserve(
-        double current_time,
-        int necessary_bits,
-        int link_buff_sz_bits,
-        double qkd_skr_bits_per_s
-    ) {
-        if (necessary_bits > link_buff_sz_bits) {
-            throw runtime_error("chunk_size_bits > link_buff_sz_bits");
-        }
-        if (current_time < last_request) {
-            throw runtime_error("current_time < last_request");
-        }
-
-        const double dt = current_time - last_request;
-        bit_balance = min(static_cast<double>(link_buff_sz_bits), bit_balance + dt * qkd_skr_bits_per_s);
-        const double waiting = max(0.0, (necessary_bits - bit_balance) / qkd_skr_bits_per_s);
-        last_request = current_time;
-        bit_balance -= necessary_bits;
-        return waiting;
-    }
-};
-
-struct EdgeKey {
-    int u = -1;
-    int v = -1;
-
-    EdgeKey() = default;
-    EdgeKey(int a, int b) {
-        u = min(a, b);
-        v = max(a, b);
-    }
-};
-
-bool operator<(const EdgeKey &a, const EdgeKey &b) {
-    if (a.u != b.u) return a.u < b.u;
-    return a.v < b.v;
-}
 
 enum class EventType : uint8_t {
     OTP_AVAILABLE = 0,
@@ -153,18 +111,17 @@ vector<int> sample_loop_erased_path(
     int seed,
     int node_count
 );
-RunResult run_single_simulation(const vector<vector<int>> &adj, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
+RunResult run_single_simulation(Graph &graph, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
     Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
-    const auto &adj = graph.adj_list();
 
     int src_idx = graph.node_index(opts.src_node);
     int tgt_idx = graph.node_index(opts.tgt_node);
 
-    RunResult run = run_single_simulation(adj, src_idx, tgt_idx, opts, 0);
+    RunResult run = run_single_simulation(graph, src_idx, tgt_idx, opts, 0);
     TputStats stats = compute_tput_stats(run, opts);
     stats.print(cout, opts.print_arrival_times);
     return 0;
@@ -316,24 +273,13 @@ vector<int> sample_loop_erased_path(
 }
 
 RunResult run_single_simulation(
-    const vector<vector<int>> &adj,
+    Graph &graph,
     int src_idx,
     int tgt_idx,
     const Options &opts,
     int seed_offset
 ) {
-    map<EdgeKey, LinkState> link;
-    for (int u = 0; u < static_cast<int>(adj.size()); u++) {
-        for (int v : adj[u]) {
-            link.emplace(EdgeKey(u, v), LinkState{0.0, 0.0});
-        }
-    }
-
-    auto link_state = [&](int a, int b) -> LinkState & {
-        auto it = link.find(EdgeKey(a, b));
-        if (it == link.end()) throw runtime_error("Missing edge in link state");
-        return it->second;
-    };
+    const auto &adj = graph.adj_list();
 
     RunResult result;
     priority_queue<Event, vector<Event>, EventGreater> pq;
@@ -378,7 +324,7 @@ RunResult run_single_simulation(
         }
         pkt->hops = 1;
         if (pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
-        double wait = link_state(source_node, next).reserve(
+        double wait = graph.link_state(source_node, next).reserve(
             now,
             opts.chunk_size_bits,
             opts.link_buff_sz_bits,
@@ -460,7 +406,7 @@ RunResult run_single_simulation(
             }
             ev.pkt->hops++;
             if (ev.pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
-            double wait = link_state(ev.at, next).reserve(
+            double wait = graph.link_state(ev.at, next).reserve(
                 ev.time,
                 opts.chunk_size_bits,
                 opts.link_buff_sz_bits,
