@@ -1,12 +1,45 @@
 #include <cctype>
 #include <iostream>
+#include <queue>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "graph.hpp"
 using namespace std;
+
+/**
+ * Mirrors helpers/compute.py ProactiveRecvChunkEvent / ProactiveKeyEstablishedEvent.
+ */
+struct ReportedRecvChunkEvent {
+    double time = 0.0;
+    string src;
+    string tgt;
+    vector<string> path;
+};
+
+struct ReportedKeyEstablEvent {
+    double time = 0.0;
+    string src;
+    string tgt;
+    int key_count = 0;
+};
+
+using ReportedEvent = variant<ReportedRecvChunkEvent, ReportedKeyEstablEvent>;
+
+/** Internal sim events — priority queue left empty until scheduling is implemented. */
+struct InternalEvent {
+    double time = 0.0;
+};
+
+struct InternalEventGreater {
+    bool operator()(const InternalEvent &a, const InternalEvent &b) const {
+        return a.time > b.time;
+    }
+};
 
 /**
  * Mirrors helpers/compute.py ProactiveSimParams (graph via stdin or --edges-csv).
@@ -24,26 +57,38 @@ struct Options {
 
 void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
-static void print_placeholder_stats(const Options &opts, ostream &out);
+static void print_proactive_output(const Options &opts, const vector<ReportedEvent> &reported, ostream &out);
 
-int main(int argc, char **argv) {
-    try {
-        Options opts = parse_args(argc, argv);
-        Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
-        for (const string &name : opts.src_nodes) {
-            graph.node_index(name);
-        }
-        // Per-edge QKD buffers: graph.link_state(u, v).reserve(...) — same semantics as tput.cpp
-        print_placeholder_stats(opts, cout);
-        return 0;
-    } catch (const exception &e) {
-        cerr << e.what() << endl;
-        return 1;
-    }
+vector<ReportedEvent> run_simulation(const Options &opts, Graph &graph) {
+    priority_queue<InternalEvent, vector<InternalEvent>, InternalEventGreater> internal_pq;
+    (void)internal_pq;
+    (void)graph;
+
+    vector<ReportedEvent> reported;
+    const string &p = opts.src_nodes.front();
+    reported.push_back(ReportedKeyEstablEvent{0.0, p, p, 0});
+    reported.push_back(ReportedRecvChunkEvent{0.0, p, p, {}});
+    return reported;
 }
 
-/** Placeholder stats for helpers/compute.py (parse until blank line). */
-static void print_placeholder_stats(const Options &opts, ostream &out) {
+static void print_event_line(const ReportedEvent &ev, ostream &out) {
+    visit(
+        [&](auto &&e) {
+            using T = decay_t<decltype(e)>;
+            if constexpr (is_same_v<T, ReportedKeyEstablEvent>) {
+                out << "key_establ " << e.time << " " << e.src << " " << e.tgt << " " << e.key_count << endl;
+            } else {
+                out << "recv_chunk " << e.time << " " << e.src << " " << e.tgt;
+                for (const string &hop : e.path) {
+                    out << " " << hop;
+                }
+                out << endl;
+            }
+        },
+        ev);
+}
+
+static void print_proactive_output(const Options &opts, const vector<ReportedEvent> &reported, ostream &out) {
     auto join_src = [&]() -> string {
         string s;
         for (size_t i = 0; i < opts.src_nodes.size(); ++i) {
@@ -58,12 +103,28 @@ static void print_placeholder_stats(const Options &opts, ostream &out) {
     out << "duration_s: " << opts.duration_s << endl;
     out << "sieve_table_sz: " << opts.sieve_table_sz << endl;
     out << "watermark_sz: " << opts.watermark_sz << endl;
-
-    const string &p = opts.src_nodes.front();
-    out << "event_count: 2" << endl;
-    out << "key_establ 0 " << p << " " << p << " 0" << endl;
-    out << "recv_chunk 0 " << p << " " << p << endl;
+    out << "watermark_time: 0" << endl;
+    out << "event_count: " << reported.size() << endl;
+    for (const ReportedEvent &ev : reported) {
+        print_event_line(ev, out);
+    }
     out << endl;
+}
+
+int main(int argc, char **argv) {
+    try {
+        Options opts = parse_args(argc, argv);
+        Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+        for (const string &name : opts.src_nodes) {
+            graph.node_index(name);
+        }
+        vector<ReportedEvent> reported = run_simulation(opts, graph);
+        print_proactive_output(opts, reported, cout);
+        return 0;
+    } catch (const exception &e) {
+        cerr << e.what() << endl;
+        return 1;
+    }
 }
 
 static string trim(string s) {
