@@ -51,6 +51,7 @@ struct LinkState {
     double bit_balance = 0.0;
     double last_request = 0.0;
 
+    // returns waiting time in seconds
     double reserve(
         double current_time,
         int necessary_bits,

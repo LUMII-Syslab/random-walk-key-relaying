@@ -1,23 +1,23 @@
 from helpers.graphs import read_geant_graph
-from helpers.compute import compute_hop_stats, HopSimParams
+from helpers.compute import (
+    compute_proactive_stats,
+    ProactiveSimParams,
+)
 import networkx as nx
 
 geant: nx.Graph = read_geant_graph()
 
-SRC, TGT, W = "MAR", "TIR", "HS"
-
-sim_params = HopSimParams(
+proactive_params = ProactiveSimParams(
     g=geant,
-    src=SRC,
-    tgt=TGT,
-    var=W,
-    no_of_runs=100,
-    erase_loops=False,
-    record_paths=True
+    src_nodes=["MIL"],
+    duration_s=10,
+    rw_variant="HS",
+    sieve_table_sz=32,
+    watermark_sz=16,
 )
 
-hop_stats = compute_hop_stats(sim_params)
-hop_stats.print_summary()
+proactive_stats = compute_proactive_stats(proactive_params)
+proactive_stats.print_summary()
+for ev in proactive_stats.events:
+    print(ev)
 
-for path in hop_stats.paths:
-    print(path)
