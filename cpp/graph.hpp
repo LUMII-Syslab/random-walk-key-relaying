@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <set>
 #include <vector>
 
 using namespace std;
@@ -61,7 +62,7 @@ class Graph {
     vector<vector<int>> adj_;
     vector<string> idx_to_name_;
     unordered_map<string, int> name_to_idx_;
-    map<EdgeKey, LinkState> link_states_;
+    set<EdgeKey> edges_;
 
     static string trim(string s) {
         while (!s.empty() && isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
@@ -91,9 +92,11 @@ class Graph {
         int u = resolve_or_add_node(u_name);
         int v = resolve_or_add_node(v_name);
         if (u == v) throw runtime_error("Self-loop edge is not allowed: " + u_name);
+        EdgeKey ek(u, v);
+        if (edges_.count(ek) > 0) return; // ignore duplicate edges
+        edges_.insert(ek);
         adj_[u].push_back(v);
         adj_[v].push_back(u);
-        link_states_.emplace(EdgeKey(u, v), LinkState{});
     }
 
     void read_from_stdin(istream &in) {
@@ -108,7 +111,7 @@ class Graph {
         adj_.assign(n, {});
         idx_to_name_.clear();
         name_to_idx_.clear();
-        link_states_.clear();
+        edges_.clear();
 
         for (int i = 0; i < m; i++) {
             string u_name, v_name;
@@ -131,7 +134,7 @@ class Graph {
         adj_.clear();
         idx_to_name_.clear();
         name_to_idx_.clear();
-        link_states_.clear();
+        edges_.clear();
 
         string line;
         bool first_line = true;
@@ -179,6 +182,10 @@ public:
         return static_cast<int>(adj_.size());
     }
 
+    const set<EdgeKey> &edges() const {
+        return edges_;
+    }
+
     int node_index(const string &node_name) const {
         auto it = name_to_idx_.find(node_name);
         if (it == name_to_idx_.end()) {
@@ -193,6 +200,51 @@ public:
         }
         return idx_to_name_[node_idx];
     }
+
+    vector<int> neighbors(int node_idx) const {
+        return adj_[node_idx];
+    }
+};
+
+/**
+ * QKD overlay for a (static) undirected graph: maintains per-link `LinkState`
+ * used to compute waiting times for OTP availability.
+ *
+ * Owns a `Graph` (composition) and a map from edges to mutable link state.
+ */
+class QkdNetwork {
+    Graph graph_;
+    map<EdgeKey, LinkState> link_states_;
+
+    void init_link_states_from_graph_edges() {
+        link_states_.clear();
+        for (const EdgeKey &e : graph_.edges()) {
+            link_states_.emplace(e, LinkState{});
+        }
+    }
+
+public:
+    QkdNetwork() = default;
+
+    explicit QkdNetwork(Graph graph) : graph_(std::move(graph)) {
+        init_link_states_from_graph_edges();
+    }
+
+    explicit QkdNetwork(istream &in) : graph_(in) {
+        init_link_states_from_graph_edges();
+    }
+
+    explicit QkdNetwork(const string &edges_csv_path) : graph_(edges_csv_path) {
+        init_link_states_from_graph_edges();
+    }
+
+    const Graph &graph() const { return graph_; }
+    Graph &graph() { return graph_; }
+
+    const vector<vector<int>> &adj_list() const { return graph_.adj_list(); }
+    int node_count() const { return graph_.node_count(); }
+    int node_index(const string &node_name) const { return graph_.node_index(node_name); }
+    const string &node_name(int node_idx) const { return graph_.node_name(node_idx); }
 
     /** Mutable state for the undirected edge between `a` and `b` (order-independent). */
     LinkState &link_state(int a, int b) {

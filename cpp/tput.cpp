@@ -9,7 +9,6 @@
 #include <vector>
 #include "graph.hpp"
 #include "walk.hpp"
-#include "utils.hpp"
 
 using namespace std;
 
@@ -111,17 +110,17 @@ vector<int> sample_loop_erased_path(
     int seed,
     int node_count
 );
-RunResult run_single_simulation(Graph &graph, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
+RunResult run_single_simulation(QkdNetwork &net, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+    QkdNetwork net = opts.edges_csv.empty() ? QkdNetwork(cin) : QkdNetwork(opts.edges_csv);
 
-    int src_idx = graph.node_index(opts.src_node);
-    int tgt_idx = graph.node_index(opts.tgt_node);
+    int src_idx = net.node_index(opts.src_node);
+    int tgt_idx = net.node_index(opts.tgt_node);
 
-    RunResult run = run_single_simulation(graph, src_idx, tgt_idx, opts, 0);
+    RunResult run = run_single_simulation(net, src_idx, tgt_idx, opts, 0);
     TputStats stats = compute_tput_stats(run, opts);
     stats.print(cout, opts.print_arrival_times);
     return 0;
@@ -273,13 +272,13 @@ vector<int> sample_loop_erased_path(
 }
 
 RunResult run_single_simulation(
-    Graph &graph,
+    QkdNetwork &net,
     int src_idx,
     int tgt_idx,
     const Options &opts,
     int seed_offset
 ) {
-    const auto &adj = graph.adj_list();
+    const auto &adj = net.adj_list();
 
     RunResult result;
     priority_queue<Event, vector<Event>, EventGreater> pq;
@@ -324,7 +323,7 @@ RunResult run_single_simulation(
         }
         pkt->hops = 1;
         if (pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
-        double wait = graph.link_state(source_node, next).reserve(
+        double wait = net.link_state(source_node, next).reserve(
             now,
             opts.chunk_size_bits,
             opts.link_buff_sz_bits,
@@ -406,7 +405,7 @@ RunResult run_single_simulation(
             }
             ev.pkt->hops++;
             if (ev.pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
-            double wait = graph.link_state(ev.at, next).reserve(
+            double wait = net.link_state(ev.at, next).reserve(
                 ev.time,
                 opts.chunk_size_bits,
                 opts.link_buff_sz_bits,
