@@ -7,8 +7,10 @@
 #include <string_view>
 #include <variant>
 #include <vector>
+#include <memory>
 
 #include "graph.hpp"
+#include "walk.hpp"
 using namespace std;
 
 /**
@@ -29,6 +31,12 @@ struct ReportedKeyEstablEvent {
 };
 
 using ReportedEvent = variant<ReportedRecvChunkEvent, ReportedKeyEstablEvent>;
+
+struct InternalOtpAvailableEvent {
+    double time = 0.0;
+    int from = -1;
+    int to = -1;
+};
 
 /** Internal sim events — priority queue left empty until scheduling is implemented. */
 struct InternalEvent {
@@ -53,16 +61,33 @@ struct Options {
     int sieve_table_sz = 32;
     int watermark_sz = 16;
     string edges_csv = "";
+    int relay_buff_sz = 100; // fifo relay buffer size
 };
 
 void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
 static void print_proactive_output(const Options &opts, const vector<ReportedEvent> &reported, ostream &out);
 
+unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count) {
+    if (rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
+    if (rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
+    if (rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
+    return nullptr;
+}
+
 vector<ReportedEvent> run_simulation(const Options &opts, Graph &graph) {
     priority_queue<InternalEvent, vector<InternalEvent>, InternalEventGreater> internal_pq;
     (void)internal_pq;
     (void)graph;
+    static int seed_offset = 0;
+
+    for (int i=0;i<opts.relay_buff_sz;i++) {
+        seed_offset++;
+        RwToken *token = make_base_token(opts.rw_variant, opts.src_nodes[0], -1, seed_offset, graph.node_count());
+        
+    }
 
     vector<ReportedEvent> reported;
     const string &p = opts.src_nodes.front();
@@ -70,6 +95,7 @@ vector<ReportedEvent> run_simulation(const Options &opts, Graph &graph) {
     reported.push_back(ReportedRecvChunkEvent{0.0, p, p, {}});
     return reported;
 }
+
 
 static void print_event_line(const ReportedEvent &ev, ostream &out) {
     visit(
