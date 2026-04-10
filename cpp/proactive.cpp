@@ -1,6 +1,7 @@
 #include <cctype>
 #include <iostream>
 #include <queue>
+#include <random>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -9,10 +10,19 @@
 #include <variant>
 #include <vector>
 #include <memory>
+#include <fstream>
+#include <unordered_set>
 
 #include "graph.hpp"
 #include "walk.hpp"
 using namespace std;
+
+static constexpr double kClassicLatencyS = 0.005; // 5 ms
+static constexpr int kChunkBits = 256;
+static constexpr double kQkdSkrBitsPerS = 1000.0;
+static constexpr int kLinkBuffSzBits = 2'000'000'000; // effectively unlimited
+static constexpr int kMinTtl = 1;
+static constexpr int kMaxTtl = 100;
 
 /**
  * Mirrors helpers/compute.py ProactiveRecvChunkEvent / ProactiveKeyEstablishedEvent.
@@ -33,16 +43,26 @@ struct ReportedKeyEstablEvent {
 
 using ReportedEvent = variant<ReportedRecvChunkEvent, ReportedKeyEstablEvent>;
 
-struct InternalOtpAvailableEvent {
-    int from = -1;
-    int to = -1;
+struct Packet {
+    int source = -1;      // originator node (A)
+    int prev_hop = -1;    // last sender to current receiver
+    int hops = 0;         // hop index of current receiver (1..)
     unique_ptr<RwToken> token;
+    vector<int> path;     // node indices (excluding source), for reporting
 };
 
-/** Internal sim events — priority queue left empty until scheduling is implemented. */
+enum class InternalEventType {
+    OtpAvailable,
+    ChunkReceived,
+    AckResponse,
+};
+
 struct InternalEvent {
     double time = 0.0;
-    unique_ptr<InternalOtpAvailableEvent> otp_available_event;
+    InternalEventType type = InternalEventType::OtpAvailable;
+    int from = -1; // sender for OtpAvailable, receiver for AckResponse
+    int to = -1;   // next-hop receiver for OtpAvailable, sender for AckResponse
+    shared_ptr<Packet> pkt;
 };
 
 struct InternalEventGreater {
@@ -64,11 +84,102 @@ struct Options {
     int watermark_sz = 16;
     string edges_csv = "";
     int relay_buff_sz = 100; // fifo relay buffer size
+    string ignore_events = "";     // comma-separated list of event kinds to suppress (e.g. "recv_chunk,key_establ")
+    string ignore_events_csv = ""; // legacy: optional path to ignore-rules file (still supported)
 };
 
 void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
-static void print_proactive_output(const Options &opts, const vector<ReportedEvent> &reported, ostream &out);
+struct SimulationOutput {
+    vector<ReportedEvent> reported;
+    double watermark_time = 0.0;
+};
+static void print_proactive_output(const Options &opts, const SimulationOutput &outp, ostream &out);
+
+struct IgnoreRule {
+    string kind; // "recv_chunk" or "key_establ"
+    string src;  // optional, "*" or empty means wildcard
+    string tgt;  // optional, "*" or empty means wildcard
+};
+
+static string trim_copy(string s) {
+    while (!s.empty() && isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
+    size_t i = 0;
+    while (i < s.size() && isspace(static_cast<unsigned char>(s[i]))) i++;
+    return s.substr(i);
+}
+
+static vector<string> split_csv_line_simple(const string &line) {
+    // Minimal CSV: comma-separated, no quotes/escapes (good enough for node names).
+    vector<string> out;
+    string cur;
+    for (char ch : line) {
+        if (ch == ',') {
+            out.push_back(trim_copy(cur));
+            cur.clear();
+        } else {
+            cur.push_back(ch);
+        }
+    }
+    out.push_back(trim_copy(cur));
+    return out;
+}
+
+static vector<string> parse_ignore_kinds_inline(const string &csv) {
+    vector<string> parts = split_csv_line_simple(csv);
+    vector<string> out;
+    out.reserve(parts.size());
+    for (string &p : parts) {
+        p = trim_copy(p);
+        if (p.empty()) continue;
+        out.push_back(p);
+    }
+    return out;
+}
+
+static vector<IgnoreRule> read_ignore_rules(const string &path) {
+    if (path.empty()) return {};
+    ifstream in(path);
+    if (!in.is_open()) {
+        throw runtime_error("Cannot open ignore-events CSV: " + path);
+    }
+    vector<IgnoreRule> rules;
+    string line;
+    while (getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        line = trim_copy(line);
+        if (line.empty()) continue;
+        if (!line.empty() && line[0] == '#') continue;
+        vector<string> parts = split_csv_line_simple(line);
+        if (parts.empty()) continue;
+        IgnoreRule r;
+        r.kind = parts[0];
+        r.src = (parts.size() >= 2 ? parts[1] : "");
+        r.tgt = (parts.size() >= 3 ? parts[2] : "");
+        if (r.kind.empty()) continue;
+        rules.push_back(std::move(r));
+    }
+    return rules;
+}
+
+static bool rule_matches_field(const string &rule, const string &value) {
+    if (rule.empty() || rule == "*") return true;
+    return rule == value;
+}
+
+static bool should_ignore_event(const vector<IgnoreRule> &rules, const ReportedEvent &ev) {
+    return visit([&](auto &&e) -> bool {
+        using T = decay_t<decltype(e)>;
+        const string kind = is_same_v<T, ReportedKeyEstablEvent> ? "key_establ" : "recv_chunk";
+        for (const auto &r : rules) {
+            if (r.kind != kind) continue;
+            if (!rule_matches_field(r.src, e.src)) continue;
+            if (!rule_matches_field(r.tgt, e.tgt)) continue;
+            return true;
+        }
+        return false;
+    }, ev);
+}
 
 unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count) {
     if (rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
@@ -85,33 +196,222 @@ int get_rng_seed() {
     return seed_offset;
 }
 
-vector<ReportedEvent> run_simulation(const Options &opts, const Graph &graph) {
+static double consume_probability(int hops, int max_ttl, int buffered_keys_for_src, int watermark_sz) {
+    if (watermark_sz <= 0) return 1.0;
+    const double b = min(1.0, static_cast<double>(buffered_keys_for_src) / static_cast<double>(watermark_sz));
+    const double t_remaining = static_cast<double>(max_ttl - hops) / static_cast<double>(max_ttl);
+    const double p = 1.0 - b * t_remaining;
+    if (p < 0.0) return 0.0;
+    if (p > 1.0) return 1.0;
+    return p;
+}
+
+SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
     QkdNetwork qkd_network(graph);
 
     priority_queue<InternalEvent, vector<InternalEvent>, InternalEventGreater> event_queue;
+    mt19937 rng(1234567);
+    uniform_real_distribution<double> u01(0.0, 1.0);
+    vector<IgnoreRule> ignore_rules = read_ignore_rules(opts.ignore_events_csv);
+    for (const string &k : parse_ignore_kinds_inline(opts.ignore_events)) {
+        IgnoreRule r;
+        r.kind = k;
+        r.src = "*";
+        r.tgt = "*";
+        ignore_rules.push_back(std::move(r));
+    }
 
-    for (int i=0;i<opts.relay_buff_sz;i++) {
-        const int src_idx = graph.node_index(opts.src_nodes[0]);
-        unique_ptr<RwToken> token = make_base_token(opts.rw_variant,
-            src_idx, src_idx, get_rng_seed(), graph.node_count());
-        if (!token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
+    const auto &adj = graph.adj_list();
+    const int node_count = graph.node_count();
+
+    // Per-node send window: how many in-flight chunks can be outstanding awaiting ACK.
+    vector<int> in_flight_free(node_count, opts.relay_buff_sz);
+
+    // Per-node, per-source FIFO occupancy (for drop decision at receiver).
+    vector<unordered_map<int, int>> per_source_fifo_used(node_count);
+
+    // Per-node, per-source "relayed key buffer" size approximation for b in p=1-b*t_remaining.
+    vector<unordered_map<int, int>> rt_size(node_count);
+
+    // Batch of consumed chunk histories for (tgt, src) to trigger key establishment.
+    // We only need counts/histories at this stage (not raw chunks).
+    struct HistItem { vector<int> path; };
+    vector<unordered_map<int, vector<HistItem>>> consumed_hist(node_count);
+
+    vector<int> established_keys_per_src(node_count, 0);
+    vector<char> is_src(node_count, 0);
+    for (const string &name : opts.src_nodes) {
+        is_src[graph.node_index(name)] = 1;
+    }
+    double watermark_time = 0.0;
+    bool watermark_reached = false;
+
+    auto schedule_new_chunk_from_src = [&](double now, int src_idx) -> void {
+        if (!is_src[src_idx]) return;
+        if (adj[src_idx].empty()) return;
+        if (in_flight_free[src_idx] <= 0) return;
+
+        in_flight_free[src_idx]--;
+
+        auto pkt = make_shared<Packet>();
+        pkt->source = src_idx;
+        pkt->prev_hop = src_idx;
+        pkt->hops = 0;
+        pkt->token = make_base_token(opts.rw_variant, src_idx, src_idx, get_rng_seed(), node_count);
+        if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
+
         RwToken::WalkNodeState node_state;
         node_state.node_idx = src_idx;
-        int nghbr = token->choose_next_and_update(node_state, graph.neighbors(src_idx));
-        const double current_time = 0.0;
-        double wait = qkd_network.link_state(src_idx, nghbr).reserve(current_time, 256, 2e9, 1000.0);
-        unique_ptr<InternalOtpAvailableEvent> otp_available_event = make_unique<InternalOtpAvailableEvent>();
-        otp_available_event->from = src_idx;
-        otp_available_event->to = nghbr;
-        otp_available_event->token = std::move(token);
-        event_queue.push(InternalEvent{current_time + wait, std::move(otp_available_event)});
+        int next = pkt->token->choose_next_and_update(node_state, graph.neighbors(src_idx));
+
+        // Reserve OTP on (src -> next) and schedule availability.
+        const double wait = qkd_network.link_state(src_idx, next).reserve(
+            now, kChunkBits, kLinkBuffSzBits, kQkdSkrBitsPerS
+        );
+        event_queue.push(InternalEvent{now + wait, InternalEventType::OtpAvailable, src_idx, next, pkt});
+    };
+
+    // Bootstrap: fill each source's send window initially.
+    for (const string &src_name : opts.src_nodes) {
+        const int src_idx = graph.node_index(src_name);
+        for (int i = 0; i < opts.relay_buff_sz; i++) {
+            schedule_new_chunk_from_src(0.0, src_idx);
+        }
     }
 
     vector<ReportedEvent> reported;
-    const string &p = opts.src_nodes.front();
-    reported.push_back(ReportedKeyEstablEvent{0.0, p, p, 0});
-    reported.push_back(ReportedRecvChunkEvent{0.0, p, p, {}});
-    return reported;
+    // Main event loop.
+    while (!event_queue.empty()) {
+        InternalEvent ev = event_queue.top();
+        event_queue.pop();
+        if (ev.time > opts.duration_s) break;
+
+        if (ev.type == InternalEventType::OtpAvailable) {
+            // After 5 ms classical latency, receiver sees the chunk.
+            event_queue.push(InternalEvent{ev.time + kClassicLatencyS, InternalEventType::ChunkReceived, ev.from, ev.to, ev.pkt});
+            continue;
+        }
+
+        if (ev.type == InternalEventType::ChunkReceived) {
+            auto &pkt = *ev.pkt;
+            const int receiver = ev.to;
+            const int sender = ev.from;
+            pkt.prev_hop = sender;
+            pkt.hops += 1;
+            if (pkt.hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
+            pkt.path.push_back(receiver);
+
+            // Loop-prevention: if a chunk returns to its origin source, drop it.
+            const bool returned_to_source = (receiver == pkt.source) && (pkt.hops > 1);
+
+            // FIFO per-source relay buffer constraint at receiver.
+            int &used = per_source_fifo_used[receiver][pkt.source];
+            const bool drop = returned_to_source || (used >= opts.relay_buff_sz);
+            if (!drop) {
+                used++;
+            }
+
+            // Report recv_chunk at arrival (even if it will be dropped later, per your description B "receives").
+            vector<string> path_names;
+            path_names.reserve(pkt.path.size());
+            for (int idx : pkt.path) path_names.push_back(graph.node_name(idx));
+            {
+                ReportedEvent rep = ReportedRecvChunkEvent{ev.time, graph.node_name(pkt.source), graph.node_name(receiver), std::move(path_names)};
+                if (!should_ignore_event(ignore_rules, rep)) {
+                    reported.push_back(std::move(rep));
+                }
+            }
+
+            // Decide consume / forward / drop.
+            bool consumed = false;
+            if (!drop) {
+                const int buffered = rt_size[receiver][pkt.source];
+                const double p = consume_probability(pkt.hops, kMaxTtl, buffered, opts.watermark_sz);
+                if (pkt.hops >= kMinTtl && pkt.hops <= kMaxTtl && u01(rng) < p) {
+                    consumed = true;
+                    rt_size[receiver][pkt.source] = buffered + 1;
+                    consumed_hist[receiver][pkt.source].push_back(HistItem{pkt.path});
+
+                    // When enough consumed chunks are collected, establish at least one 256-bit key (XOR is always possible).
+                    if (static_cast<int>(consumed_hist[receiver][pkt.source].size()) >= opts.sieve_table_sz) {
+                        consumed_hist[receiver][pkt.source].clear();
+                        {
+                            ReportedEvent rep = ReportedKeyEstablEvent{ev.time, graph.node_name(pkt.source), graph.node_name(receiver), 1};
+                            if (!should_ignore_event(ignore_rules, rep)) {
+                                reported.push_back(std::move(rep));
+                            }
+                        }
+                        established_keys_per_src[pkt.source] += 1;
+                        if (!watermark_reached) {
+                            bool all_ok = true;
+                            for (const string &src_name : opts.src_nodes) {
+                                const int sidx = graph.node_index(src_name);
+                                if (established_keys_per_src[sidx] < opts.watermark_sz) {
+                                    all_ok = false;
+                                    break;
+                                }
+                            }
+                            if (all_ok) {
+                                watermark_reached = true;
+                                watermark_time = ev.time;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!drop && !consumed) {
+                // Forward (random walk step).
+                if (adj[receiver].empty()) {
+                    // nowhere to go, treat as drop
+                } else {
+                    RwToken::WalkNodeState node_state;
+                    node_state.node_idx = receiver;
+                    int next = pkt.token->choose_next_and_update(node_state, adj[receiver]);
+                    const double wait = qkd_network.link_state(receiver, next).reserve(
+                        ev.time, kChunkBits, kLinkBuffSzBits, kQkdSkrBitsPerS
+                    );
+                    event_queue.push(InternalEvent{ev.time + wait, InternalEventType::OtpAvailable, receiver, next, ev.pkt});
+                }
+            }
+
+            // Receiver buffer slot is freed after processing (consume/drop/forward decision is local).
+            if (!drop) {
+                used--;
+                if (used < 0) throw runtime_error("per-source fifo accounting underflow");
+            }
+
+            // ACK always sent back after additional 5ms; frees one in-flight slot at sender.
+            event_queue.push(InternalEvent{ev.time + kClassicLatencyS, InternalEventType::AckResponse, receiver, sender, ev.pkt});
+            continue;
+        }
+
+        if (ev.type == InternalEventType::AckResponse) {
+            const int sender = ev.to; // original sender of the chunk hop
+            if (sender < 0 || sender >= node_count) continue;
+            if (is_src[sender]) {
+                in_flight_free[sender]++;
+                if (in_flight_free[sender] > opts.relay_buff_sz) {
+                    throw runtime_error("in_flight buffer accounting overflow");
+                }
+                // Now that one slot is freed, issue a new chunk if this is a configured source.
+                schedule_new_chunk_from_src(ev.time, sender);
+            }
+            continue;
+        }
+    }
+
+    // Sort by time to ensure monotone output.
+    stable_sort(reported.begin(), reported.end(), [](const ReportedEvent &a, const ReportedEvent &b) {
+        auto ta = visit([](auto &&e) { return e.time; }, a);
+        auto tb = visit([](auto &&e) { return e.time; }, b);
+        return ta < tb;
+    });
+
+    SimulationOutput outp;
+    outp.reported = std::move(reported);
+    outp.watermark_time = watermark_time;
+    return outp;
 }
 
 
@@ -132,7 +432,7 @@ static void print_event_line(const ReportedEvent &ev, ostream &out) {
         ev);
 }
 
-static void print_proactive_output(const Options &opts, const vector<ReportedEvent> &reported, ostream &out) {
+static void print_proactive_output(const Options &opts, const SimulationOutput &outp, ostream &out) {
     auto join_src = [&]() -> string {
         string s;
         for (size_t i = 0; i < opts.src_nodes.size(); ++i) {
@@ -147,9 +447,9 @@ static void print_proactive_output(const Options &opts, const vector<ReportedEve
     out << "duration_s: " << opts.duration_s << endl;
     out << "sieve_table_sz: " << opts.sieve_table_sz << endl;
     out << "watermark_sz: " << opts.watermark_sz << endl;
-    out << "watermark_time: 0" << endl;
-    out << "event_count: " << reported.size() << endl;
-    for (const ReportedEvent &ev : reported) {
+    out << "watermark_time: " << outp.watermark_time << endl;
+    out << "event_count: " << outp.reported.size() << endl;
+    for (const ReportedEvent &ev : outp.reported) {
         print_event_line(ev, out);
     }
     out << endl;
@@ -162,8 +462,8 @@ int main(int argc, char **argv) {
         for (const string &name : opts.src_nodes) {
             graph.node_index(name);
         }
-        vector<ReportedEvent> reported = run_simulation(opts, graph);
-        print_proactive_output(opts, reported, cout);
+        SimulationOutput outp = run_simulation(opts, graph);
+        print_proactive_output(opts, outp, cout);
         return 0;
     } catch (const exception &e) {
         cerr << e.what() << endl;
@@ -194,7 +494,7 @@ void print_usage(const char *prog_name) {
          << " (--src-nodes|-S) <n1,n2,...> (--rw-variant|-w) <name> "
             "(--duration-s|-d) <seconds> "
             "[--sieve-table-sz <int>] [--watermark-sz <int>] "
-            "[(--edges-csv|-e) <path>]" << endl;
+            "[(--edges-csv|-e) <path>] [--ignore-events <csv>] [--ignore-events-csv <path>]" << endl;
 }
 
 static bool valid_rw_variant(const string &w) {
@@ -254,6 +554,10 @@ Options parse_args(int argc, char **argv) {
             opts.watermark_sz = stoi(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--edges-csv" || flag == "-e") {
             opts.edges_csv = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--ignore-events") {
+            opts.ignore_events = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--ignore-events-csv") {
+            opts.ignore_events_csv = require_value(i, flag, has_inline, inline_value);
         } else {
             fail("Unknown argument: " + string(arg));
         }

@@ -93,6 +93,7 @@ class ProactiveSimParams:
     duration_s: float  # simulation duration in seconds
     sieve_table_sz: int = 32
     watermark_sz: int = 16  # the targeted number of buffered keys
+    ignore_events: Optional[list[str]] = None  # event kinds, e.g. ["recv_chunk"]
 
 
 @dataclass
@@ -309,6 +310,8 @@ def compute_proactive_stats(params: ProactiveSimParams) -> ProactiveStats:
         "--watermark-sz",
         str(params.watermark_sz),
     ]
+    if params.ignore_events:
+        cmd += ["--ignore-events", ",".join(params.ignore_events)]
 
     result = subprocess.run(
         cmd,
