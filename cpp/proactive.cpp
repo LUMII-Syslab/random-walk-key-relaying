@@ -11,7 +11,6 @@
 #include <vector>
 #include <memory>
 #include <fstream>
-#include <unordered_set>
 
 #include "graph.hpp"
 #include "walk.hpp"
