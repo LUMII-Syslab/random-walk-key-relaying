@@ -4,7 +4,6 @@ quick/
 build/
 out2/
 simulate_proactive
-.vscode/
 plots/
 constructed.csv
 .venv/

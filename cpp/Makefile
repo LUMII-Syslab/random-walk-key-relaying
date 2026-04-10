@@ -3,7 +3,16 @@ CACHE_DIR ?= /tmp/random-walk-key-relaying-cache
 HEADERS := $(wildcard *.hpp)
 
 CXX := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -pedantic -pthread
+
+# Set DEBUG=0 for optimized builds.
+DEBUG ?= 1
+
+CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic -pthread
+ifeq ($(DEBUG),1)
+	CXXFLAGS += -Og -g -fno-omit-frame-pointer
+else
+	CXXFLAGS += -O2
+endif
 
 .DEFAULT_GOAL := all
 
