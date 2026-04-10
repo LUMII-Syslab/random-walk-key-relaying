@@ -5,6 +5,7 @@
 #include <string>
 #include <type_traits>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 #include <memory>
@@ -33,14 +34,15 @@ struct ReportedKeyEstablEvent {
 using ReportedEvent = variant<ReportedRecvChunkEvent, ReportedKeyEstablEvent>;
 
 struct InternalOtpAvailableEvent {
-    double time = 0.0;
     int from = -1;
     int to = -1;
+    unique_ptr<RwToken> token;
 };
 
 /** Internal sim events — priority queue left empty until scheduling is implemented. */
 struct InternalEvent {
     double time = 0.0;
+    unique_ptr<InternalOtpAvailableEvent> otp_available_event;
 };
 
 struct InternalEventGreater {
@@ -77,16 +79,32 @@ unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int t
     return nullptr;
 }
 
-vector<ReportedEvent> run_simulation(const Options &opts, Graph &graph) {
-    priority_queue<InternalEvent, vector<InternalEvent>, InternalEventGreater> internal_pq;
-    (void)internal_pq;
-    (void)graph;
+int get_rng_seed() {
     static int seed_offset = 0;
+    seed_offset++;
+    return seed_offset;
+}
+
+vector<ReportedEvent> run_simulation(const Options &opts, const Graph &graph) {
+    QkdNetwork qkd_network(graph);
+
+    priority_queue<InternalEvent, vector<InternalEvent>, InternalEventGreater> event_queue;
 
     for (int i=0;i<opts.relay_buff_sz;i++) {
-        seed_offset++;
-        RwToken *token = make_base_token(opts.rw_variant, opts.src_nodes[0], -1, seed_offset, graph.node_count());
-        
+        const int src_idx = graph.node_index(opts.src_nodes[0]);
+        unique_ptr<RwToken> token = make_base_token(opts.rw_variant,
+            src_idx, src_idx, get_rng_seed(), graph.node_count());
+        if (!token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
+        RwToken::WalkNodeState node_state;
+        node_state.node_idx = src_idx;
+        int nghbr = token->choose_next_and_update(node_state, graph.neighbors(src_idx));
+        const double current_time = 0.0;
+        double wait = qkd_network.link_state(src_idx, nghbr).reserve(current_time, 256, 2e9, 1000.0);
+        unique_ptr<InternalOtpAvailableEvent> otp_available_event = make_unique<InternalOtpAvailableEvent>();
+        otp_available_event->from = src_idx;
+        otp_available_event->to = nghbr;
+        otp_available_event->token = std::move(token);
+        event_queue.push(InternalEvent{current_time + wait, std::move(otp_available_event)});
     }
 
     vector<ReportedEvent> reported;
