@@ -82,7 +82,7 @@ struct Options {
     int sieve_table_sz = 32;
     int watermark_sz = 16;
     string edges_csv = "";
-    int relay_buff_sz = 100; // fifo relay buffer size
+    int relay_buff_sz = 1000000; // fifo relay buffer size
     string ignore_events = "";     // comma-separated list of event kinds to suppress (e.g. "recv_chunk,key_establ")
     string ignore_events_csv = ""; // legacy: optional path to ignore-rules file (still supported)
 };
@@ -91,7 +91,6 @@ void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
 struct SimulationOutput {
     vector<ReportedEvent> reported;
-    double watermark_time = 0.0;
 };
 static void print_proactive_output(const Options &opts, const SimulationOutput &outp, ostream &out);
 
@@ -242,8 +241,6 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
     for (const string &name : opts.src_nodes) {
         is_src[graph.node_index(name)] = 1;
     }
-    double watermark_time = 0.0;
-    bool watermark_reached = false;
 
     auto schedule_new_chunk_from_src = [&](double now, int src_idx) -> void {
         if (!is_src[src_idx]) return;
@@ -341,20 +338,6 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
                             }
                         }
                         established_keys_per_src[pkt.source] += 1;
-                        if (!watermark_reached) {
-                            bool all_ok = true;
-                            for (const string &src_name : opts.src_nodes) {
-                                const int sidx = graph.node_index(src_name);
-                                if (established_keys_per_src[sidx] < opts.watermark_sz) {
-                                    all_ok = false;
-                                    break;
-                                }
-                            }
-                            if (all_ok) {
-                                watermark_reached = true;
-                                watermark_time = ev.time;
-                            }
-                        }
                     }
                 }
             }
@@ -409,7 +392,6 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
 
     SimulationOutput outp;
     outp.reported = std::move(reported);
-    outp.watermark_time = watermark_time;
     return outp;
 }
 
@@ -446,7 +428,6 @@ static void print_proactive_output(const Options &opts, const SimulationOutput &
     out << "duration_s: " << opts.duration_s << endl;
     out << "sieve_table_sz: " << opts.sieve_table_sz << endl;
     out << "watermark_sz: " << opts.watermark_sz << endl;
-    out << "watermark_time: " << outp.watermark_time << endl;
     out << "event_count: " << outp.reported.size() << endl;
     for (const ReportedEvent &ev : outp.reported) {
         print_event_line(ev, out);

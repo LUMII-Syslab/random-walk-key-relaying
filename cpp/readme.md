@@ -49,3 +49,5 @@ The simulator reports a time-sorted list of events of two types (as parsed by `h
 
 - `recv_chunk time src tgt [path...]`
 - `key_establ time src tgt key_count`
+
+`watermark_time` (time until all nodes have at least `watermark_sz` keys with each source) is computed on the Python side in `helpers/compute.py` from the `key_establ` stream.

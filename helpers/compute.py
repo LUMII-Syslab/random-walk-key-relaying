@@ -361,8 +361,6 @@ def compute_proactive_stats(params: ProactiveSimParams) -> ProactiveStats:
             elif key == "watermark_sz":
                 if int(value) != params.watermark_sz:
                     raise ValueError("proactive watermark_sz mismatch")
-            elif key == "watermark_time":
-                watermark_time = float(value)
             elif key == "event_count":
                 expected_event_count = int(value)
             else:
@@ -403,6 +401,30 @@ def compute_proactive_stats(params: ProactiveSimParams) -> ProactiveStats:
         raise ValueError(
             f"proactive event_count {expected_event_count} != parsed {len(events)}"
         )
+
+    # Compute watermark_time in Python:
+    # earliest time when for every src in params.src_nodes and every tgt node != src,
+    # cumulative established keys for (src,tgt) reaches at least watermark_sz.
+    required_pairs: set[tuple[str, str]] = set()
+    all_nodes = [str(n) for n in params.g.nodes()]
+    for src in (str(s) for s in params.src_nodes):
+        for tgt in all_nodes:
+            if tgt == src:
+                continue
+            required_pairs.add((src, tgt))
+
+    counts: dict[tuple[str, str], int] = {}
+    remaining = set(required_pairs)
+    for ev in events:
+        if isinstance(ev, ProactiveKeyEstablishedEvent):
+            key = (ev.src, ev.tgt)
+            if key in required_pairs:
+                counts[key] = counts.get(key, 0) + ev.key_count
+                if counts[key] >= params.watermark_sz:
+                    remaining.discard(key)
+                    if not remaining:
+                        watermark_time = float(ev.time)
+                        break
 
     return ProactiveStats(
         context=params,
