@@ -175,6 +175,10 @@ public:
         return adj_;
     }
 
+    int node_count() const {
+        return static_cast<int>(adj_.size());
+    }
+
     int node_index(const string &node_name) const {
         auto it = name_to_idx_.find(node_name);
         if (it == name_to_idx_.end()) {
