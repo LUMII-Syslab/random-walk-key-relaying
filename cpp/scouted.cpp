@@ -9,7 +9,9 @@
 #include <string>
 #include <string_view>
 #include <chrono>
+#include <array>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -65,13 +67,17 @@ struct Options {
     string rw_variant;
     double duration_s = 0.0;
     string edges_csv = "";
+    vector<string> delete_nodes; // node names to delete from graph
 
     // Phase 1: scout emission rate (per source)
     double scout_rate_per_s = 20.0;
 
     // Phase 4: block formation
     int block_chunks = 32;
-    int block_keys = 1;
+    // Upper bound for extracted keys per completed block.
+    // Defaults to block_chunks (set after parsing).
+    int max_block_keys = -1;
+    int cartel_size = 1; // adversary nodes per (src,tgt), currently supports 0, 1 or 2
 
     // Congestion / willingness to accept
     int watermark_sz = 16;
@@ -82,6 +88,9 @@ struct Options {
 
     // Periodic wall-clock progress logging.
     bool verbose = false;
+
+    // RNG seed (controls accept decisions and per-scout RW seeds).
+    uint64_t seed = 1234567;
 };
 
 static void print_usage(const char *prog_name) {
@@ -89,8 +98,11 @@ static void print_usage(const char *prog_name) {
          << " (--src-nodes|-S) <n1,n2,...> (--rw-variant|-w) <name> "
             "(--duration-s|-d) <seconds> "
             "[(--edges-csv|-e) <path>] "
-            "[--scout-rate <float>] [--block-chunks <int>] [--block-keys <int>] [--watermark-sz <int>]"
+            "[--delete-nodes <n1,n2,...>] "
+            "[--scout-rate <float>] [--block-chunks <int>] [--max-block-keys <int>] [--watermark-sz <int>]"
+            " [--cartel-size <int>]"
             " [--min-keys-per-pair <int>]"
+            " [--seed <uint64>]"
             " [--verbose]"
          << endl;
 }
@@ -143,16 +155,25 @@ static Options parse_args(int argc, char **argv) {
             have_duration = true;
         } else if (flag == "--edges-csv" || flag == "-e") {
             opts.edges_csv = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--delete-nodes") {
+            opts.delete_nodes = parse_src_nodes_csv(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--scout-rate") {
             opts.scout_rate_per_s = stod(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--block-chunks") {
             opts.block_chunks = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--max-block-keys") {
+            opts.max_block_keys = stoi(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--block-keys") {
-            opts.block_keys = stoi(require_value(i, flag, has_inline, inline_value));
+            // Back-compat alias (deprecated): --block-keys -> --max-block-keys
+            opts.max_block_keys = stoi(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--watermark-sz") {
             opts.watermark_sz = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--cartel-size") {
+            opts.cartel_size = stoi(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--min-keys-per-pair") {
             opts.min_keys_per_pair = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--seed") {
+            opts.seed = stoull(require_value(i, flag, has_inline, inline_value));
         } else if (flag == "--verbose") {
             opts.verbose = true;
         } else {
@@ -167,8 +188,10 @@ static Options parse_args(int argc, char **argv) {
     if (opts.duration_s <= 0.0) fail("--duration-s must be > 0");
     if (opts.scout_rate_per_s <= 0.0) fail("--scout-rate must be > 0");
     if (opts.block_chunks <= 0) fail("--block-chunks must be > 0");
-    if (opts.block_keys <= 0) fail("--block-keys must be > 0");
+    if (opts.max_block_keys == -1) opts.max_block_keys = opts.block_chunks;
+    if (opts.max_block_keys <= 0) fail("--max-block-keys must be > 0");
     if (opts.watermark_sz <= 0) fail("--watermark-sz must be > 0");
+    if (opts.cartel_size != 0 && opts.cartel_size != 1 && opts.cartel_size != 2) fail("--cartel-size must be 0, 1 or 2");
     if (opts.min_keys_per_pair < 0) fail("--min-keys-per-pair must be >= 0");
 
     return opts;
@@ -183,17 +206,20 @@ static unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx
     return nullptr;
 }
 
-static int get_rng_seed() {
-    static int seed_offset = 0;
-    seed_offset++;
-    return seed_offset;
+static int derive_scout_seed(uint64_t base_seed, uint64_t scout_idx) {
+    const uint32_t a = static_cast<uint32_t>(base_seed ^ (base_seed >> 32));
+    const uint32_t b = static_cast<uint32_t>(scout_idx ^ (scout_idx >> 32));
+    seed_seq seq{a, b};
+    array<uint32_t, 1> out{};
+    seq.generate(out.begin(), out.end());
+    return static_cast<int>(out[0]);
 }
 
 static double consume_probability(int hops, int max_ttl, int buffered_keys_for_src, int watermark_sz) {
     if (watermark_sz <= 0) return 1.0;
     // Hard congestion cut-off: if already at/above watermark, do not accept new scouts.
     // This prevents repeatedly feeding already-satisfied nodes when watermark is small (e.g. 1).
-    // if (buffered_keys_for_src >= watermark_sz) return 0.0;
+    if (buffered_keys_for_src >= watermark_sz) return 0.0;
     const double b = min(1.0, static_cast<double>(buffered_keys_for_src) / static_cast<double>(watermark_sz));
     const double t_remaining = static_cast<double>(max_ttl - hops) / static_cast<double>(max_ttl);
     const double p = 1.0 - b * t_remaining;
@@ -333,6 +359,38 @@ struct SimulationOutput {
     vector<ReportedEvent> reported;
 };
 
+static Graph build_filtered_graph(const Graph &g, const vector<string> &delete_nodes) {
+    if (delete_nodes.empty()) return g;
+    unordered_set<string> del;
+    del.reserve(delete_nodes.size() * 2 + 1);
+    for (const string &nm : delete_nodes) {
+        string t = trim_copy(nm);
+        if (!t.empty()) del.insert(t);
+    }
+    if (del.empty()) return g;
+
+    // Keep edges whose endpoints are not deleted; rebuild a Graph via stdin format.
+    vector<pair<string, string>> kept_edges;
+    kept_edges.reserve(g.edges().size());
+    unordered_set<string> kept_nodes;
+    kept_nodes.reserve(g.node_count() * 2 + 1);
+    for (const EdgeKey &ek : g.edges()) {
+        const string &u = g.node_name(ek.u);
+        const string &v = g.node_name(ek.v);
+        if (del.count(u) || del.count(v)) continue;
+        kept_edges.emplace_back(u, v);
+        kept_nodes.insert(u);
+        kept_nodes.insert(v);
+    }
+
+    stringstream ss;
+    ss << kept_nodes.size() << " " << kept_edges.size() << "\n";
+    for (const auto &e : kept_edges) {
+        ss << e.first << " " << e.second << "\n";
+    }
+    return Graph(ss);
+}
+
 static SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
     QueueQkdNetwork qkd{Graph(graph)}; // own link queues
     const int n = graph.node_count();
@@ -346,7 +404,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
         is_src[idx] = 1;
     }
 
-    mt19937 rng(1234567);
+    mt19937 rng(static_cast<uint32_t>(opts.seed));
     uniform_real_distribution<double> u01(0.0, 1.0);
     priority_queue<Event, vector<Event>, EventGreater> pq;
 
@@ -359,6 +417,9 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
     // Established keys count (tgt -> (src -> count)).
     vector<unordered_map<int, int>> established_keys(n);
+
+    // Per (tgt, src): store loop-erased paths for the current block window.
+    vector<unordered_map<int, vector<vector<int>>>> block_paths(n);
 
     auto early_stop_satisfied = [&]() -> bool {
         if (opts.min_keys_per_pair <= 0) return false;
@@ -394,6 +455,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
     const auto wall_start = Clock::now();
     auto wall_last_log = wall_start;
     uint64_t processed_at_last_log = 0;
+    uint64_t scout_counter = 0;
 
     while (!pq.empty()) {
         Event ev = pq.top();
@@ -459,6 +521,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
             auto scout = make_shared<Scout>();
             scouts_emitted++;
+            scout_counter++;
             scout->src = s;
             scout->hops = 0;
             scout->walk_nodes.clear();
@@ -466,7 +529,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
             // IMPORTANT: For scouting, do NOT set RW target to the source.
             // Many RW variants have a "direct-to-visible-target" shortcut that would keep snapping back to `s`,
             // severely limiting exploration. Use a sentinel target (-1) so that shortcut never triggers.
-            scout->token = make_base_token(opts.rw_variant, s, -1, get_rng_seed(), n);
+            scout->token = make_base_token(opts.rw_variant, s, -1, derive_scout_seed(opts.seed, scout_counter), n);
             if (!scout->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
 
             RwToken::WalkNodeState st;
@@ -608,14 +671,113 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
                 int &cnt = block_recv_count[chunk->tgt][chunk->src];
                 cnt += 1;
+                block_paths[chunk->tgt][chunk->src].push_back(chunk->path);
                 if (cnt >= opts.block_chunks) {
                     cnt = 0;
+                    // Adversary model (for now): cartel size m=1, chosen optimally per (src,tgt)
+                    // as the intermediate node(s) that cover the most chunk paths in this block window.
+                    const auto &paths = block_paths[chunk->tgt][chunk->src];
+                    const size_t W = paths.size();
+                    const size_t words = (W + 63) / 64;
+
+                    // node -> bitset of which path indices contain it
+                    unordered_map<int, vector<uint64_t>> seen_bits;
+                    seen_bits.reserve(256);
+                    for (size_t pi = 0; pi < paths.size(); pi++) {
+                        const auto &p = paths[pi];
+                        if (p.size() < 2) continue;
+                        const size_t wi = pi / 64;
+                        const uint64_t bit = 1ull << (pi % 64);
+                        for (size_t i = 1; i + 1 < p.size(); i++) { // exclude src and tgt
+                            const int mid = p[i];
+                            if (mid == chunk->src || mid == chunk->tgt) continue;
+                            auto &bs = seen_bits[mid];
+                            if (bs.empty()) bs.assign(words, 0ull);
+                            bs[wi] |= bit;
+                        }
+                    }
+
+                    auto popcount_words = [&](const vector<uint64_t> &bs) -> int {
+                        int c = 0;
+                        for (uint64_t w : bs) c += __builtin_popcountll(w);
+                        return c;
+                    };
+
+                    int max_seen_by_cartel = 0;
+                    vector<int> best_nodes;
+                    if (opts.cartel_size == 0) {
+                        // No adversary: cartel sees nothing.
+                        max_seen_by_cartel = 0;
+                        best_nodes.clear();
+                    } else if (opts.cartel_size == 1) {
+                        int best = -1;
+                        for (const auto &kv : seen_bits) {
+                            const int node = kv.first;
+                            const int c = popcount_words(kv.second);
+                            if (c > max_seen_by_cartel) {
+                                max_seen_by_cartel = c;
+                                best = node;
+                            }
+                        }
+                        if (best >= 0) best_nodes = {best};
+                    } else {
+                        // cartel_size == 2: choose pair maximizing popcount(OR(bitset_i, bitset_j)).
+                        vector<int> nodes;
+                        nodes.reserve(seen_bits.size());
+                        for (const auto &kv : seen_bits) nodes.push_back(kv.first);
+
+                        int best_a = -1, best_b = -1;
+                        for (size_t i = 0; i < nodes.size(); i++) {
+                            const int a = nodes[i];
+                            const auto &A = seen_bits[a];
+                            // allow pair with itself only if only one node exists; otherwise it doesn't improve union.
+                            for (size_t j = i; j < nodes.size(); j++) {
+                                const int b = nodes[j];
+                                const auto &B = seen_bits[b];
+                                int c = 0;
+                                for (size_t w = 0; w < words; w++) {
+                                    c += __builtin_popcountll(A[w] | B[w]);
+                                }
+                                if (c > max_seen_by_cartel) {
+                                    max_seen_by_cartel = c;
+                                    best_a = a;
+                                    best_b = b;
+                                }
+                            }
+                        }
+                        if (best_a >= 0) {
+                            best_nodes = {best_a, best_b};
+                            if (best_nodes.size() == 2 && best_nodes[0] == best_nodes[1]) best_nodes.resize(1);
+                        }
+                    }
+
+                    const int h = static_cast<int>(opts.block_chunks) - max_seen_by_cartel;
+                    const int extracted_keys = (h > 0) ? min(opts.max_block_keys, h) : 0;
+
                     reported.push_back(ReportedKeyEstablEvent{
-                        ev.time, graph.node_name(chunk->src), graph.node_name(chunk->tgt), opts.block_keys
+                        ev.time, graph.node_name(chunk->src), graph.node_name(chunk->tgt), extracted_keys
                     });
-                    established_keys[chunk->tgt][chunk->src] += opts.block_keys;
-                    buffered_keys[chunk->tgt][chunk->src] += opts.block_keys;
+                    established_keys[chunk->tgt][chunk->src] += extracted_keys;
+                    buffered_keys[chunk->tgt][chunk->src] += extracted_keys;
+                    block_paths[chunk->tgt][chunk->src].clear();
                     keys_established_events++;
+                    if (opts.verbose) {
+                        cerr << "  [block] sim=" << ev.time
+                             << " src=" << graph.node_name(chunk->src)
+                             << " tgt=" << graph.node_name(chunk->tgt)
+                             << " cartel_size=" << opts.cartel_size
+                             << " max_seen=" << max_seen_by_cartel
+                             << " h=" << h
+                             << " keys=" << extracted_keys;
+                        if (!best_nodes.empty()) {
+                            cerr << " cartel_nodes=";
+                            for (size_t i = 0; i < best_nodes.size(); i++) {
+                                if (i) cerr << ",";
+                                cerr << graph.node_name(best_nodes[i]);
+                            }
+                        }
+                        cerr << "\n";
+                    }
                     if (early_stop_satisfied()) break;
                 }
                 continue;
@@ -651,10 +813,22 @@ static void print_output(const Options &opts, const SimulationOutput &outp, ostr
     out << "rw_variant: " << opts.rw_variant << "\n";
     out << "duration_s: " << opts.duration_s << "\n";
     out << "scout_rate_per_s: " << opts.scout_rate_per_s << "\n";
+    if (!opts.delete_nodes.empty()) {
+        out << "delete_nodes: ";
+        for (size_t i = 0; i < opts.delete_nodes.size(); i++) {
+            if (i) out << ",";
+            out << opts.delete_nodes[i];
+        }
+        out << "\n";
+    } else {
+        out << "delete_nodes: " << "\n";
+    }
     out << "block_chunks: " << opts.block_chunks << "\n";
-    out << "block_keys: " << opts.block_keys << "\n";
+    out << "max_block_keys: " << opts.max_block_keys << "\n";
+    out << "cartel_size: " << opts.cartel_size << "\n";
     out << "watermark_sz: " << opts.watermark_sz << "\n";
     out << "min_keys_per_pair: " << opts.min_keys_per_pair << "\n";
+    out << "seed: " << opts.seed << "\n";
     out << "verbose: " << (opts.verbose ? 1 : 0) << "\n";
     out << "event_count: " << outp.reported.size() << "\n";
     for (const auto &ev : outp.reported) print_event_line(ev, out);
@@ -664,8 +838,25 @@ static void print_output(const Options &opts, const SimulationOutput &outp, ostr
 int main(int argc, char **argv) {
     try {
         Options opts = parse_args(argc, argv);
-        Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+        Graph base_graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+        for (const string &name : opts.src_nodes) base_graph.node_index(name);
+        for (const string &nm : opts.delete_nodes) {
+            // Only validate if node exists; otherwise ignore silently.
+            // This makes "eyeballing deletions" convenient.
+            try { (void)base_graph.node_index(nm); } catch (...) {}
+        }
+        for (const string &name : opts.src_nodes) {
+            for (const string &del : opts.delete_nodes) {
+                if (trim_copy(name) == trim_copy(del)) {
+                    throw runtime_error("Cannot delete a source node: " + name);
+                }
+            }
+        }
+
+        Graph graph = build_filtered_graph(base_graph, opts.delete_nodes);
+        // Ensure sources still exist after filtering.
         for (const string &name : opts.src_nodes) graph.node_index(name);
+
         SimulationOutput outp = run_simulation(opts, graph);
         print_output(opts, outp, cout);
         return 0;
