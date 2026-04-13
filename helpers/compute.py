@@ -104,6 +104,14 @@ class ProactiveRecvChunkEvent:
     path: list[str] = field(default_factory=list)  # if recording is enabled
     type: Literal["recv_chunk"] = "recv_chunk"
 
+    def print_pretty(self) -> None:
+        if self.path:
+            print(
+                f"{self.time:.3f}s chunk {self.src}->{self.tgt} ({' '.join(self.path)})"
+            )
+        else:
+            print(f"{self.time:.3f}s chunk {self.src}->{self.tgt}")
+
 
 @dataclass
 class ProactiveKeyEstablishedEvent:
@@ -112,6 +120,9 @@ class ProactiveKeyEstablishedEvent:
     tgt: str  # node that will be sending the feedback puzzle
     key_count: int  # number of established 256 bit keys
     type: Literal["key_establ"] = "key_establ"
+
+    def print_pretty(self) -> None:
+        print(f"{self.time:.3f}s key {self.src}->{self.tgt} +{self.key_count}")
 
 
 ProactiveSimEvent = Union[ProactiveRecvChunkEvent, ProactiveKeyEstablishedEvent]
