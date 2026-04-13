@@ -189,9 +189,12 @@ static int get_rng_seed() {
     return seed_offset;
 }
 
-static double consume_probability(int hops, int max_ttl, int buffered_chunks_for_src, int watermark_sz) {
+static double consume_probability(int hops, int max_ttl, int buffered_keys_for_src, int watermark_sz) {
     if (watermark_sz <= 0) return 1.0;
-    const double b = min(1.0, static_cast<double>(buffered_chunks_for_src) / static_cast<double>(watermark_sz));
+    // Hard congestion cut-off: if already at/above watermark, do not accept new scouts.
+    // This prevents repeatedly feeding already-satisfied nodes when watermark is small (e.g. 1).
+    // if (buffered_keys_for_src >= watermark_sz) return 0.0;
+    const double b = min(1.0, static_cast<double>(buffered_keys_for_src) / static_cast<double>(watermark_sz));
     const double t_remaining = static_cast<double>(max_ttl - hops) / static_cast<double>(max_ttl);
     const double p = 1.0 - b * t_remaining;
     if (p < 0.0) return 0.0;
@@ -347,8 +350,9 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
     uniform_real_distribution<double> u01(0.0, 1.0);
     priority_queue<Event, vector<Event>, EventGreater> pq;
 
-    // Congestion term: per-target, per-source buffered chunks (used only for accept prob).
-    vector<unordered_map<int, int>> buffered_chunks(n);
+    // Congestion term: per-target, per-source buffered KEYS (used only for accept prob).
+    // This is a simulation proxy for "how many established keys does tgt currently hold for src".
+    vector<unordered_map<int, int>> buffered_keys(n);
 
     // Block formation count.
     vector<unordered_map<int, int>> block_recv_count(n);
@@ -417,6 +421,31 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                      << " key_events=" << keys_established_events
                      << "\n";
 
+                // Also log which nodes are still below watermark buffered keys for each source.
+                // This is a proxy for "nodes still waiting for watermark with every source".
+                const int max_names_per_src = 10;
+                for (int s : src_indices) {
+                    vector<string> names;
+                    names.reserve(max_names_per_src);
+                    int missing = 0;
+                    for (int v = 0; v < n; v++) {
+                        if (v == s) continue;
+                        const int have = buffered_keys[v][s];
+                        if (have >= opts.watermark_sz) continue;
+                        missing++;
+                        if (static_cast<int>(names.size()) < max_names_per_src) {
+                            names.push_back(graph.node_name(v));
+                        }
+                    }
+                    cerr << "  [watermark<src=" << graph.node_name(s) << "] missing=" << missing;
+                    if (!names.empty()) {
+                        cerr << " e.g.";
+                        for (const auto &nm : names) cerr << " " << nm;
+                        if (missing > static_cast<int>(names.size())) cerr << " ...";
+                    }
+                    cerr << "\n";
+                }
+
                 wall_last_log = wall_now;
                 processed_at_last_log = processed_events;
             }
@@ -434,8 +463,10 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
             scout->hops = 0;
             scout->walk_nodes.clear();
             scout->walk_nodes.push_back(s);
-            // Set token target to src so RW doesn't bias to a particular destination.
-            scout->token = make_base_token(opts.rw_variant, s, s, get_rng_seed(), n);
+            // IMPORTANT: For scouting, do NOT set RW target to the source.
+            // Many RW variants have a "direct-to-visible-target" shortcut that would keep snapping back to `s`,
+            // severely limiting exploration. Use a sentinel target (-1) so that shortcut never triggers.
+            scout->token = make_base_token(opts.rw_variant, s, -1, get_rng_seed(), n);
             if (!scout->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
 
             RwToken::WalkNodeState st;
@@ -465,7 +496,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
             // Observe waiting time of the traversed QKD link (queue length * chunk / SKR).
             (void)qkd.link_state(sender, receiver).observe_wait_s(ev.time);
 
-            const int buffered = buffered_chunks[receiver][scout->src];
+            const int buffered = buffered_keys[receiver][scout->src];
             const double p = consume_probability(scout->hops, kMaxTtl, buffered, opts.watermark_sz);
             const bool accept = (scout->hops >= kMinTtl && scout->hops <= kMaxTtl && u01(rng) < p);
 
@@ -583,6 +614,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                         ev.time, graph.node_name(chunk->src), graph.node_name(chunk->tgt), opts.block_keys
                     });
                     established_keys[chunk->tgt][chunk->src] += opts.block_keys;
+                    buffered_keys[chunk->tgt][chunk->src] += opts.block_keys;
                     keys_established_events++;
                     if (early_stop_satisfied()) break;
                 }
