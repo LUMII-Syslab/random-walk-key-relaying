@@ -8,7 +8,7 @@ The simulator is a **discrete-event** model of *key relaying with scouting*, whe
 - The accepting node loop-erases the walk into a simple **path** $(source \to target)$.
 - The accepting node **checks congestion** along the loop-erased path; if OK, it “returns” the scout by **reserving** one chunk worth of QKD key on each hop’s link queue.
 - When the source has enough one-time-pad (OTP) material available hop-by-hop, it sends a classical **chunk** along that fixed path.
-- After `block_chunks` chunks for a $(src,tgt)$ pair, the target computes how many keys can be extracted under an **optimal cartel adversary** of size $m \in \{0,1,2\}$.
+- After `block_chunks` chunks for a $(src,tgt)$ pair, the target computes how many keys can be extracted under an **optimal cartel adversary** of size $m \in 0,1,2$.
 
 The code is the source of truth; the goal here is to explain *what is being simulated* and how to interpret its output/diagnostics.
 
@@ -18,7 +18,7 @@ The code is the source of truth; the goal here is to explain *what is being simu
 - **Links**: undirected edges; each link has a QKD “key production” process modeled as a **FIFO queue** of reserved chunk-keys.
 - **Events**: processed in non-decreasing simulation time.
 - **Classical propagation latency**: every hop traversal of scouts and chunks costs a fixed
-  $\Delta = 5\text{ ms}$ (see `kClassicLatencyS`).
+$\Delta = 5\text{ ms}$ (see `kClassicLatencyS`).
 
 The simulator does **not** model quantum transmission explicitly; it models the *availability* of key material as time-varying capacity at each link via a queue and a fixed secret key rate.
 
@@ -37,8 +37,8 @@ $$T_\text{chunk} = \frac{\text{chunk bits}}{\text{SKR}} = \frac{256}{1000}\text{
 At any time $t$, the simulator can “observe” a link’s waiting time as the current **backlog time**:
 
 - `observe_wait_s(t)` returns approximately
-  $(\text{queued chunks}) \times T_\text{chunk}$,
-  with queueing interpreted as “how long until a new reservation would be ready if enqueued now”.
+$(\text{queued chunks}) \times T_\text{chunk}$,
+with queueing interpreted as “how long until a new reservation would be ready if enqueued now”.
 
 ### Reservation on return
 
@@ -67,9 +67,9 @@ At each hop arrival at `receiver` (from `sender`):
 2. **Loop-prevention drop**: if the walk returns to `src` after leaving, it is dropped.
 3. **Observe link wait** on the traversed link $(sender,receiver)$ (this affects diagnostics; it does not itself decide acceptance).
 4. **Acceptance decision**:
-   - Acceptance is allowed only if `kMinTtl ≤ hops ≤ kMaxTtl` (defaults: 1..100).
-   - The acceptance probability is `consume_probability(hops, kMaxTtl, buffered_keys[receiver][src], watermark_sz)`.
-     Intuition: nodes that already have “enough” established keys for this source are less willing (or unwilling) to accept new scouts.
+  - Acceptance is allowed only if `kMinTtl ≤ hops ≤ kMaxTtl` (defaults: 1..100).
+  - The acceptance probability is `consume_probability(hops, kMaxTtl, buffered_keys[receiver][src], watermark_sz)`.
+  Intuition: nodes that already have “enough” established keys for this source are less willing (or unwilling) to accept new scouts.
 
 If not accepted and `hops < kMaxTtl`, the scout chooses the next neighbor via the RW token and continues.
 
@@ -80,8 +80,8 @@ When a node accepts a scout:
 1. Set `tgt = receiver`.
 2. Compute `path = loop_erase_path(walk_nodes)` to obtain a simple path from `src` to `tgt`.
 3. **Congestion drop rule (max per-link wait)**:
-   - The target observes the waiting time on each hop of the *loop-erased path* at acceptance time $t$.
-   - If **any** hop has observed wait $> 10\text{ s}$ (`kDropIfAnyLinkWaitGtS`), the scout is dropped (no reservations made).
+  - The target observes the waiting time on each hop of the *loop-erased path* at acceptance time $t$.
+  - If **any** hop has observed wait $> 10\text{ s}$ (`kDropIfAnyLinkWaitGtS`), the scout is dropped (no reservations made).
 
 ### Return step (reservations)
 
@@ -111,13 +111,13 @@ Let:
 The source therefore chooses:
 
 $$
-send\_time = \max\Bigl(now,\ \max_i\bigl(hop\_ready\_time[i] - i\cdot \Delta\bigr)\Bigr),
+sendtime = \max\Bigl(now,\ \max_i\bigl(hopreadytime[i] - i\cdot \Delta\bigr)\Bigr),
 $$
 
 so that for all hops $i$:
 
 $$
-send\_time + i\cdot \Delta \ge hop\_ready\_time[i].
+sendtime + i\cdot \Delta \ge hopreadytime[i].
 $$
 
 Once started, the chunk traverses the fixed path with only classical latency per hop. When it reaches the target, the simulator records a `recv_chunk` event with the path.
@@ -132,21 +132,21 @@ At block close, the simulator computes how many **extractable keys** the pair es
 
 1. Consider the multiset of loop-erased paths observed in the block (one per chunk).
 2. An adversary is a **cartel of size $m$** (`--cartel-size`):
-   - $m=0$: no cartel (sees nothing).
-   - $m=1$: one intermediate node chosen **optimally** to maximize how many of the block’s paths it appears on (excluding `src` and `tgt`).
-   - $m=2$: two intermediate nodes chosen **optimally** to maximize coverage of paths by the OR of their appearances.
+  - $m=0$: no cartel (sees nothing).
+  - $m=1$: one intermediate node chosen **optimally** to maximize how many of the block’s paths it appears on (excluding `src` and `tgt`).
+  - $m=2$: two intermediate nodes chosen **optimally** to maximize coverage of paths by the OR of their appearances.
 3. Let `max_seen` be the maximum number of block paths covered by the optimal cartel.
 4. Define:
 
 $$
-h = \text{block\_chunks} - max\_seen.
+h = \text{blockchunks} - maxseen.
 $$
 
-5. The number of extracted keys from the block is:
+1. The number of extracted keys from the block is:
 
 - `extracted_keys = min(max_block_keys, h)` if $h>0$, else 0.
 
-This makes “every path goes through the same cartel node(s)” correspond to $max\_seen = block\_chunks$ and hence **zero** extracted keys.
+This makes “every path goes through the same cartel node(s)” correspond to $maxseen = blockchunks$ and hence **zero** extracted keys.
 
 ### Buffered keys and willingness to accept scouts
 
@@ -203,5 +203,5 @@ This simulator is a **model**, not a full QKD network stack. In particular:
 - Link SKR is constant, and all key consumption is in fixed 256-bit chunks.
 - Classical latency is constant per hop (5 ms).
 - The accept probability depends on local buffered keys and hop count; it is not derived from a full protocol implementation.
-- Security is reduced to “cartel covers these paths → those chunks are compromised”, producing the simple $h=\text{block\_chunks}-max\_seen$ accounting.
+- Security is reduced to “cartel covers these paths → those chunks are compromised”, producing the simple $h=\text{blockchunks}-maxseen$ accounting.
 
