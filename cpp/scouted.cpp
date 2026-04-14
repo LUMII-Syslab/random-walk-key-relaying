@@ -207,12 +207,18 @@ static unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx
 }
 
 static int derive_scout_seed(uint64_t base_seed, uint64_t scout_idx) {
-    const uint32_t a = static_cast<uint32_t>(base_seed ^ (base_seed >> 32));
-    const uint32_t b = static_cast<uint32_t>(scout_idx ^ (scout_idx >> 32));
-    seed_seq seq{a, b};
-    array<uint32_t, 1> out{};
-    seq.generate(out.begin(), out.end());
-    return static_cast<int>(out[0]);
+    // Use splitmix64-style mixing to avoid correlations between successive seeds
+    // (important when downstream uses rng()%deg for small degrees).
+    auto mix64 = [](uint64_t x) -> uint64_t {
+        x += 0x9e3779b97f4a7c15ull;
+        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+        x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+        x = x ^ (x >> 31);
+        return x;
+    };
+    uint64_t x = base_seed ^ mix64(scout_idx);
+    uint64_t y = mix64(x);
+    return static_cast<int>(static_cast<uint32_t>(y ^ (y >> 32)));
 }
 
 static double consume_probability(int hops, int max_ttl, int buffered_keys_for_src, int watermark_sz) {
@@ -308,6 +314,10 @@ struct Scout {
     int tgt = -1;
     vector<int> path; // loop-erased s..t inclusive
 
+    // Filled when a node accepts the scout (before return walk).
+    int raw_walk_vertices_at_accept = 0;
+    int hops_at_accept = 0;
+
     // per-hop OTP ready times computed on return; indexed by hop i (edge path[i]->path[i+1])
     vector<double> hop_ready_time;
 };
@@ -317,6 +327,15 @@ struct Chunk {
     int tgt = -1;
     vector<int> path; // s..t inclusive
     int pos = 0;
+    // Snapshot from scouting (accept defines tgt; hops = graph hops from src to acceptor).
+    int raw_walk_vertices_at_accept = 0;
+    int hops_at_accept = 0;
+};
+
+struct BlockPathEntry {
+    vector<int> path;
+    int scout_raw_walk_vertices = 0;
+    int scout_hops_at_accept = 0;
 };
 
 enum class EventType {
@@ -391,6 +410,33 @@ static Graph build_filtered_graph(const Graph &g, const vector<string> &delete_n
     return Graph(ss);
 }
 
+static bool exists_path_avoiding_nodes(const Graph &graph, int src, int tgt, const vector<int> &forbidden) {
+    if (src == tgt) return true;
+    vector<char> blocked(graph.node_count(), 0);
+    for (int v : forbidden) {
+        if (v < 0 || v >= graph.node_count()) continue;
+        blocked[v] = 1;
+    }
+    blocked[src] = 0;
+    blocked[tgt] = 0;
+
+    deque<int> q;
+    vector<char> seen(graph.node_count(), 0);
+    q.push_back(src);
+    seen[src] = 1;
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop_front();
+        if (u == tgt) return true;
+        for (int v : graph.neighbors(u)) {
+            if (blocked[v] || seen[v]) continue;
+            seen[v] = 1;
+            q.push_back(v);
+        }
+    }
+    return false;
+}
+
 static SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
     QueueQkdNetwork qkd{Graph(graph)}; // own link queues
     const int n = graph.node_count();
@@ -418,8 +464,8 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
     // Established keys count (tgt -> (src -> count)).
     vector<unordered_map<int, int>> established_keys(n);
 
-    // Per (tgt, src): store loop-erased paths for the current block window.
-    vector<unordered_map<int, vector<vector<int>>>> block_paths(n);
+    // Per (tgt, src): store loop-erased paths (+ scout walk stats) for the current block window.
+    vector<unordered_map<int, vector<BlockPathEntry>>> block_paths(n);
 
     auto early_stop_satisfied = [&]() -> bool {
         if (opts.min_keys_per_pair <= 0) return false;
@@ -447,6 +493,10 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
     uint64_t scouts_emitted = 0;
     uint64_t scouts_accepted = 0;
     uint64_t scouts_dropped_wait = 0;
+    uint64_t scouts_dropped_ttl_gt_1000 = 0;
+    uint64_t scouts_dropped_return_src = 0;
+    uint64_t scouts_dropped_max_ttl = 0;
+    array<uint64_t, 6> scout_accept_hop_hist{}; // bins: hops 1,2,3,4,5,6+
     uint64_t chunks_started = 0;
     uint64_t chunks_received = 0;
     uint64_t keys_established_events = 0;
@@ -478,7 +528,12 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                      << " pq=" << pq.size()
                      << " ev=" << processed_events
                      << " ev/s=" << evps
-                     << " scouts(em/acc/dropWait)=" << scouts_emitted << "/" << scouts_accepted << "/" << scouts_dropped_wait
+                     << " scouts(em/acc)=" << scouts_emitted << "/" << scouts_accepted
+                     << " drop(ttl1000/srcRet/maxTtl/wait)=" << scouts_dropped_ttl_gt_1000 << "/" << scouts_dropped_return_src << "/"
+                     << scouts_dropped_max_ttl << "/" << scouts_dropped_wait
+                     << " accept_hops[1..5,6+]=" << scout_accept_hop_hist[0] << "," << scout_accept_hop_hist[1] << ","
+                     << scout_accept_hop_hist[2] << "," << scout_accept_hop_hist[3] << "," << scout_accept_hop_hist[4] << ","
+                     << scout_accept_hop_hist[5]
                      << " chunks(start/recv)=" << chunks_started << "/" << chunks_received
                      << " key_events=" << keys_established_events
                      << "\n";
@@ -551,10 +606,16 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
             scout->hops += 1;
             scout->walk_nodes.push_back(receiver);
-            if (scout->hops > 1000) continue;
+            if (scout->hops > 1000) {
+                scouts_dropped_ttl_gt_1000++;
+                continue;
+            }
 
             // Loop-prevention: if it returns to its source, drop.
-            if (receiver == scout->src && scout->hops > 1) continue;
+            if (receiver == scout->src && scout->hops > 1) {
+                scouts_dropped_return_src++;
+                continue;
+            }
 
             // Observe waiting time of the traversed QKD link (queue length * chunk / SKR).
             (void)qkd.link_state(sender, receiver).observe_wait_s(ev.time);
@@ -565,6 +626,8 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
             if (accept) {
                 scout->tgt = receiver;
+                scout->raw_walk_vertices_at_accept = static_cast<int>(scout->walk_nodes.size());
+                scout->hops_at_accept = scout->hops;
                 scout->path = loop_erase_path(scout->walk_nodes);
                 if (scout->path.size() < 2 || scout->path.front() != scout->src || scout->path.back() != scout->tgt) {
                     throw runtime_error("loop erasure produced invalid path");
@@ -585,13 +648,20 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
                 // Begin return: enqueue onto each link queue along the path (from t back to s).
                 scouts_accepted++;
+                {
+                    const int hb = min(max(scout->hops_at_accept - 1, 0), 5);
+                    scout_accept_hop_hist[static_cast<size_t>(hb)]++;
+                }
                 scout->hop_ready_time.assign(scout->path.size() - 1, 0.0);
                 const int start_pos = static_cast<int>(scout->path.size()) - 1; // index of target node in path
                 pq.push(Event{ev.time, EventType::ScoutReturnStep, -1, scout, nullptr, -1, -1, start_pos});
                 continue;
             }
 
-            if (scout->hops >= kMaxTtl) continue;
+            if (scout->hops >= kMaxTtl) {
+                scouts_dropped_max_ttl++;
+                continue;
+            }
             if (adj[receiver].empty()) continue;
 
             RwToken::WalkNodeState st;
@@ -624,6 +694,8 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                 chunk->tgt = scout->tgt;
                 chunk->path = scout->path;
                 chunk->pos = 0;
+                chunk->raw_walk_vertices_at_accept = scout->raw_walk_vertices_at_accept;
+                chunk->hops_at_accept = scout->hops_at_accept;
                 pq.push(Event{send_time, EventType::StartChunk, -1, nullptr, chunk, -1, -1, -1});
                 continue;
             }
@@ -671,7 +743,8 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
 
                 int &cnt = block_recv_count[chunk->tgt][chunk->src];
                 cnt += 1;
-                block_paths[chunk->tgt][chunk->src].push_back(chunk->path);
+                block_paths[chunk->tgt][chunk->src].push_back(BlockPathEntry{
+                    chunk->path, chunk->raw_walk_vertices_at_accept, chunk->hops_at_accept});
                 if (cnt >= opts.block_chunks) {
                     cnt = 0;
                     // Adversary model (for now): cartel size m=1, chosen optimally per (src,tgt)
@@ -680,11 +753,31 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                     const size_t W = paths.size();
                     const size_t words = (W + 63) / 64;
 
+                    // Diagnostics: path diversity and first-hop distribution from src.
+                    struct VecHash {
+                        size_t operator()(const vector<int> &v) const noexcept {
+                            size_t h = 0;
+                            for (int x : v) {
+                                h ^= std::hash<int>{}(x) + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+                            }
+                            return h;
+                        }
+                    };
+                    unordered_set<vector<int>, VecHash> unique_paths;
+                    unique_paths.reserve(paths.size() * 2 + 1);
+                    unordered_map<int, int> first_hop_count;
+                    first_hop_count.reserve(32);
+                    for (const auto &e : paths) {
+                        unique_paths.insert(e.path);
+                        if (e.path.size() >= 2) first_hop_count[e.path[1]] += 1;
+                    }
+
                     // node -> bitset of which path indices contain it
                     unordered_map<int, vector<uint64_t>> seen_bits;
                     seen_bits.reserve(256);
                     for (size_t pi = 0; pi < paths.size(); pi++) {
-                        const auto &p = paths[pi];
+                        const auto &e = paths[pi];
+                        const auto &p = e.path;
                         if (p.size() < 2) continue;
                         const size_t wi = pi / 64;
                         const uint64_t bit = 1ull << (pi % 64);
@@ -759,16 +852,79 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                     });
                     established_keys[chunk->tgt][chunk->src] += extracted_keys;
                     buffered_keys[chunk->tgt][chunk->src] += extracted_keys;
-                    block_paths[chunk->tgt][chunk->src].clear();
                     keys_established_events++;
+
+                    int sc_h_min = 0, sc_h_max = 0, sc_w_min = 0, sc_w_max = 0, sc_e_min = 0, sc_e_max = 0;
+                    long long sc_h_sum = 0, sc_w_sum = 0, sc_e_sum = 0;
+                    array<int, 6> block_accept_hist{};
+                    {
+                        bool sc_first = true;
+                        for (const auto &e : paths) {
+                            const int ha = e.scout_hops_at_accept;
+                            const int wv = e.scout_raw_walk_vertices;
+                            const int ev = static_cast<int>(e.path.size());
+                            if (sc_first) {
+                                sc_h_min = sc_h_max = ha;
+                                sc_w_min = sc_w_max = wv;
+                                sc_e_min = sc_e_max = ev;
+                                sc_first = false;
+                            } else {
+                                sc_h_min = min(sc_h_min, ha);
+                                sc_h_max = max(sc_h_max, ha);
+                                sc_w_min = min(sc_w_min, wv);
+                                sc_w_max = max(sc_w_max, wv);
+                                sc_e_min = min(sc_e_min, ev);
+                                sc_e_max = max(sc_e_max, ev);
+                            }
+                            sc_h_sum += ha;
+                            sc_w_sum += wv;
+                            sc_e_sum += ev;
+                            const int hb = min(max(ha - 1, 0), 5);
+                            block_accept_hist[static_cast<size_t>(hb)]++;
+                        }
+                    }
+                    const double sc_h_avg = W ? static_cast<double>(sc_h_sum) / static_cast<double>(W) : 0.0;
+                    const double sc_w_avg = W ? static_cast<double>(sc_w_sum) / static_cast<double>(W) : 0.0;
+                    const double sc_e_avg = W ? static_cast<double>(sc_e_sum) / static_cast<double>(W) : 0.0;
+
                     if (opts.verbose) {
+                        auto print_path_compact = [&](const vector<int> &p) -> void {
+                            const int max_nodes = 18;
+                            cerr << "[";
+                            if ((int)p.size() <= max_nodes) {
+                                for (size_t i = 0; i < p.size(); i++) {
+                                    if (i) cerr << " ";
+                                    cerr << graph.node_name(p[i]);
+                                }
+                            } else {
+                                for (int i = 0; i < max_nodes / 2; i++) {
+                                    if (i) cerr << " ";
+                                    cerr << graph.node_name(p[i]);
+                                }
+                                cerr << " ...";
+                                for (size_t i = p.size() - (max_nodes / 2); i < p.size(); i++) {
+                                    cerr << " " << graph.node_name(p[i]);
+                                }
+                            }
+                            cerr << "]";
+                        };
+
+                        cerr.setf(ios::fixed);
+                        cerr.precision(2);
                         cerr << "  [block] sim=" << ev.time
                              << " src=" << graph.node_name(chunk->src)
                              << " tgt=" << graph.node_name(chunk->tgt)
                              << " cartel_size=" << opts.cartel_size
+                             << " uniq_paths=" << unique_paths.size()
                              << " max_seen=" << max_seen_by_cartel
                              << " h=" << h
-                             << " keys=" << extracted_keys;
+                             << " keys=" << extracted_keys
+                             << " accept_hops(min/avg/max)=" << sc_h_min << "/" << sc_h_avg << "/" << sc_h_max
+                             << " hist[1..6+]=" << block_accept_hist[0] << "," << block_accept_hist[1] << ","
+                             << block_accept_hist[2] << "," << block_accept_hist[3] << "," << block_accept_hist[4] << ","
+                             << block_accept_hist[5]
+                             << " walk_v(min/avg/max)=" << sc_w_min << "/" << sc_w_avg << "/" << sc_w_max
+                             << " erased_v(min/avg/max)=" << sc_e_min << "/" << sc_e_avg << "/" << sc_e_max;
                         if (!best_nodes.empty()) {
                             cerr << " cartel_nodes=";
                             for (size_t i = 0; i < best_nodes.size(); i++) {
@@ -776,8 +932,62 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
                                 cerr << graph.node_name(best_nodes[i]);
                             }
                         }
+                        // First-hop distribution (top 5).
+                        {
+                            vector<pair<int, int>> fh;
+                            fh.reserve(first_hop_count.size());
+                            for (const auto &kv : first_hop_count) fh.push_back({kv.first, kv.second});
+                            sort(fh.begin(), fh.end(), [](const auto &a, const auto &b) {
+                                if (a.second != b.second) return a.second > b.second;
+                                return a.first < b.first;
+                            });
+                            cerr << " first_hops=";
+                            const int show = min<int>(5, fh.size());
+                            for (int i = 0; i < show; i++) {
+                                if (i) cerr << ",";
+                                cerr << graph.node_name(fh[i].first) << ":" << fh[i].second;
+                            }
+                            if ((int)fh.size() > show) cerr << ",...";
+                        }
+                        // Intermediate nodes (top 5 by number of paths they appear in).
+                        {
+                            vector<pair<int, int>> top_mid;
+                            top_mid.reserve(seen_bits.size());
+                            for (const auto &kv : seen_bits) {
+                                int c = 0;
+                                for (uint64_t w : kv.second) c += __builtin_popcountll(w);
+                                top_mid.push_back({kv.first, c});
+                            }
+                            sort(top_mid.begin(), top_mid.end(), [](const auto &a, const auto &b) {
+                                if (a.second != b.second) return a.second > b.second;
+                                return a.first < b.first;
+                            });
+                            cerr << " top_mid=";
+                            const int show = min<int>(5, top_mid.size());
+                            for (int i = 0; i < show; i++) {
+                                if (i) cerr << ",";
+                                cerr << graph.node_name(top_mid[i].first) << ":" << top_mid[i].second;
+                            }
+                            if ((int)top_mid.size() > show) cerr << ",...";
+                        }
+                        // Representative path(s) when diversity is small.
+                        if (unique_paths.size() <= 2) {
+                            int shown = 0;
+                            for (const auto &p : unique_paths) {
+                                cerr << " path" << (shown + 1) << "=";
+                                print_path_compact(p);
+                                shown++;
+                                if (shown >= 2) break;
+                            }
+                        }
+
+                        // If cartel dominates the whole window, check whether a cartel-avoiding path exists in the graph.
+                        if (!best_nodes.empty() && max_seen_by_cartel >= opts.block_chunks) {
+                            cerr << " avoid_cartel_path=" << (exists_path_avoiding_nodes(graph, chunk->src, chunk->tgt, best_nodes) ? 1 : 0);
+                        }
                         cerr << "\n";
                     }
+                    block_paths[chunk->tgt][chunk->src].clear();
                     if (early_stop_satisfied()) break;
                 }
                 continue;
