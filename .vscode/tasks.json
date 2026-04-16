@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "make: scouted2",
+      "type": "shell",
+      "command": "make",
+      "args": ["build/scouted2"],
+      "options": {
+        "cwd": "${workspaceFolder}/cpp"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

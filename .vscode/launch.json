@@ -5,8 +5,9 @@
       "name": "Debug proactive (gdb)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/cpp/build/proactive",
-      "args": [],
+      "preLaunchTask": "make: scouted2",
+      "program": "${workspaceFolder}/cpp/build/scouted2",
+      "args": ["-S", "MIL", "-e", "${workspaceFolder}/graphs/geant/edges.csv"],
       "cwd": "${workspaceFolder}/cpp",
       "stopAtEntry": false,
       "externalConsole": false,
@@ -22,4 +23,3 @@
     }
   ]
 }
-

@@ -21,7 +21,7 @@ struct Options{
     string edges_csv = "";
     vector<string> src_nodes;
     bool verbose;
-    int watermark_sz = 32;
+    int watermark_sz = 128;
     uint ttl = 100;
     int max_wait_time_s = 2;
 
@@ -57,7 +57,7 @@ struct Event{
 };
 
 bool operator<(const Event& lhs, const Event& rhs){
-    return lhs.time < rhs.time;
+    return lhs.time > rhs.time;
 }
 
 bool consume(int keys_in_buff, int watermark, int hop_count, int ttl){
@@ -92,6 +92,8 @@ void run_simulation(const Options& opts, const Graph& graph){
     }
 
     map<pair<int,int>,int> established_keys;
+    map<pair<int,int>,int> chunks_received;
+    map<pair<int,int>, map<int,int>> chunk_traversed;
 
     map<pair<int,int>,int> reserved_total_on_qkd_link;
 
@@ -99,7 +101,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         if(from>to) swap(from,to);
         double generated = QKD_SKR_BITS_P_S * time_now;
         double extracted = reserved_total_on_qkd_link[{from,to}];
-        double req_bits_to_gen = 256-(generated-extracted);
+        double req_bits_to_gen = CHUNK_SIZE_BITS-(generated-extracted);
         double time_to_gen = req_bits_to_gen/QKD_SKR_BITS_P_S;
         return max(time_to_gen, 0.0);
     };
@@ -109,7 +111,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         double generated = QKD_SKR_BITS_P_S * time_now;
         double extracted = reserved_total_on_qkd_link[{from,to}];
         reserved_total_on_qkd_link[{from,to}]++;
-        double req_bits_to_gen = 256-(generated-extracted);
+        double req_bits_to_gen = CHUNK_SIZE_BITS-(generated-extracted);
         double time_to_gen = req_bits_to_gen/QKD_SKR_BITS_P_S;
         return max(time_to_gen, 0.0);
     };
@@ -170,14 +172,29 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
         
         if(e.type == EventType::ChunkReceived){
-            established_keys[{e.origin, e.target}]++;
-            if(opts.verbose){
-                cout<<"chunk";
-                for(int x: e.history){
-                    string name = graph.node_name(x);
-                    cout<<" "<<x;
+            chunks_received[{e.origin, e.target}]++;
+            for(int x: e.history){
+                chunk_traversed[{e.origin, e.target}][x]++;
+            }
+            if(chunks_received[{e.origin, e.target}]==opts.watermark_sz){
+                chunks_received[{e.origin, e.target}]=0;
+                int max_chunks_traversed = 0;
+                int max_chunks_traversed_node = -1;
+                for(auto [node, cnt]: chunk_traversed[{e.origin, e.target}]){
+                    if(node==e.origin||node==e.target) continue;
+                    if (cnt>max_chunks_traversed){
+                        max_chunks_traversed = cnt;
+                        max_chunks_traversed_node = node;
+                    }
                 }
-                cout<<endl;
+                chunk_traversed[{e.origin, e.target}] = map<int,int>();
+                int honesty = opts.watermark_sz - max_chunks_traversed;
+                established_keys[{e.origin, e.target}]+=honesty;
+                if(opts.verbose){
+                    string node_name = "-";
+                    if (max_chunks_traversed_node!=-1) node_name = graph.node_name(max_chunks_traversed_node);
+                    cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" "<<node_name<<" "<<max_chunks_traversed<<endl;
+                }
             }
         }
 
