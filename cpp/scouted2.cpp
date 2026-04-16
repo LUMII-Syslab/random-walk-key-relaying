@@ -62,6 +62,7 @@ bool operator<(const Event& lhs, const Event& rhs){
 
 bool consume(int keys_in_buff, int watermark, int hop_count, int ttl){
     if(keys_in_buff>=watermark) return false;
+    if(rng()%2==0) return false;
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
