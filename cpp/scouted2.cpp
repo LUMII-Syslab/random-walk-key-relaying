@@ -22,7 +22,7 @@ struct Options{
     vector<string> src_nodes;
     bool verbose;
     int watermark_sz = 32;
-    int ttl = 100;
+    uint ttl = 100;
     int max_wait_time_s = 2;
 
     void print(){
@@ -88,7 +88,7 @@ void run_simulation(const Options& opts, const Graph& graph){
 
     for(string src: opts.src_nodes){
         int origin = graph.node_index(src);
-        pq.push(Event{0.0,EventType::EmitScout,origin,-1,-1,nullptr,{},{}});
+        pq.push(Event{0.0,EventType::EmitScout,origin,-1,-1,nullptr,{},-1,0});
     }
 
     map<pair<int,int>,int> established_keys;
@@ -120,14 +120,14 @@ void run_simulation(const Options& opts, const Graph& graph){
 
         if(e.type == EventType::EmitScout){
             double next_occurrence = e.time + 1/SCOUTS_PER_SECONDS;
-            pq.push(Event{next_occurrence,EventType::EmitScout,e.origin,-1,-1,nullptr,{},-1});
+            pq.push(Event{next_occurrence,EventType::EmitScout,e.origin,-1,-1,nullptr,{},-1,0});
             shared_ptr<RwToken> token = make_shared<HsToken>(e.origin, -1, rng());
             int ngh = token->choose_next_and_update(e.origin, graph.neighbors(e.origin));
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
             bool wait_time_ok = predict_wait_time(e.time, e.sender, e.receiver)<=opts.max_wait_time_s;
             bool ttl_ok = 1 <= opts.ttl;
             if(wait_time_ok&&ttl_ok)
-                pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.origin,ngh,token,{e.origin,ngh}});
+                pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.origin,ngh,token,{e.origin,ngh},-1,0});
             continue;
         }
 
@@ -145,9 +145,9 @@ void run_simulation(const Options& opts, const Graph& graph){
             new_history.push_back(ngh);
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
             bool wait_time_ok = predict_wait_time(e.time, e.sender, e.receiver)<=opts.max_wait_time_s;
-            bool ttl_ok = new_history.size()-1 <= opts.ttl;
+            bool ttl_ok = new_history.size() <= opts.ttl+1;
             if(wait_time_ok&&ttl_ok)
-                pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.receiver,ngh,e.token,new_history});
+                pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.receiver,ngh,e.token,new_history,-1,0});
             continue;
         }
 
