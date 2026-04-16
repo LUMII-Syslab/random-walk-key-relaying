@@ -587,9 +587,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
             scout->token = make_base_token(opts.rw_variant, s, -1, derive_scout_seed(opts.seed, scout_counter), n);
             if (!scout->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
 
-            RwToken::WalkNodeState st;
-            st.node_idx = s;
-            int next = scout->token->choose_next_and_update(st, graph.neighbors(s));
+            int next = scout->token->choose_next_and_update(s, graph.neighbors(s));
             pq.push(Event{ev.time + kClassicLatencyS, EventType::ScoutArrive, -1, scout, nullptr, s, next, -1});
 
             const double dt = 1.0 / opts.scout_rate_per_s;
@@ -664,9 +662,7 @@ static SimulationOutput run_simulation(const Options &opts, const Graph &graph) 
             }
             if (adj[receiver].empty()) continue;
 
-            RwToken::WalkNodeState st;
-            st.node_idx = receiver;
-            int next = scout->token->choose_next_and_update(st, adj[receiver]);
+            int next = scout->token->choose_next_and_update(receiver, adj[receiver]);
             pq.push(Event{ev.time + kClassicLatencyS, EventType::ScoutArrive, -1, scout, nullptr, receiver, next, -1});
             continue;
         }

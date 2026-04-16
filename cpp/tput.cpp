@@ -251,9 +251,7 @@ vector<int> sample_loop_erased_path(
     int hops = 0;
     vector<int> history = {src_idx};
     while (position != tgt_idx) {
-        RwToken::WalkNodeState node_state;
-        node_state.node_idx = position;
-        int next = token->choose_next_and_update(node_state, adj[position]);
+        int next = token->choose_next_and_update(position, adj[position]);
         position = next;
         history.push_back(position);
         hops++;
@@ -284,8 +282,6 @@ RunResult run_single_simulation(
     priority_queue<Event, vector<Event>, EventGreater> pq;
     vector<int> relay_free(static_cast<int>(adj.size()), opts.relay_buffer_sz_chunks);
     vector<priority_queue<Event, vector<Event>, WaitingEventGreater>> slot_polling_events(static_cast<int>(adj.size()));
-    vector<map<int, int>> sent_to_neighbor_count(static_cast<int>(adj.size()));
-    const bool uses_send_state = (opts.rw_variant == "HSB" || opts.rw_variant == "BHS");
     const int node_count = static_cast<int>(adj.size());
 
     auto schedule_first_hop = [&](double now, int source_node) -> void {
@@ -311,16 +307,7 @@ RunResult run_single_simulation(
             pkt->token = make_base_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
         }
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
-        RwToken::WalkNodeState node_state;
-        node_state.node_idx = source_node;
-        node_state.no_of_runs = max(1, result.emitted_chunks + 1);
-        if (uses_send_state) {
-            node_state.sent_to_neighbor_count = &sent_to_neighbor_count[source_node];
-        }
-        int next = pkt->token->choose_next_and_update(node_state, adj[source_node]);
-        if (uses_send_state) {
-            sent_to_neighbor_count[source_node][next]++;
-        }
+        int next = pkt->token->choose_next_and_update(source_node, adj[source_node]);
         pkt->hops = 1;
         if (pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
         double wait = net.link_state(source_node, next).reserve(
@@ -393,16 +380,7 @@ RunResult run_single_simulation(
                 continue;
             }
 
-            RwToken::WalkNodeState node_state;
-            node_state.node_idx = ev.at;
-            node_state.no_of_runs = max(1, result.emitted_chunks + 1);
-            if (uses_send_state) {
-                node_state.sent_to_neighbor_count = &sent_to_neighbor_count[ev.at];
-            }
-            int next = ev.pkt->token->choose_next_and_update(node_state, adj[ev.at]);
-            if (uses_send_state) {
-                sent_to_neighbor_count[ev.at][next]++;
-            }
+            int next = ev.pkt->token->choose_next_and_update(ev.at, adj[ev.at]);
             ev.pkt->hops++;
             if (ev.pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");
             double wait = net.link_state(ev.at, next).reserve(

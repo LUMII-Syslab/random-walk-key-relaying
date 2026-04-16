@@ -256,9 +256,7 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
         pkt->token = make_base_token(opts.rw_variant, src_idx, src_idx, get_rng_seed(), node_count);
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
 
-        RwToken::WalkNodeState node_state;
-        node_state.node_idx = src_idx;
-        int next = pkt->token->choose_next_and_update(node_state, graph.neighbors(src_idx));
+        int next = pkt->token->choose_next_and_update(src_idx, graph.neighbors(src_idx));
 
         // Reserve OTP on (src -> next) and schedule availability.
         const double wait = qkd_network.link_state(src_idx, next).reserve(
@@ -347,9 +345,7 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
                 if (adj[receiver].empty()) {
                     // nowhere to go, treat as drop
                 } else {
-                    RwToken::WalkNodeState node_state;
-                    node_state.node_idx = receiver;
-                    int next = pkt.token->choose_next_and_update(node_state, adj[receiver]);
+                    int next = pkt.token->choose_next_and_update(receiver, adj[receiver]);
                     const double wait = qkd_network.link_state(receiver, next).reserve(
                         ev.time, kChunkBits, kLinkBuffSzBits, kQkdSkrBitsPerS
                     );

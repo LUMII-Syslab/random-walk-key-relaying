@@ -27,11 +27,7 @@ inline bool has_neighbor(const vector<int> &nbrs, int node_idx) {
 }
 
 struct RwToken{
-    struct WalkNodeState {
-        int node_idx = -1;
-    };
-
-    virtual int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs) = 0;
+    virtual int choose_next_and_update(int node_idx, const vector<int> &nbrs) = 0;
 };
 
 class FixedPathToken: public RwToken{
@@ -42,12 +38,12 @@ public:
         if(path.size() < 2) throw runtime_error("Fixed path token requires at least two nodes");
     }
 
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
         (void)nbrs;
         if(path_pos >= path.size() - 1) {
             throw runtime_error("Fixed path token exhausted");
         }
-        if(state.node_idx != path[path_pos]) {
+        if(node_idx != path[path_pos]) {
             throw runtime_error("Fixed path token used at unexpected node");
         }
         int next = path[path_pos + 1];
@@ -69,8 +65,8 @@ public:
         this->src_node_idx = src;
         this->tgt_node_idx = tgt;
     }
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
-        (void)state;
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
+        (void)node_idx;
 #if RW_DIRECT_TO_VISIBLE_TARGET
         if(has_neighbor(nbrs, tgt_node_idx)) return tgt_node_idx;
 #endif
@@ -92,8 +88,8 @@ public:
         current = src_node_idx;
         previous = -1;
     }
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
-        (void)state;
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
+        (void)node_idx;
 #if RW_DIRECT_TO_VISIBLE_TARGET
         if(has_neighbor(nbrs, tgt_node_idx)) {
             previous = current;
@@ -149,8 +145,8 @@ public:
         age = 0;
         last_seen[src_node_idx]=0;
     }
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
-        (void)state;
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
+        (void)node_idx;
 #if RW_DIRECT_TO_VISIBLE_TARGET
         if(has_neighbor(nbrs, tgt_node_idx)) {
             append_to_history(tgt_node_idx);
@@ -234,8 +230,8 @@ public:
         age = 0;
         last_seen[src_node_idx] = age;
     }
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
-        (void)state;
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
+        (void)node_idx;
         vector<int> choices = enabled_neighbors(nbrs);
         if(choices.empty()) {
             throw runtime_error("NC walk reached a node whose only neighbors are disabled");
@@ -310,8 +306,8 @@ public:
         visited.insert(src_node_idx);
         last_visited[src_node_idx] = age;
     }
-    int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs){
-        (void)state;
+    int choose_next_and_update(int node_idx, const vector<int> &nbrs){
+        (void)node_idx;
 #if RW_DIRECT_TO_VISIBLE_TARGET
         if(has_neighbor(nbrs, tgt_node_idx)) {
             visited.insert(tgt_node_idx);
@@ -363,4 +359,3 @@ public:
     }
 
 };
-
