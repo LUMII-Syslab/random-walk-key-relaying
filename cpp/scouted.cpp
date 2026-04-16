@@ -70,7 +70,7 @@ struct Options {
     vector<string> delete_nodes; // node names to delete from graph
 
     // Phase 1: scout emission rate (per source)
-    double scout_rate_per_s = 20.0;
+    double scout_rate_per_s = 1.0;
 
     // Phase 4: block formation
     int block_chunks = 32;
@@ -1075,4 +1075,3 @@ int main(int argc, char **argv) {
         return 1;
     }
 }
-

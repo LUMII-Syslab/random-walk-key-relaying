@@ -38,3 +38,31 @@ inline int choose_uniformly(const vector<int> &choices, mt19937 &rng){
     int idx = rng() % choices.size();
     return choices[idx];
 }
+
+inline std::vector<std::string> split(const std::string& s, string delimiter)
+{
+    std::vector<std::string> result;
+
+    std::size_t current = 0;
+    std::size_t p = s.find_first_of(delimiter, 0);
+
+    while (p != std::string::npos)
+    {
+        result.emplace_back(s, current, p - current);
+        current = p + 1;
+        p = s.find_first_of(delimiter, current);
+    }
+
+    result.emplace_back(s, current);
+
+    return result;
+}
+
+inline string join(vector<string> words, string delimiter){
+    string res="";
+    for(unsigned int i=0;i<words.size();i++){
+        if(i>0)res+=delimiter;
+        res+=words[i];
+    }
+    return res;
+}

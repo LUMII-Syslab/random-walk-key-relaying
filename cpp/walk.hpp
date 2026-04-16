@@ -29,8 +29,6 @@ inline bool has_neighbor(const vector<int> &nbrs, int node_idx) {
 struct RwToken{
     struct WalkNodeState {
         int node_idx = -1;
-        const map<int, int> *sent_to_neighbor_count = nullptr;
-        int no_of_runs = 1;
     };
 
     virtual int choose_next_and_update(const WalkNodeState &state, const vector<int> &nbrs) = 0;
