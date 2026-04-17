@@ -129,7 +129,7 @@ void run_simulation(const Options& opts, const Graph& graph){
             shared_ptr<RwToken> token = make_shared<HsToken>(e.origin, -1, rng());
             int ngh = token->choose_next_and_update(e.origin, graph.neighbors(e.origin));
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
-            bool wait_time_ok = predict_wait_time(e.time, e.sender, e.receiver)<=opts.max_wait_time_s;
+            bool wait_time_ok = predict_wait_time(e.time, e.origin, ngh)<=opts.max_wait_time_s;
             bool ttl_ok = 1 <= opts.ttl;
             if(wait_time_ok&&ttl_ok)
                 pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.origin,ngh,token,{e.origin,ngh},-1,0});
@@ -149,7 +149,7 @@ void run_simulation(const Options& opts, const Graph& graph){
             vector<int> new_history = e.history;
             new_history.push_back(ngh);
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
-            bool wait_time_ok = predict_wait_time(e.time, e.sender, e.receiver)<=opts.max_wait_time_s;
+            bool wait_time_ok = predict_wait_time(e.time, e.receiver, ngh)<=opts.max_wait_time_s;
             bool ttl_ok = new_history.size() <= opts.ttl+1;
             if(wait_time_ok&&ttl_ok)
                 pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.receiver,ngh,e.token,new_history,-1,0});
@@ -168,9 +168,10 @@ void run_simulation(const Options& opts, const Graph& graph){
             }
             assert(idx>=1);
             int nxt = e.history[idx-1];
-            double wait_time = max(e.wait,enqueue_on_link(e.time, e.receiver, nxt));
+            double wait_time = enqueue_on_link(e.time, e.receiver, nxt);
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
-            pq.push(Event{arrives_at,EventType::ScoutReturn,e.origin,e.receiver,nxt,nullptr,e.history,e.target,wait_time});
+            double max_wait = max(e.wait, wait_time);
+            pq.push(Event{arrives_at,EventType::ScoutReturn,e.origin,e.receiver,nxt,nullptr,e.history,e.target,max_wait});
             continue;
         }
         
