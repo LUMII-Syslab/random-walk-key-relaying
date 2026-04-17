@@ -24,6 +24,8 @@ struct Options{
     int watermark_sz = 128;
     uint ttl = 100;
     int max_wait_time_s = 2;
+    int required_cnt = -1;
+    double max_consume_prob = 0.5;
 
     void print(){
         cout<<"edges_csv: "<<edges_csv<<endl;
@@ -60,14 +62,14 @@ bool operator<(const Event& lhs, const Event& rhs){
     return lhs.time > rhs.time;
 }
 
-bool consume(int keys_in_buff, int watermark, int hop_count, int ttl){
+bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max_consume_prob){
     if(keys_in_buff>=watermark) return false;
-    if(rng()%2==0) return false;
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
-    double p = 1 - b*t;
+    double p = 1 - b*t*1.2;
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
+    p = min(p, max_consume_prob);
     return r <= p;
 }
 
@@ -135,7 +137,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
         if(e.type == EventType::ScoutForward){
-            if(e.receiver!=e.origin&&consume(established_keys[{e.origin,e.receiver}], opts.watermark_sz, e.history.size()-1, opts.ttl)){
+            if(e.receiver!=e.origin&&consume(established_keys[{e.origin,e.receiver}], opts.watermark_sz, e.history.size()-1, opts.ttl, opts.max_consume_prob)){
                 auto path = erase_loops(e.history);
                 double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
                 int nxt = path[path.size()-2];
@@ -196,6 +198,25 @@ void run_simulation(const Options& opts, const Graph& graph){
                     if (max_chunks_traversed_node!=-1) node_name = graph.node_name(max_chunks_traversed_node);
                     cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" "<<node_name<<" "<<max_chunks_traversed<<endl;
                 }
+                // check if we can halt
+                if(opts.required_cnt!=-1){
+                    bool found_unsatisfied = false;
+                    for(string src_name: opts.src_nodes){
+                        int src = graph.node_index(src_name);
+                        for(int i=0;i<graph.node_count();i++){
+                            if(i==src) continue;
+                            if(established_keys[{src,i}]<opts.required_cnt){
+                                found_unsatisfied = true;
+                                break;
+                            }
+                        }
+                        if(found_unsatisfied) break;
+                    }
+                    if(!found_unsatisfied){
+                        cout<<"Halted at "<<e.time<<" seconds"<<endl;
+                        return;
+                    }
+                }
             }
         }
 
@@ -217,6 +238,9 @@ void print_usage(const char* progr_name) {
     cerr << "usage: "<<progr_name;
     cerr << " -S <comma_separated_src_node_list>";
     cerr << " -e <graph_edge_list_csv_file>";
+    cerr << " --halt-at-keys <int>";
+    cerr << " --max-consume-prob <float>";
+    cerr << " --watermark-sz <int>";
     cerr << endl;
 }
 
@@ -247,6 +271,12 @@ Options parse_args(int argc, char* argv[]){
             opts.edges_csv = read_value();
         } else if(flag=="--verbose"){
             opts.verbose = true;
+        } else if(flag=="--halt-at-keys"){
+            opts.required_cnt = stoi(read_value());
+        } else if(flag=="--max-consume-prob"){
+            opts.max_consume_prob = stod(read_value());
+        } else if(flag=="--watermark-sz"){
+            opts.watermark_sz = stoi(read_value());
         } else {
             fail("unknown flag "+flag);
         }
