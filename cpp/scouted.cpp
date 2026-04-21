@@ -31,6 +31,7 @@ struct Options{
     int required_cnt = -1;
     double max_consume_prob = 0.5;
     bool v_conn_cartel_size = false;
+    bool report_chunk_paths = false;
 
     void print(){
         cout<<"edges_csv: "<<edges_csv<<endl;
@@ -39,6 +40,7 @@ struct Options{
         cout<<"block_chunks: "<<block_chunks<<endl;
         cout<<"watermark_sz: "<<watermark_sz<<endl;
         cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
+        cout<<"report_chunk_paths: "<<(report_chunk_paths?"true":"false")<<endl;
     }
 };
 
@@ -101,6 +103,9 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
 
     if (opts.block_chunks <= 0) {
         throw runtime_error("block_chunks must be > 0");
+    }
+    if (opts.report_chunk_paths && !opts.verbose) {
+        throw runtime_error("--report-chunk-paths requires --verbose");
     }
 
     for(string src: opts.src_nodes){
@@ -203,6 +208,13 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
         }
         
         if(e.type == EventType::ChunkReceived){
+            if (opts.report_chunk_paths) {
+                // Path is already loop-erased at acceptance time.
+                cout<<"chunk "<<fmt_3dp(e.time)<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target);
+                for (int v : e.history) cout<<" "<<graph.node_name(v);
+                cout<<endl;
+            }
+
             auto key = make_pair(e.origin, e.target);
             BlockState &blk = blocks[key];
             if (
@@ -315,6 +327,7 @@ void print_usage(const char* progr_name) {
     cerr << " --block-chunks <int>";
     cerr << " --v-conn-cartel-size";
     cerr << " --v-conn-csv <conn_csv_file>";
+    cerr << " --report-chunk-paths";
     cerr << endl;
 }
 
@@ -357,6 +370,8 @@ Options parse_args(int argc, char* argv[]){
             opts.v_conn_cartel_size = true;
         } else if(flag=="--v-conn-csv"){
             opts.v_conn_csv = read_value();
+        } else if(flag=="--report-chunk-paths"){
+            opts.report_chunk_paths = true;
         } else {
             fail("unknown flag "+flag);
         }
