@@ -14,13 +14,13 @@ Discrete-event simulation of **scout-based key relaying** on an undirected graph
 
 ### Scouts
 
-For each source, scouts are emitted at `scout_rate_per_s` and do a random walk (`--rw-variant`).
+For each source, scouts are emitted at a fixed rate and do a random walk.
 
 At each hop arrival over edge \((sender,receiver)\):
 
 - **Drop on return-to-source** (after leaving).
 - **Drop on wait-limit**: if `observe_wait_s(time) > max_wait_time_s`, drop immediately.
-- Otherwise, receiver may **accept** with probability `consume_probability(...)` (depends on hop count + `buffered_keys[receiver][src]` vs `watermark_sz`).
+- Otherwise, receiver may **accept** with probability `consume(...)` (depends on hop count + `buffered_keys[src,tgt]` vs `watermark_sz`).
 
 On acceptance at `tgt`:
 
@@ -41,16 +41,29 @@ send\_time = now + max\_return\_wait\_s.
 
 ### Blocks and extracted keys
 
-For each ordered pair \((src,tgt)\), received chunks are grouped into windows of size `block_chunks`.
+For each ordered pair \((src,tgt)\), received chunks are grouped into windows of size `block_chunks` (`--block-chunks`, default: 32).
 At block close:
 
-- Choose an **optimal cartel** of size \(m\in\{0,1,2\}\) (`--cartel-size`) that maximizes how many paths in the block include it (excluding endpoints).
+- Choose a **worst-case cartel** of size \(m\in\{0,1,2,3\}\) that maximizes how many chunks in the block traverse *any* cartel member (excluding endpoints).
 - Let `max_seen` be that maximum coverage count.
 - Define \(h = block\_chunks - max\_seen\).
-- Extract `min(max_block_keys, h)` keys (0 if \(h\le 0\)).
+- Extract \(h\) keys (0 if \(h\le 0\)).
+
+#### Cartel size selection
+
+- **Default behavior**: assumes cartel size \(m=1\) (one compromised intermediate node).
+- **`--v-conn-cartel-size`**: sets cartel size from **pairwise vertex connectivity** \(\kappa(src,tgt)\) loaded from `--v-conn-csv` (`conn.csv`):
+  - \(m = \min(3, \max(0, \kappa(src,tgt)-1))\)
+  - If `--v-conn-cartel-size` is passed without `--v-conn-csv`, the program fails.
+  - If a needed \((src,tgt)\) pair is missing from `conn.csv`, the program fails.
+
+#### Parameters (current)
+
+- `--watermark-sz <int>`: **buffer watermark** used only by `consume(...)` (accept/drop dynamics), not the block size.
+- `--block-chunks <int>`: chunks per extraction block/window (default: 16).
 
 ### Output
 
-- `recv_chunk time src tgt <path...>`
-- `key_establ time src tgt key_count`
+- `keys <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> [vconn=<k> cartel_sz=<m>]` (printed when a block closes; extra fields appear in `--verbose` mode)
+- `Halted at <t> seconds` (when `--halt-at-keys` condition is satisfied)
 

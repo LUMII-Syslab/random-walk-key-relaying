@@ -25,6 +25,7 @@ struct Options{
     vector<string> src_nodes;
     bool verbose = false;
     int watermark_sz = 128;
+    int block_chunks = 32;
     uint ttl = 100;
     int max_wait_time_s = 2;
     int required_cnt = -1;
@@ -35,6 +36,8 @@ struct Options{
         cout<<"edges_csv: "<<edges_csv<<endl;
         cout<<"v_conn_csv: "<<v_conn_csv<<endl;
         cout<<"src_nodes: "<<join(src_nodes, ",")<<endl;
+        cout<<"block_chunks: "<<block_chunks<<endl;
+        cout<<"watermark_sz: "<<watermark_sz<<endl;
         cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
     }
 };
@@ -73,7 +76,7 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
-    double p = 1 - b*t*1.2;
+    double p = 1 - b*t;
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
     p = min(p, max_consume_prob);
     return r <= p;
@@ -94,6 +97,10 @@ vector<int> erase_loops(vector<int> history){
 
 void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,int>, int>* pair_vconn){
     priority_queue<Event> pq;
+
+    if (opts.block_chunks <= 0) {
+        throw runtime_error("block_chunks must be > 0");
+    }
 
     for(string src: opts.src_nodes){
         int origin = graph.node_index(src);
@@ -147,7 +154,16 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
         }
 
         if(e.type == EventType::ScoutForward){
-            if(e.receiver!=e.origin&&consume(established_keys[{e.origin,e.receiver}], opts.watermark_sz, e.history.size()-1, opts.ttl, opts.max_consume_prob)){
+            if(
+                e.receiver!=e.origin
+                && consume(
+                    established_keys[{e.origin,e.receiver}],
+                    opts.watermark_sz,
+                    e.history.size()-1,
+                    opts.ttl,
+                    opts.max_consume_prob
+                )
+            ){
                 auto path = erase_loops(e.history);
                 double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
                 int nxt = path[path.size()-2];
@@ -191,11 +207,11 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
             if (
                 blk.covered_chunks_by_node.empty()
                 || static_cast<int>(blk.covered_chunks_by_node.size()) != graph.node_count()
-                || (graph.node_count() > 0 && static_cast<int>(blk.covered_chunks_by_node[0].size()) != opts.watermark_sz)
+                || (graph.node_count() > 0 && static_cast<int>(blk.covered_chunks_by_node[0].size()) != opts.block_chunks)
             ) {
                 blk.covered_chunks_by_node.assign(
                     graph.node_count(),
-                    boost::dynamic_bitset<>(static_cast<size_t>(opts.watermark_sz))
+                    boost::dynamic_bitset<>(static_cast<size_t>(opts.block_chunks))
                 );
             }
 
@@ -208,7 +224,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
             blk.received++;
             chunks_received[key] = blk.received;
 
-            if (blk.received == opts.watermark_sz) {
+            if (blk.received == opts.block_chunks) {
                 blk.received = 0;
                 chunks_received[key] = 0;
 
@@ -233,7 +249,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                 // Reset block state for this pair.
                 for (auto &bs : blk.covered_chunks_by_node) bs.reset();
 
-                int honesty = opts.watermark_sz - cr.max_seen;
+                int honesty = opts.block_chunks - cr.max_seen;
                 established_keys[key] += honesty;
                 if (opts.verbose) {
                     vector<string> cartel_names;
@@ -295,6 +311,7 @@ void print_usage(const char* progr_name) {
     cerr << " --halt-at-keys <int>";
     cerr << " --max-consume-prob <float>";
     cerr << " --watermark-sz <int>";
+    cerr << " --block-chunks <int>";
     cerr << " --v-conn-cartel-size";
     cerr << " --v-conn-csv <conn_csv_file>";
     cerr << endl;
@@ -333,6 +350,8 @@ Options parse_args(int argc, char* argv[]){
             opts.max_consume_prob = stod(read_value());
         } else if(flag=="--watermark-sz"){
             opts.watermark_sz = stoi(read_value());
+        } else if(flag=="--block-chunks"){
+            opts.block_chunks = stoi(read_value());
         } else if(flag=="--v-conn-cartel-size"){
             opts.v_conn_cartel_size = true;
         } else if(flag=="--v-conn-csv"){
