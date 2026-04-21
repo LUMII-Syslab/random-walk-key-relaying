@@ -5,8 +5,10 @@
 #include <random>
 #include <vector>
 #include "graph.hpp"
+#include "pair_vconn.hpp"
 #include "utils.hpp"
 #include "walk.hpp"
+#include "cartel.hpp"
 
 using namespace std;
 
@@ -19,17 +21,21 @@ mt19937 rng(2026);
 
 struct Options{
     string edges_csv = "";
+    string v_conn_csv = "";
     vector<string> src_nodes;
-    bool verbose;
+    bool verbose = false;
     int watermark_sz = 128;
     uint ttl = 100;
     int max_wait_time_s = 2;
     int required_cnt = -1;
     double max_consume_prob = 0.5;
+    bool v_conn_cartel_size = false;
 
     void print(){
         cout<<"edges_csv: "<<edges_csv<<endl;
+        cout<<"v_conn_csv: "<<v_conn_csv<<endl;
         cout<<"src_nodes: "<<join(src_nodes, ",")<<endl;
+        cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
     }
 };
 
@@ -86,7 +92,7 @@ vector<int> erase_loops(vector<int> history){
     return res;
 }
 
-void run_simulation(const Options& opts, const Graph& graph){
+void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,int>, int>* pair_vconn){
     priority_queue<Event> pq;
 
     for(string src: opts.src_nodes){
@@ -96,7 +102,11 @@ void run_simulation(const Options& opts, const Graph& graph){
 
     map<pair<int,int>,int> established_keys;
     map<pair<int,int>,int> chunks_received;
-    map<pair<int,int>, map<int,int>> chunk_traversed;
+    struct BlockState {
+        int received = 0;
+        vector<boost::dynamic_bitset<>> covered_chunks_by_node;
+    };
+    map<pair<int,int>, BlockState> blocks;
 
     map<pair<int,int>,int> reserved_total_on_qkd_link;
 
@@ -176,28 +186,63 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
         
         if(e.type == EventType::ChunkReceived){
-            chunks_received[{e.origin, e.target}]++;
-            for(int x: e.history){
-                chunk_traversed[{e.origin, e.target}][x]++;
+            auto key = make_pair(e.origin, e.target);
+            BlockState &blk = blocks[key];
+            if (
+                blk.covered_chunks_by_node.empty()
+                || static_cast<int>(blk.covered_chunks_by_node.size()) != graph.node_count()
+                || (graph.node_count() > 0 && static_cast<int>(blk.covered_chunks_by_node[0].size()) != opts.watermark_sz)
+            ) {
+                blk.covered_chunks_by_node.assign(
+                    graph.node_count(),
+                    boost::dynamic_bitset<>(static_cast<size_t>(opts.watermark_sz))
+                );
             }
-            if(chunks_received[{e.origin, e.target}]==opts.watermark_sz){
-                chunks_received[{e.origin, e.target}]=0;
-                int max_chunks_traversed = 0;
-                int max_chunks_traversed_node = -1;
-                for(auto [node, cnt]: chunk_traversed[{e.origin, e.target}]){
-                    if(node==e.origin||node==e.target) continue;
-                    if (cnt>max_chunks_traversed){
-                        max_chunks_traversed = cnt;
-                        max_chunks_traversed_node = node;
+
+            const int chunk_idx = blk.received;
+            for (int x : e.history) {
+                if (x == e.origin || x == e.target) continue;
+                if (x < 0 || x >= graph.node_count()) continue;
+                blk.covered_chunks_by_node[x].set(static_cast<size_t>(chunk_idx));
+            }
+            blk.received++;
+            chunks_received[key] = blk.received;
+
+            if (blk.received == opts.watermark_sz) {
+                blk.received = 0;
+                chunks_received[key] = 0;
+
+                int cartel_sz = 1;
+                int vconn = -1;
+                if (opts.v_conn_cartel_size) {
+                    if (pair_vconn == nullptr) {
+                        throw runtime_error("--v-conn-cartel-size requires --v-conn-csv");
                     }
+                    vconn = pair_vconn::lookup_or_throw(graph, *pair_vconn, e.origin, e.target);
+                    cartel_sz = max(0, vconn - 1);
+                    cartel_sz = min(cartel_sz, 3);
                 }
-                chunk_traversed[{e.origin, e.target}] = map<int,int>();
-                int honesty = opts.watermark_sz - max_chunks_traversed;
-                established_keys[{e.origin, e.target}]+=honesty;
-                if(opts.verbose){
-                    string node_name = "-";
-                    if (max_chunks_traversed_node!=-1) node_name = graph.node_name(max_chunks_traversed_node);
-                    cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" "<<node_name<<" "<<max_chunks_traversed<<endl;
+
+                cartel::Result cr = cartel::worst_case_coverage(
+                    blk.covered_chunks_by_node,
+                    e.origin,
+                    e.target,
+                    cartel_sz
+                );
+
+                // Reset block state for this pair.
+                for (auto &bs : blk.covered_chunks_by_node) bs.reset();
+
+                int honesty = opts.watermark_sz - cr.max_seen;
+                established_keys[key] += honesty;
+                if (opts.verbose) {
+                    vector<string> cartel_names;
+                    for (int v : cr.nodes) cartel_names.push_back(graph.node_name(v));
+                    string cartel_str = cartel_names.empty() ? "-" : join(cartel_names, ",");
+                    cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" ";
+                    cout<<cartel_str<<" "<<cr.max_seen;
+                    if (opts.v_conn_cartel_size) cout<<" vconn="<<vconn<<" cartel_sz="<<cartel_sz;
+                    cout<<endl;
                 }
                 // check if we can halt
                 if(opts.required_cnt!=-1){
@@ -232,7 +277,15 @@ int main(int argc, char* argv[]) {
 
     opts.print();
 
-    run_simulation(opts, graph);
+    unique_ptr<map<pair<int,int>, int>> pair_vconn;
+    if (opts.v_conn_cartel_size) {
+        if (opts.v_conn_csv.empty()) {
+            throw runtime_error("--v-conn-cartel-size requires --v-conn-csv <file>");
+        }
+        pair_vconn = make_unique<map<pair<int,int>, int>>(pair_vconn::load_conn_csv_or_throw(graph, opts.v_conn_csv));
+    }
+
+    run_simulation(opts, graph, pair_vconn.get());
 }
 
 void print_usage(const char* progr_name) {
@@ -242,6 +295,8 @@ void print_usage(const char* progr_name) {
     cerr << " --halt-at-keys <int>";
     cerr << " --max-consume-prob <float>";
     cerr << " --watermark-sz <int>";
+    cerr << " --v-conn-cartel-size";
+    cerr << " --v-conn-csv <conn_csv_file>";
     cerr << endl;
 }
 
@@ -278,6 +333,10 @@ Options parse_args(int argc, char* argv[]){
             opts.max_consume_prob = stod(read_value());
         } else if(flag=="--watermark-sz"){
             opts.watermark_sz = stoi(read_value());
+        } else if(flag=="--v-conn-cartel-size"){
+            opts.v_conn_cartel_size = true;
+        } else if(flag=="--v-conn-csv"){
+            opts.v_conn_csv = read_value();
         } else {
             fail("unknown flag "+flag);
         }

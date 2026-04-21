@@ -63,6 +63,7 @@ class Graph {
     vector<string> idx_to_name_;
     unordered_map<string, int> name_to_idx_;
     set<EdgeKey> edges_;
+    map<EdgeKey, int> edge_vconn_;
 
     static string trim(string s) {
         while (!s.empty() && isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
@@ -99,6 +100,16 @@ class Graph {
         adj_[v].push_back(u);
     }
 
+    void set_edge_vconn(int u, int v, int vconn) {
+        EdgeKey ek(u, v);
+        auto it = edge_vconn_.find(ek);
+        if (it == edge_vconn_.end()) {
+            edge_vconn_[ek] = vconn;
+        } else {
+            // Keep the first value for duplicate edges (consistent with add_undirected_edge behavior).
+        }
+    }
+
     void read_from_stdin(istream &in) {
         int n, m;
         if (!(in >> n >> m)) {
@@ -112,6 +123,7 @@ class Graph {
         idx_to_name_.clear();
         name_to_idx_.clear();
         edges_.clear();
+        edge_vconn_.clear();
 
         for (int i = 0; i < m; i++) {
             string u_name, v_name;
@@ -135,31 +147,55 @@ class Graph {
         idx_to_name_.clear();
         name_to_idx_.clear();
         edges_.clear();
+        edge_vconn_.clear();
 
         string line;
         bool first_line = true;
+        int vconn_col = -1;
         while (getline(in, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.empty()) continue;
 
             stringstream ss(line);
-            string source, target;
-            if (!getline(ss, source, ',')) continue;
-            if (!getline(ss, target, ',')) continue;
-            source = trim(source);
-            target = trim(target);
+            vector<string> cols;
+            string cell;
+            while (getline(ss, cell, ',')) cols.push_back(trim(cell));
+            if (cols.size() < 2) continue;
+
+            string source = cols[0];
+            string target = cols[1];
             if (source.empty() || target.empty()) continue;
 
             if (first_line) {
-                string src_l = lower_copy(source);
-                string tgt_l = lower_copy(target);
-                if (src_l == "source" && tgt_l == "target") {
+                // Header detection + column discovery (case-insensitive).
+                vector<string> headers_l;
+                headers_l.reserve(cols.size());
+                for (const string &h : cols) headers_l.push_back(lower_copy(h));
+
+                // Only treat as header if it looks like one.
+                if (headers_l[0] == "source" && headers_l[1] == "target") {
+                    for (int i = 0; i < static_cast<int>(headers_l.size()); i++) {
+                        if (headers_l[i] == "vconn") vconn_col = i;
+                    }
                     first_line = false;
                     continue;
                 }
             }
             first_line = false;
             add_undirected_edge(source, target);
+            if (vconn_col != -1 && vconn_col < static_cast<int>(cols.size())) {
+                const string &vconn_s = cols[vconn_col];
+                if (!vconn_s.empty()) {
+                    try {
+                        int vconn = stoi(vconn_s);
+                        int u = node_index(source);
+                        int v = node_index(target);
+                        set_edge_vconn(u, v, vconn);
+                    } catch (...) {
+                        // Ignore malformed VConn values.
+                    }
+                }
+            }
         }
     }
 
@@ -184,6 +220,13 @@ public:
 
     const set<EdgeKey> &edges() const {
         return edges_;
+    }
+
+    /** Per-link precomputed VConn from `edges.csv` (defaults to 1 if missing). */
+    int edge_vconn(int a, int b) const {
+        auto it = edge_vconn_.find(EdgeKey(a, b));
+        if (it == edge_vconn_.end()) return 1;
+        return it->second;
     }
 
     int node_index(const string &node_name) const {
