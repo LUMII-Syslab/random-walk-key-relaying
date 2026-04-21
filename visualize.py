@@ -84,6 +84,30 @@ def make_time_axis(events: list[KeyEvent], halt_time_s: float | None) -> list[fl
     # events uniformly over the total run time.
     return [halt_time_s * (e.idx / (len(events) - 1)) for e in events]
 
+def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
+    if halt_time_s is None:
+        ax.set_xlabel("Event index (no timestamps in log)")
+        return
+
+    ax.set_xlabel("Time (h:mm)")
+
+    total_s = max(0.0, halt_time_s)
+    step_s = 30 * 60  # 30 minutes
+    ticks = [0.0]
+    x = step_s
+    while x <= total_s + 1e-9:
+        ticks.append(float(x))
+        x += step_s
+
+    def fmt_tick(sec: float) -> str:
+        m = int(round(sec / 60.0))
+        h = m // 60
+        mm = m % 60
+        return f"{h}:{mm:02d}"
+
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([fmt_tick(s) for s in ticks])
+
 
 def plot_keys_over_time(
     src_node: str,
@@ -91,6 +115,17 @@ def plot_keys_over_time(
     halt_time_s: float | None,
     out_path: Path | None,
 ) -> None:
+    plt.rcParams.update(
+        {
+            "font.size": 18,
+            "axes.titlesize": 22,
+            "axes.labelsize": 20,
+            "xtick.labelsize": 18,
+            "ytick.labelsize": 18,
+            "lines.linewidth": 2.0,
+        }
+    )
+
     t = make_time_axis(events, halt_time_s)
     if not t:
         raise ValueError("No key events found; nothing to plot.")
@@ -111,32 +146,20 @@ def plot_keys_over_time(
             series_x[tgt].append(t[i])
             series_y[tgt].append(cumulative.get(tgt, 0))
 
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(8, 5))
     for tgt in targets:
-        ax.plot(series_x[tgt], series_y[tgt], linewidth=1.2, label=tgt)
+        ax.plot(series_x[tgt], series_y[tgt])
 
     watermark = 128
-    ax.axhline(watermark, color="black", linestyle="--", linewidth=1.2, alpha=0.8, label=f"watermark={watermark}")
+    ax.axhline(watermark, color="black", linestyle="--", linewidth=2.0, alpha=0.9)
+    ax.set_ylim(0, watermark)
+    ax.set_yticks(list(range(0, watermark + 1, 32)))
 
-    if halt_time_s is None:
-        ax.set_xlabel("Event index (no timestamps in log)")
-        title_suffix = " (x-axis = event index)"
-    else:
-        ax.set_xlabel("Time (s) (approximated from total run time)")
-        title_suffix = " (x-axis time approximated)"
+    apply_time_ticks_30m(ax, halt_time_s)
 
-    ax.set_ylabel("Establishable key count (cumulative)")
-    ax.set_title(f"Scout-based key relaying: keys over time (source={src_node}){title_suffix}")
+    ax.set_ylabel("Established key count")
+    # ax.set_title(f"Keys over time (source={src_node})")
     ax.grid(True, alpha=0.3)
-
-    # Large legend: put it outside.
-    ax.legend(
-        loc="center left",
-        bbox_to_anchor=(1.02, 0.5),
-        ncol=1,
-        fontsize="small",
-        frameon=False,
-    )
     fig.tight_layout()
 
     if out_path is not None:
@@ -145,25 +168,90 @@ def plot_keys_over_time(
     else:
         plt.show()
 
+def plot_side_by_side(logs: list[Path], out_path: Path) -> None:
+    if len(logs) != 2:
+        raise ValueError("Provide exactly 2 logs for side-by-side plotting.")
+
+    plt.rcParams.update(
+        {
+            "font.size": 18,
+            "axes.titlesize": 22,
+            "axes.labelsize": 20,
+            "xtick.labelsize": 18,
+            "ytick.labelsize": 18,
+            "lines.linewidth": 2.0,
+        }
+    )
+
+    parsed = [parse_scouted_log(p) for p in logs]
+    src_nodes = {src for (src, _, _) in parsed}
+    if len(src_nodes) != 1:
+        raise ValueError(f"Expected exactly one source node across logs, got: {sorted(src_nodes)}")
+    src_node = next(iter(src_nodes))
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5), sharey=True)
+    watermark = 128
+
+    for ax, log_path, (src, events, halt_time_s) in zip(axes, logs, parsed):
+        t = make_time_axis(events, halt_time_s)
+        if not t:
+            raise ValueError(f"No key events found in {log_path}")
+
+        targets = sorted({e.tgt for e in events if e.tgt != src_node})
+        cumulative = {tgt: 0 for tgt in targets}
+
+        series_x: dict[str, list[float]] = {tgt: [] for tgt in targets}
+        series_y: dict[str, list[int]] = {tgt: [] for tgt in targets}
+
+        for i, e in enumerate(events):
+            if e.tgt != src_node:
+                cumulative[e.tgt] = cumulative.get(e.tgt, 0) + e.keys
+            for tgt in targets:
+                series_x[tgt].append(t[i])
+                series_y[tgt].append(cumulative.get(tgt, 0))
+
+        for tgt in targets:
+            ax.plot(series_x[tgt], series_y[tgt])
+
+        # ax.axhline(watermark, color="black", linestyle="--", linewidth=2.0, alpha=0.9)
+        ax.set_ylim(0, watermark)
+        ax.set_yticks(list(range(0, watermark + 1, 32)))
+        apply_time_ticks_30m(ax, halt_time_s)
+        ax.grid(True, alpha=0.3)
+        ax.set_title(log_path.name)
+
+    axes[0].set_ylabel("Established key count")
+    fig.suptitle(f"Keys over time (source={src_node})", y=1.02)
+    fig.tight_layout()
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=200, bbox_inches="tight")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Visualize scouted key establishment over time.")
     parser.add_argument(
         "--log",
         type=Path,
-        default=Path("data/scouted-geant.log"),
-        help="Path to scouted log file.",
+        action="append",
+        help="Path to scouted log file. Provide once or twice (for side-by-side).",
     )
     parser.add_argument(
         "--out",
         type=Path,
         default=Path("data/scouted-geant-keys-over-time.png"),
-        help="Output PNG path.",
+        help="Output image path.",
     )
     args = parser.parse_args()
 
-    src_node, events, halt_time_s = parse_scouted_log(args.log)
-    plot_keys_over_time(src_node=src_node, events=events, halt_time_s=halt_time_s, out_path=args.out)
+    logs = args.log if args.log is not None else [Path("data/scouted-geant.log")]
+    if len(logs) == 1:
+        src_node, events, halt_time_s = parse_scouted_log(logs[0])
+        plot_keys_over_time(src_node=src_node, events=events, halt_time_s=halt_time_s, out_path=args.out)
+    elif len(logs) == 2:
+        plot_side_by_side(logs, args.out)
+    else:
+        raise ValueError("Provide either 1 or 2 --log arguments.")
 
 
 if __name__ == "__main__":

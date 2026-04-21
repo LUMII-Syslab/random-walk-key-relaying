@@ -78,7 +78,8 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
-    double p = 1 - max(b,t);
+    // double p = 1 - max(b,t);
+    double p = 1 - max(5*b*t, t);
     
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
     // p = min(p, max_consume_prob);
