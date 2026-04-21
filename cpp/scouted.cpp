@@ -26,7 +26,7 @@ struct Options{
     bool verbose = false;
     int watermark_sz = 128;
     int block_chunks = 32;
-    uint ttl = 100;
+    uint ttl = 200;
     int max_wait_time_s = 2;
     int required_cnt = -1;
     double max_consume_prob = 0.5;
@@ -76,9 +76,10 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
-    double p = 1 - b*t;
+    double p = 1 - max(b,t);
+    
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
-    p = min(p, max_consume_prob);
+    // p = min(p, max_consume_prob);
     return r <= p;
 }
 

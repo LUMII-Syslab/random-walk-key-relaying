@@ -115,6 +115,9 @@ def plot_keys_over_time(
     for tgt in targets:
         ax.plot(series_x[tgt], series_y[tgt], linewidth=1.2, label=tgt)
 
+    watermark = 128
+    ax.axhline(watermark, color="black", linestyle="--", linewidth=1.2, alpha=0.8, label=f"watermark={watermark}")
+
     if halt_time_s is None:
         ax.set_xlabel("Event index (no timestamps in log)")
         title_suffix = " (x-axis = event index)"
