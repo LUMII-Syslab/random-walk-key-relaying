@@ -14,5 +14,5 @@ RUN_NAME="scouted-geant-1-max-b-t"
     --v-conn-cartel-size \
     --v-conn-csv ../graphs/geant/conn.csv \
     --block-chunks 32 \
-    | tee ../data/${RUN_NAME}.log
+    | tee ../data/${RUN_NAME}.log | grep Halted
 
