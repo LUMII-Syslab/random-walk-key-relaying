@@ -83,7 +83,7 @@ def make_time_axis(events: list[KeyEvent], halt_time_s: float | None) -> list[fl
     return [halt_time_s * (e.idx / (len(events) - 1)) for e in events]
 
 
-def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
+def apply_time_ticks_15m(ax: plt.Axes, halt_time_s: float | None) -> None:
     if halt_time_s is None:
         ax.set_xlabel("Event index (no timestamps in log)")
         return
@@ -91,7 +91,7 @@ def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
     ax.set_xlabel("Time (h:mm)")
 
     total_s = max(0.0, halt_time_s)
-    step_s = 30 * 60
+    step_s = 15 * 60
     ticks = [0.0]
     x = step_s
     while x <= total_s + 1e-9:
@@ -205,8 +205,9 @@ def plot_threshold_reach_counts(
         if not reached:
             print("    (none)")
             continue
-        for tgt, when in sorted(reached.items(), key=lambda kv: kv[1]):
+        for tgt, when in sorted(reached.items(), key=lambda kv: kv[1],reverse=True):
             print(f"    {tgt}: {fmt_time_or_idx(when, halt_time_s)}")
+            break
 
     cumulative: dict[str, int] = {tgt: 0 for tgt in targets}
     reached: dict[int, set[str]] = {thr: set() for thr in thresholds}
@@ -235,7 +236,7 @@ def plot_threshold_reach_counts(
         ax.plot(xs[thr], ys[thr], label=f"{thr} keys", **style_for(i))
 
     ax.set_ylabel("No. of nodes satisfied")
-    apply_time_ticks_30m(ax, halt_time_s)
+    apply_time_ticks_15m(ax, halt_time_s)
     ax.set_ylim(0, len(targets))
     ax.grid(True, alpha=0.3)
     # ax.set_title(f"How fast nodes reach key thresholds (source={src_node})")
@@ -289,8 +290,6 @@ def main() -> None:
         thresholds=thresholds,
         out_path=args.out,
     )
-    from subprocess import run
-    run(["evince", args.out])
 
 if __name__ == "__main__":
     main()

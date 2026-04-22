@@ -84,7 +84,7 @@ def make_time_axis(events: list[KeyEvent], halt_time_s: float | None) -> list[fl
     # events uniformly over the total run time.
     return [halt_time_s * (e.idx / (len(events) - 1)) for e in events]
 
-def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
+def apply_time_ticks_15m(ax: plt.Axes, halt_time_s: float | None) -> None:
     if halt_time_s is None:
         ax.set_xlabel("Event index (no timestamps in log)")
         return
@@ -92,7 +92,7 @@ def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
     ax.set_xlabel("Time (h:mm)")
 
     total_s = max(0.0, halt_time_s)
-    step_s = 30 * 60  # 30 minutes
+    step_s = 15 * 60  # 15 minutes
     ticks = [0.0]
     x = step_s
     while x <= total_s + 1e-9:
@@ -151,11 +151,11 @@ def plot_keys_over_time(
         ax.plot(series_x[tgt], series_y[tgt])
 
     watermark = 128
-    ax.axhline(watermark, color="black", linestyle="--", linewidth=2.0, alpha=0.9)
+    # ax.axhline(watermark, color="black", linestyle="--", linewidth=2.0, alpha=0.9)
     ax.set_ylim(0, watermark)
     ax.set_yticks(list(range(0, watermark + 1, 32)))
 
-    apply_time_ticks_30m(ax, halt_time_s)
+    apply_time_ticks_15m(ax, halt_time_s)
 
     ax.set_ylabel("Established key count")
     # ax.set_title(f"Keys over time (source={src_node})")
@@ -216,7 +216,7 @@ def plot_side_by_side(logs: list[Path], out_path: Path) -> None:
         # ax.axhline(watermark, color="black", linestyle="--", linewidth=2.0, alpha=0.9)
         ax.set_ylim(0, watermark)
         ax.set_yticks(list(range(0, watermark + 1, 32)))
-        apply_time_ticks_30m(ax, halt_time_s)
+        apply_time_ticks_15m(ax, halt_time_s)
         ax.grid(True, alpha=0.3)
         ax.set_title(log_path.name)
 
