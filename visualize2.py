@@ -88,21 +88,32 @@ def apply_time_ticks_15m(ax: plt.Axes, halt_time_s: float | None) -> None:
         ax.set_xlabel("Event index (no timestamps in log)")
         return
 
-    ax.set_xlabel("Time (h:mm)")
+    ax.set_xlabel("Time [minutes]")
 
-    total_s = max(0.0, halt_time_s)
-    step_s = 15 * 60
-    ticks = [0.0]
-    x = step_s
-    while x <= total_s + 1e-9:
-        ticks.append(float(x))
-        x += step_s
+    # Fixed tick locations for easier cross-plot comparison.
+    def parse_hms_ms(s: str) -> float:
+        # Format: h:mm:ss.mmm
+        h, mm, rest = s.split(":")
+        ss, ms = rest.split(".")
+        return 3600.0 * int(h) + 60.0 * int(mm) + float(ss) + float(ms) / 1000.0
+
+    ticks = [
+        parse_hms_ms("0:03:40.189"),
+        parse_hms_ms("0:09:43.500"),
+        parse_hms_ms("0:17:14.887"),
+        parse_hms_ms("0:27:09.396"),
+        parse_hms_ms("0:35:13.811"),
+        parse_hms_ms("0:38:42.990"),
+    ]
+    total_s = max(0.0, float(halt_time_s))
+    ticks = [x for x in ticks if x <= total_s + 1e-9]
+    if not ticks:
+        ticks = [0.0]
 
     def fmt_tick(sec: float) -> str:
-        m = int(round(sec / 60.0))
-        h = m // 60
-        mm = m % 60
-        return f"{h}:{mm:02d}"
+        total = max(0.0, float(sec))
+        minutes = int(round(total / 60.0))
+        return str(minutes)
 
     ax.set_xticks(ticks)
     ax.set_xticklabels([fmt_tick(s) for s in ticks])
