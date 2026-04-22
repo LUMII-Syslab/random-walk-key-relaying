@@ -12,7 +12,7 @@
 
 using namespace std;
 
-const double SCOUTS_PER_SECONDS = 20;
+const double SCOUTS_PER_SECONDS = 100;
 const double CLASSICAL_DELAY_MS = 5;
 const double QKD_SKR_BITS_P_S = 1000;
 const int CHUNK_SIZE_BITS = 256;
@@ -122,6 +122,8 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
     };
     map<pair<int,int>, BlockState> blocks;
 
+    // Total number of QKD bits already reserved for future use on each undirected link.
+    // Units: bits (not chunks).
     map<pair<int,int>,int> reserved_total_on_qkd_link;
 
     auto predict_wait_time = [&](double time_now, int from, int to) -> double{
@@ -137,7 +139,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
         if(from>to) swap(from,to);
         double generated = QKD_SKR_BITS_P_S * time_now;
         double extracted = reserved_total_on_qkd_link[{from,to}];
-        reserved_total_on_qkd_link[{from,to}]++;
+        reserved_total_on_qkd_link[{from,to}] += CHUNK_SIZE_BITS;
         double req_bits_to_gen = CHUNK_SIZE_BITS-(generated-extracted);
         double time_to_gen = req_bits_to_gen/QKD_SKR_BITS_P_S;
         return max(time_to_gen, 0.0);
