@@ -310,6 +310,13 @@ int main(int argc, char* argv[]) {
     Options opts = parse_args(argc, argv);
     Graph graph = Graph(opts.edges_csv);
 
+    if (opts.src_nodes.empty()) {
+        opts.src_nodes.reserve(graph.node_count());
+        for (int i = 0; i < graph.node_count(); i++) {
+            opts.src_nodes.push_back(graph.node_name(i));
+        }
+    }
+
     opts.print();
 
     unique_ptr<map<pair<int,int>, int>> pair_vconn;
@@ -384,12 +391,16 @@ Options parse_args(int argc, char* argv[]){
 
     }
 
+    if (seen_flags.count("--halt-at-keys") == 0) {
+        // Default: halt when reaching the watermark.
+        opts.required_cnt = opts.watermark_sz;
+    }
+
     auto mandatory_flag = [&](string flag){
         if(seen_flags.count(flag)>0) return;
         fail("flag "+flag+" is mandatory");
     };
 
-    mandatory_flag("-S");
     mandatory_flag("-e");
 
     return opts;
