@@ -108,6 +108,40 @@ def apply_time_ticks_30m(ax: plt.Axes, halt_time_s: float | None) -> None:
     ax.set_xticklabels([fmt_tick(s) for s in ticks])
 
 
+def fmt_time_or_idx(x: float, halt_time_s: float | None) -> str:
+    if halt_time_s is None:
+        if abs(x - round(x)) < 1e-9:
+            return f"idx={int(round(x))}"
+        return f"idx={x:.3f}"
+    total_s = max(0.0, float(x))
+    h = int(total_s // 3600)
+    m = int((total_s % 3600) // 60)
+    s = total_s - (3600 * h + 60 * m)
+    return f"{h}:{m:02d}:{s:06.3f}"
+
+
+def compute_threshold_reach_times(
+    src_node: str,
+    events: list[KeyEvent],
+    t: list[float],
+    thresholds: list[int],
+) -> dict[int, dict[str, float]]:
+    targets = sorted({e.tgt for e in events if e.tgt != src_node})
+    cumulative: dict[str, int] = {tgt: 0 for tgt in targets}
+    reach_time: dict[int, dict[str, float]] = {thr: {} for thr in thresholds}
+
+    for i, e in enumerate(events):
+        if e.tgt != src_node:
+            cumulative[e.tgt] = cumulative.get(e.tgt, 0) + e.keys
+        for thr in thresholds:
+            for tgt in targets:
+                if tgt in reach_time[thr]:
+                    continue
+                if cumulative.get(tgt, 0) >= thr:
+                    reach_time[thr][tgt] = t[i]
+    return reach_time
+
+
 def plot_threshold_reach_counts(
     src_node: str,
     events: list[KeyEvent],
@@ -115,6 +149,30 @@ def plot_threshold_reach_counts(
     thresholds: list[int],
     out_path: Path | None,
 ) -> None:
+    # Colorblind-friendly palette (Okabe-Ito) + redundant encodings (linestyle/marker)
+    # so lines are distinguishable even in grayscale.
+    okabe_ito = [
+        "#0072B2",  # blue
+        "#E69F00",  # orange
+        "#56B4E9",  # sky blue
+        "#009E73",  # bluish green
+        "#F0E442",  # yellow
+        "#CC79A7",  # reddish purple
+        "#D55E00",  # vermillion
+        "#000000",  # black
+    ]
+    linestyles = ["-", "--", "-.", ":", (0, (5, 2)), (0, (2, 2)), (0, (3, 1, 1, 1)), (0, (1, 1))]
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*"]
+
+    def style_for(i: int) -> dict:
+        return {
+            "color": okabe_ito[i % len(okabe_ito)],
+            "linestyle": linestyles[i % len(linestyles)],
+            "marker": markers[i % len(markers)],
+            "markersize": 9,
+            "markevery": max(1, int(len(events) / 25)) if events else 1,
+        }
+
     plt.rcParams.update(
         {
             "font.size": 18,
@@ -133,6 +191,22 @@ def plot_threshold_reach_counts(
     targets = sorted({e.tgt for e in events if e.tgt != src_node})
     if not targets:
         raise ValueError("No target nodes found in log.")
+
+    reach_time = compute_threshold_reach_times(
+        src_node=src_node,
+        events=events,
+        t=t,
+        thresholds=thresholds,
+    )
+    print("Threshold reach times:")
+    for thr in thresholds:
+        reached = reach_time.get(thr, {})
+        print(f"  {thr} keys:")
+        if not reached:
+            print("    (none)")
+            continue
+        for tgt, when in sorted(reached.items(), key=lambda kv: kv[1]):
+            print(f"    {tgt}: {fmt_time_or_idx(when, halt_time_s)}")
 
     cumulative: dict[str, int] = {tgt: 0 for tgt in targets}
     reached: dict[int, set[str]] = {thr: set() for thr in thresholds}
@@ -157,8 +231,8 @@ def plot_threshold_reach_counts(
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    for thr in thresholds:
-        ax.plot(xs[thr], ys[thr], label=f"{thr} keys")
+    for i, thr in enumerate(thresholds):
+        ax.plot(xs[thr], ys[thr], label=f"{thr} keys", **style_for(i))
 
     ax.set_ylabel("No. of nodes satisfied")
     apply_time_ticks_30m(ax, halt_time_s)

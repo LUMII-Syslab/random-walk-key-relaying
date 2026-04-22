@@ -4,7 +4,7 @@ set -ex
 
 cd cpp
 make ./build/scouted
-RUN_NAME="scouted-geant"
+RUN_NAME="scouted-geant-1-max-b-t"
 
 ./build/scouted \
     -S MAR \

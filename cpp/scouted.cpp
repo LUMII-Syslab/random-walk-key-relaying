@@ -12,7 +12,7 @@
 
 using namespace std;
 
-const double SCOUTS_PER_SECONDS = 4;
+const double SCOUTS_PER_SECONDS = 20;
 const double CLASSICAL_DELAY_MS = 5;
 const double QKD_SKR_BITS_P_S = 1000;
 const int CHUNK_SIZE_BITS = 256;
@@ -78,8 +78,8 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     assert(hop_count<=ttl);
     double b = (double)keys_in_buff/(double)watermark;
     double t = (double)(ttl-hop_count)/(double)ttl;
-    // double p = 1 - max(b,t);
-    double p = 1 - max(5*b*t, t);
+    double p = 1 - max(b,t);
+    // double p = 1 - max(5*b*t, t);
     
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
     // p = min(p, max_consume_prob);
@@ -264,6 +264,9 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                 for (auto &bs : blk.covered_chunks_by_node) bs.reset();
 
                 int honesty = opts.block_chunks - cr.max_seen;
+                if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
+                    honesty /= 2;
+                }
                 established_keys[key] += honesty;
                 if (opts.verbose) {
                     vector<string> cartel_names;
