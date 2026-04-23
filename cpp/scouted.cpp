@@ -6,6 +6,7 @@
 #include <vector>
 #include "graph.hpp"
 #include "pair_vconn.hpp"
+#include "sieve.hpp"
 #include "utils.hpp"
 #include "walk.hpp"
 #include "cartel.hpp"
@@ -24,6 +25,7 @@ struct Options{
     string v_conn_csv = "";
     vector<string> src_nodes;
     bool verbose = false;
+    bool enable_chunk_sieve = false; // disabled by default
     int watermark_sz = 128;
     int block_chunks = 32;
     uint ttl = 200;
@@ -41,6 +43,7 @@ struct Options{
         cout<<"watermark_sz: "<<watermark_sz<<endl;
         cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
         cout<<"report_chunk_paths: "<<(report_chunk_paths?"true":"false")<<endl;
+        cout<<"enable_chunk_sieve: "<<(enable_chunk_sieve?"true":"false")<<endl;
     }
 };
 
@@ -255,20 +258,73 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                     cartel_sz = min(cartel_sz, 3);
                 }
 
-                cartel::Result cr = cartel::worst_case_coverage(
-                    blk.covered_chunks_by_node,
-                    e.origin,
-                    e.target,
-                    cartel_sz
-                );
-
-                // Reset block state for this pair.
-                for (auto &bs : blk.covered_chunks_by_node) bs.reset();
-
+                // Base (unsieved) honesty computation.
+                cartel::Result cr = cartel::worst_case_coverage(blk.covered_chunks_by_node, e.origin, e.target, cartel_sz);
                 int honesty = opts.block_chunks - cr.max_seen;
                 if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
                     honesty /= 2;
                 }
+
+                // Optional ChunkSieve: prune rows (chunks) before computing honesty.
+                if (opts.enable_chunk_sieve) {
+                    // Build a compact boolean table rows=chunks, cols=relay nodes (excluding endpoints),
+                    // and remember which original node index each table column corresponds to.
+                    vector<int> relay_nodes;
+                    relay_nodes.reserve(static_cast<size_t>(graph.node_count()));
+                    for (int v = 0; v < graph.node_count(); v++) {
+                        if (v == e.origin || v == e.target) continue;
+                        if (blk.covered_chunks_by_node[v].none()) continue;
+                        relay_nodes.push_back(v);
+                    }
+
+                    vector<vector<unsigned char>> table;
+                    table.assign(
+                        static_cast<size_t>(opts.block_chunks),
+                        vector<unsigned char>(relay_nodes.size(), 0)
+                    );
+                    for (int row = 0; row < opts.block_chunks; row++) {
+                        for (size_t cj = 0; cj < relay_nodes.size(); cj++) {
+                            const int v = relay_nodes[cj];
+                            table[static_cast<size_t>(row)][cj] =
+                                blk.covered_chunks_by_node[v].test(static_cast<size_t>(row)) ? 1 : 0;
+                        }
+                    }
+
+                    ChunkSieve::Result sr = ChunkSieve::sieve(table);
+                    const int kept = static_cast<int>(sr.retained_rows.size());
+
+                    // Rebuild covered_chunks_by_node with only retained rows.
+                    vector<boost::dynamic_bitset<>> reduced;
+                    reduced.reserve(blk.covered_chunks_by_node.size());
+                    for (size_t v = 0; v < blk.covered_chunks_by_node.size(); v++) {
+                        boost::dynamic_bitset<> bs(static_cast<size_t>(kept));
+                        for (int new_i = 0; new_i < kept; new_i++) {
+                            const int old_i = sr.retained_rows[static_cast<size_t>(new_i)];
+                            if (blk.covered_chunks_by_node[v].test(static_cast<size_t>(old_i))) {
+                                bs.set(static_cast<size_t>(new_i));
+                            }
+                        }
+                        reduced.push_back(std::move(bs));
+                    }
+
+                    cartel::Result cr2 = cartel::worst_case_coverage(reduced, e.origin, e.target, cartel_sz);
+                    int honesty2 = kept - cr2.max_seen;
+                    if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
+                        honesty2 /= 2;
+                    }
+
+                    if (opts.verbose && honesty2 > honesty) {
+                        cout<<"chunk_sieve increased honesty "<<honesty<<" -> "<<honesty2
+                            <<" (kept "<<kept<<"/"<<opts.block_chunks<<") "
+                            <<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<endl;
+                    }
+                    honesty = honesty2;
+                    cr = std::move(cr2);
+                }
+
+                // Reset block state for this pair.
+                for (auto &bs : blk.covered_chunks_by_node) bs.reset();
+
                 established_keys[key] += honesty;
                 if (opts.verbose) {
                     vector<string> cartel_names;
@@ -338,6 +394,7 @@ void print_usage(const char* progr_name) {
     cerr << " --max-consume-prob <float>";
     cerr << " --watermark-sz <int>";
     cerr << " --block-chunks <int>";
+    cerr << " --enable-chunk-sieve";
     cerr << " --v-conn-cartel-size";
     cerr << " --v-conn-csv <conn_csv_file>";
     cerr << " --report-chunk-paths";
@@ -379,6 +436,8 @@ Options parse_args(int argc, char* argv[]){
             opts.watermark_sz = stoi(read_value());
         } else if(flag=="--block-chunks"){
             opts.block_chunks = stoi(read_value());
+        } else if(flag=="--enable-chunk-sieve"){
+            opts.enable_chunk_sieve = true;
         } else if(flag=="--v-conn-cartel-size"){
             opts.v_conn_cartel_size = true;
         } else if(flag=="--v-conn-csv"){
