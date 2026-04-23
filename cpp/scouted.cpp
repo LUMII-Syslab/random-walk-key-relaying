@@ -24,6 +24,7 @@ struct Options{
     string edges_csv = "";
     string v_conn_csv = "";
     vector<string> src_nodes;
+    string rw_variant = "HS"; // NB, LRV, HS
     bool verbose = false;
     bool enable_chunk_sieve = false; // disabled by default
     int watermark_sz = 128;
@@ -33,15 +34,18 @@ struct Options{
     int required_cnt = -1;
     double max_consume_prob = 0.5;
     bool v_conn_cartel_size = false;
+    int cartel_size_limit = 4; // cap cartel size (applies after any derivation)
     bool report_chunk_paths = false;
 
     void print(){
         cout<<"edges_csv: "<<edges_csv<<endl;
         cout<<"v_conn_csv: "<<v_conn_csv<<endl;
         cout<<"src_nodes: "<<join(src_nodes, ",")<<endl;
+        cout<<"rw_variant: "<<rw_variant<<endl;
         cout<<"block_chunks: "<<block_chunks<<endl;
         cout<<"watermark_sz: "<<watermark_sz<<endl;
         cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
+        cout<<"cartel_size_limit: "<<cartel_size_limit<<endl;
         cout<<"report_chunk_paths: "<<(report_chunk_paths?"true":"false")<<endl;
         cout<<"enable_chunk_sieve: "<<(enable_chunk_sieve?"true":"false")<<endl;
     }
@@ -102,6 +106,19 @@ vector<int> erase_loops(vector<int> history){
     return res;
 }
 
+static bool valid_rw_variant(const string &w) {
+    return w == "NB" || w == "LRV" || w == "HS";
+}
+
+static shared_ptr<RwToken> make_walk_token(const Options &opts, int src_idx) {
+    const int seed = static_cast<int>(rng());
+    const int tgt_idx = -1; // unknown-target mode
+    if (opts.rw_variant == "NB") return make_shared<NbToken>(src_idx, tgt_idx, seed);
+    if (opts.rw_variant == "LRV") return make_shared<LrvToken>(src_idx, tgt_idx, seed);
+    if (opts.rw_variant == "HS") return make_shared<HsToken>(src_idx, tgt_idx, seed);
+    throw runtime_error("Unknown --rw-variant: " + opts.rw_variant);
+}
+
 void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,int>, int>* pair_vconn){
     priority_queue<Event> pq;
 
@@ -110,6 +127,9 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
     }
     if (opts.report_chunk_paths && !opts.verbose) {
         throw runtime_error("--report-chunk-paths requires --verbose");
+    }
+    if (!valid_rw_variant(opts.rw_variant)) {
+        throw runtime_error("Invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
     }
 
     for(string src: opts.src_nodes){
@@ -155,7 +175,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
         if(e.type == EventType::EmitScout){
             double next_occurrence = e.time + 1/SCOUTS_PER_SECONDS;
             pq.push(Event{next_occurrence,EventType::EmitScout,e.origin,-1,-1,nullptr,{},-1,0});
-            shared_ptr<RwToken> token = make_shared<HsToken>(e.origin, -1, rng());
+            shared_ptr<RwToken> token = make_walk_token(opts, e.origin);
             int ngh = token->choose_next_and_update(e.origin, graph.neighbors(e.origin));
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
             bool wait_time_ok = predict_wait_time(e.time, e.origin, ngh)<=opts.max_wait_time_s;
@@ -257,6 +277,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                     cartel_sz = max(0, vconn - 1);
                     cartel_sz = min(cartel_sz, 3);
                 }
+                cartel_sz = min(cartel_sz, max(0, opts.cartel_size_limit));
 
                 // Base (unsieved) honesty computation.
                 cartel::Result cr = cartel::worst_case_coverage(blk.covered_chunks_by_node, e.origin, e.target, cartel_sz);
@@ -390,6 +411,7 @@ void print_usage(const char* progr_name) {
     cerr << "usage: "<<progr_name;
     cerr << " -S <comma_separated_src_node_list>";
     cerr << " -e <graph_edge_list_csv_file>";
+    cerr << " --rw-variant <NB|LRV|HS>";
     cerr << " --halt-at-keys <int>";
     cerr << " --max-consume-prob <float>";
     cerr << " --watermark-sz <int>";
@@ -397,6 +419,7 @@ void print_usage(const char* progr_name) {
     cerr << " --enable-chunk-sieve";
     cerr << " --v-conn-cartel-size";
     cerr << " --v-conn-csv <conn_csv_file>";
+    cerr << " --cartel-size-limit <int>";
     cerr << " --report-chunk-paths";
     cerr << endl;
 }
@@ -426,6 +449,8 @@ Options parse_args(int argc, char* argv[]){
             opts.src_nodes = split(src_node_list,",");
         } else if(flag=="-e"){
             opts.edges_csv = read_value();
+        } else if(flag=="--rw-variant" || flag=="-w"){
+            opts.rw_variant = read_value();
         } else if(flag=="--verbose"){
             opts.verbose = true;
         } else if(flag=="--halt-at-keys"){
@@ -442,6 +467,8 @@ Options parse_args(int argc, char* argv[]){
             opts.v_conn_cartel_size = true;
         } else if(flag=="--v-conn-csv"){
             opts.v_conn_csv = read_value();
+        } else if (flag=="--cartel-size-limit") {
+            opts.cartel_size_limit = stoi(read_value());
         } else if(flag=="--report-chunk-paths"){
             opts.report_chunk_paths = true;
         } else {
@@ -461,6 +488,13 @@ Options parse_args(int argc, char* argv[]){
     };
 
     mandatory_flag("-e");
+
+    if (!valid_rw_variant(opts.rw_variant)) {
+        fail("invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
+    }
+    if (opts.cartel_size_limit < 0) {
+        fail("--cartel-size-limit must be >= 0");
+    }
 
     return opts;
 }

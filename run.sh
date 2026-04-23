@@ -12,4 +12,7 @@ make ./build/scouted
     --v-conn-cartel-size \
     --v-conn-csv ../graphs/geant/conn.csv \
     --block-chunks 32 \
+    --rw-variant HS \
+    --cartel-size-limit 3 \
+    # --enable-chunk-sieve \
 
