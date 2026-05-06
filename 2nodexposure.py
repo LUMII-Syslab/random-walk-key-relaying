@@ -16,12 +16,53 @@ graph = read_geant_graph()
 nodes = list(graph.nodes())
 DEFAULT_EXPOSURES_PATH = Path("out/exposures-3nodes.json")
 DEFAULT_THRESHOLDS = (0.75, 0.80, 0.85, 0.90, 0.95, 0.97, 0.99)
+HOP_VARIANT = "HS"
+HOP_RUNS = 10000
+GEANT_EDGES_PATH = "./graphs/geant/edges.csv"
 
 
 def cartel_nodes_from_result(cartel_result):
     if "cartel" in cartel_result:
         return cartel_result["cartel"]
     return [cartel_result["u"], cartel_result["v"]]
+
+
+def hop_command(src, tgt, cartel=None):
+    cmd = [
+        "./cpp/build/hops",
+        "-s",
+        str(src),
+        "-t",
+        str(tgt),
+        "-w",
+        HOP_VARIANT,
+        "-e",
+        GEANT_EDGES_PATH,
+        "-n",
+        str(HOP_RUNS),
+    ]
+    if cartel is not None:
+        cmd.extend(["--cartel", ",".join(map(str, cartel))])
+    return cmd
+
+
+def run_hop_simulation(src, tgt, cartel=None):
+    return check_output(hop_command(src, tgt, cartel)).decode("utf-8")
+
+
+def warm_hops_cache(max_workers):
+    src_tgt_pairs = [(src, tgt) for src in nodes for tgt in nodes if src != tgt]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(run_hop_simulation, src, tgt)
+            for src, tgt in src_tgt_pairs
+        ]
+        for future in tqdm(
+            as_completed(futures),
+            total=len(src_tgt_pairs),
+            desc="Warming hops cache for source-target pairs",
+        ):
+            future.result()
 
 
 def compute_cartel_exposures(cartel):
@@ -45,17 +86,7 @@ def compute_cartel_exposures(cartel):
             if not nx.has_path(without_cartel, src, tgt):
                 continue
 
-            # Run the simulation from src to tgt with this cartel.
-            cmd = [
-                "./cpp/build/hops",
-                "-s", str(src),
-                "-t", str(tgt),
-                "-w", "HS",
-                "-e", "./graphs/geant/edges.csv",
-                "-n", "10000",
-                "--cartel", ",".join(map(str, cartel)),
-            ]
-            output = check_output(cmd).decode("utf-8")
+            output = run_hop_simulation(src, tgt, cartel)
 
             exposure = re.search(r"cartel_hit_prob_lerw: ([0-9.]+)", output).group(1)
             cartel_exposures.append({"src": src, "tgt": tgt, "exposure": float(exposure)})
@@ -63,8 +94,11 @@ def compute_cartel_exposures(cartel):
     return {"cartel": list(cartel), "exposures": cartel_exposures}
 
 
-def precompute_exposures(output_path, max_workers, cartel_size):
+def precompute_exposures(output_path, max_workers, cartel_size, warm_cache):
     check_output(["make", "./build/hops"], cwd="cpp")
+
+    if warm_cache:
+        warm_hops_cache(max_workers)
 
     cartels = list(combinations(nodes, cartel_size))
     exposures = []
@@ -165,10 +199,20 @@ def main():
         default=12,
         help="worker count used only with --precompute",
     )
+    parser.add_argument(
+        "--skip-cache-warmup",
+        action="store_true",
+        help="skip the preliminary source-target cache warm-up used with --precompute",
+    )
     args = parser.parse_args()
 
     if args.precompute:
-        precompute_exposures(args.exposures, args.workers, args.cartel_size)
+        precompute_exposures(
+            args.exposures,
+            args.workers,
+            args.cartel_size,
+            not args.skip_cache_warmup,
+        )
         return
 
     exposures = load_exposures(args.exposures)
