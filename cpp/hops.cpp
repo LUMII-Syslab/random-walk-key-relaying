@@ -14,7 +14,6 @@
 #include <set>
 #include "graph.hpp"
 #include "walk.hpp"
-#include "utils.hpp"
 using namespace std;
 
 struct Options {
@@ -33,6 +32,8 @@ struct HopStats {
     int q1_hops, q2_hops, q3_hops;
     double max_hit_prob;
     string max_hit_node;
+    double max_hit_prob_lerw;
+    string max_hit_node_lerw;
     vector<vector<string>> paths;
 
     void print(ostream &out, Options opts) const {
@@ -45,6 +46,8 @@ struct HopStats {
         out << "q3_hops: " << q3_hops << endl;
         out << "max_hit_prob: " << max_hit_prob << endl;
         out << "max_hit_node: " << max_hit_node << endl;
+        out << "max_hit_prob_lerw: " << max_hit_prob_lerw << endl;
+        out << "max_hit_node_lerw: " << max_hit_node_lerw << endl;
         if(opts.record_paths){
             out << "path_count: " << paths.size() << endl;
             for(size_t i = 0; i < paths.size(); i++){
@@ -66,6 +69,7 @@ void print_usage(const char *prog_name);
 HopStats compute_stats(
     const vector<int> &hop_counts,
     const vector<int> &hit_count,
+    const vector<int> &hit_count_lerw,
     const Graph &graph,
     int src_idx,
     int tgt_idx,
@@ -94,7 +98,7 @@ int main(int argc, char **argv) {
     const int node_count = static_cast<int>(adj.size());
     vector<int> hop_counts(opts.no_of_runs, 0);
     vector<int> hit_count(node_count, 0);
-    const bool keep_history = opts.record_paths || opts.erase_loops;
+    vector<int> hit_count_lerw(node_count, 0);
     vector<vector<string>> recorded_paths;
     if (opts.record_paths) {
         recorded_paths.resize(opts.no_of_runs);
@@ -117,45 +121,52 @@ int main(int argc, char **argv) {
     int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
     thread_count = min(thread_count, opts.no_of_runs);
     vector<vector<int>> local_hit_counts(thread_count, vector<int>(node_count, 0));
+    vector<vector<int>> local_hit_counts_lerw(thread_count, vector<int>(node_count, 0));
     vector<thread> workers;
     workers.reserve(thread_count);
 
     auto run_chunk = [&](int tid, int start_run, int end_run) -> void {
         vector<int> &local_hits = local_hit_counts[tid];
+        vector<int> &local_hits_lerw = local_hit_counts_lerw[tid];
         for (int i = start_run; i < end_run; i++) {
             unique_ptr<RwToken> token = make_token(i);
             int position = src_idx;
-            int hops = 0;
-            set<int> seen_nodes = {position};
+            int hops_raw = 0;
+            set<int> seen_nodes_raw = {position};
             vector<int> history;
-            if (keep_history) {
-                history.push_back(position);
-            }
+            history.push_back(position);
             while (position != tgt_idx) {
                 int next = token->choose_next_and_update(position, adj[position]);
                 position = next;
-                seen_nodes.insert(position);
-                if (keep_history) {
-                    history.push_back(position);
-                }
-                hops++;
-                if (hops > 100000) {
+                seen_nodes_raw.insert(position);
+                history.push_back(position);
+                hops_raw++;
+                if (hops_raw > 100000) {
                     throw runtime_error("Random walk exceeded 100000 steps");
                 }
             }
-            if (opts.erase_loops) {
-                history = erase_loops_from_history(history);
-                hops = static_cast<int>(history.size()) - 1;
-                seen_nodes = set<int>(history.begin(), history.end());
-            }
-            hop_counts[i] = hops;
-            for (int node : seen_nodes) {
+
+            // Loop-erasure post-processing (LERW).
+            vector<int> history_lerw = erase_loops_from_history(history);
+            set<int> seen_nodes_lerw(history_lerw.begin(), history_lerw.end());
+
+            int hops_effective = opts.erase_loops ? static_cast<int>(history_lerw.size()) - 1 : hops_raw;
+            hop_counts[i] = hops_effective;
+
+            // Hits for the raw walk (always), independent of --erase-loops.
+            for (int node : seen_nodes_raw) {
                 local_hits[node]++;
+            }
+
+            // Hits for the loop-erased walk always.
+            for (int node : seen_nodes_lerw) {
+                local_hits_lerw[node]++;
             }
             if (opts.record_paths) {
                 vector<string> path_names;
-                path_names.reserve(history.size());
-                for (int node : history) {
+                const vector<int> &history_to_record = opts.erase_loops ? history_lerw : history;
+                path_names.reserve(history_to_record.size());
+                for (int node : history_to_record) {
                     path_names.push_back(graph.node_name(node));
                 }
                 recorded_paths[i] = std::move(path_names);
@@ -180,10 +191,11 @@ int main(int argc, char **argv) {
     for (int tid = 0; tid < thread_count; tid++) {
         for (int node = 0; node < node_count; node++) {
             hit_count[node] += local_hit_counts[tid][node];
+            hit_count_lerw[node] += local_hit_counts_lerw[tid][node];
         }
     }
 
-    HopStats stats = compute_stats(hop_counts, hit_count, graph, src_idx, tgt_idx, opts.no_of_runs);
+    HopStats stats = compute_stats(hop_counts, hit_count, hit_count_lerw, graph, src_idx, tgt_idx, opts.no_of_runs);
     if (opts.record_paths) {
         stats.paths = std::move(recorded_paths);
     }
@@ -272,6 +284,7 @@ Options parse_args(int argc, char **argv){
 HopStats compute_stats(
     const vector<int> &hop_counts,
     const vector<int> &hit_count,
+    const vector<int> &hit_count_lerw,
     const Graph &graph,
     int src_idx,
     int tgt_idx,
@@ -292,16 +305,22 @@ HopStats compute_stats(
     int q2_hops = percentile_value(sorted_hops, 0.50);
     int q3_hops = percentile_value(sorted_hops, 0.75);
 
-    int max_hit_count = 0;
-    int max_hit_node = -1;
-    for (int node = 0; node < static_cast<int>(hit_count.size()); node++) {
-        int count = hit_count[node];
-        if (node == src_idx || node == tgt_idx) continue;
-        if (count > max_hit_count) {
-            max_hit_count = count;
-            max_hit_node = node;
+    auto max_hit = [&](const vector<int> &counts) -> pair<int, int> {
+        int best_count = 0;
+        int best_node = -1;
+        for (int node = 0; node < static_cast<int>(counts.size()); node++) {
+            int count = counts[node];
+            if (node == src_idx || node == tgt_idx) continue;
+            if (count > best_count) {
+                best_count = count;
+                best_node = node;
+            }
         }
-    }
+        return {best_node, best_count};
+    };
+
+    auto [max_hit_node_eff, max_hit_count_eff] = max_hit(hit_count);
+    auto [max_hit_node_lerw, max_hit_count_lerw] = max_hit(hit_count_lerw);
 
     HopStats stats;
     stats.min_hops = min_hops;
@@ -310,8 +329,10 @@ HopStats compute_stats(
     stats.q1_hops = q1_hops;
     stats.q2_hops = q2_hops;
     stats.q3_hops = q3_hops;
-    stats.max_hit_prob = static_cast<double>(max_hit_count) / no_of_runs;
-    stats.max_hit_node = max_hit_node == -1 ? "N/A" : graph.node_name(max_hit_node);
+    stats.max_hit_prob = static_cast<double>(max_hit_count_eff) / no_of_runs;
+    stats.max_hit_node = max_hit_node_eff == -1 ? "N/A" : graph.node_name(max_hit_node_eff);
+    stats.max_hit_prob_lerw = static_cast<double>(max_hit_count_lerw) / no_of_runs;
+    stats.max_hit_node_lerw = max_hit_node_lerw == -1 ? "N/A" : graph.node_name(max_hit_node_lerw);
     return stats;
 }
 
@@ -332,7 +353,7 @@ filesystem::path cache_dir_from_argv0(const char *argv0) {
 
 string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj) {
     ostringstream fingerprint;
-    fingerprint << "hops-cache-v2";
+    fingerprint << "hops-cache-v4";
     fingerprint << "|runs=" << opts.no_of_runs;
     fingerprint << "|src=" << opts.src_node;
     fingerprint << "|tgt=" << opts.tgt_node;
