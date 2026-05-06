@@ -2,6 +2,7 @@ import json
 import re
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from itertools import combinations
 from pathlib import Path
 from statistics import mean, median
 from subprocess import check_output
@@ -13,31 +14,38 @@ from helpers.graphs import read_geant_graph
 
 graph = read_geant_graph()
 nodes = list(graph.nodes())
-DEFAULT_EXPOSURES_PATH = Path("out/exposures.json")
+DEFAULT_EXPOSURES_PATH = Path("out/exposures-3nodes.json")
 DEFAULT_THRESHOLDS = (0.75, 0.80, 0.85, 0.90, 0.95, 0.97, 0.99)
 
 
-def compute_uv_exposures(pair):
-    u, v = pair
-    uv_exposures = []
+def cartel_nodes_from_result(cartel_result):
+    if "cartel" in cartel_result:
+        return cartel_result["cartel"]
+    return [cartel_result["u"], cartel_result["v"]]
 
-    without_uv = graph.copy()
-    without_uv.remove_nodes_from([u, v])
+
+def compute_cartel_exposures(cartel):
+    cartel = tuple(cartel)
+    cartel_set = set(cartel)
+    cartel_exposures = []
+
+    without_cartel = graph.copy()
+    without_cartel.remove_nodes_from(cartel)
 
     for src in nodes:
         for tgt in nodes:
             if src == tgt:
                 continue
 
-            # if src or tgt is u or v, then skip
-            if src == u or src == v or tgt == u or tgt == v:
+            # If src or tgt is controlled by the cartel, it is not an exposure case.
+            if src in cartel_set or tgt in cartel_set:
                 continue
 
-            # if removing u, v disconnects src, tgt, then skip u,v
-            if not nx.has_path(without_uv, src, tgt):
+            # If removing the cartel disconnects src and tgt, the cartel is unavoidable.
+            if not nx.has_path(without_cartel, src, tgt):
                 continue
 
-            # run the simulation from src to tgt with cartel {u,v}
+            # Run the simulation from src to tgt with this cartel.
             cmd = [
                 "./cpp/build/hops",
                 "-s", str(src),
@@ -45,27 +53,27 @@ def compute_uv_exposures(pair):
                 "-w", "HS",
                 "-e", "./graphs/geant/edges.csv",
                 "-n", "10000",
-                "--cartel", f"{u},{v}",
+                "--cartel", ",".join(map(str, cartel)),
             ]
             output = check_output(cmd).decode("utf-8")
 
             exposure = re.search(r"cartel_hit_prob_lerw: ([0-9.]+)", output).group(1)
-            uv_exposures.append({"src": src, "tgt": tgt, "exposure": float(exposure)})
+            cartel_exposures.append({"src": src, "tgt": tgt, "exposure": float(exposure)})
 
-    return {"u": u, "v": v, "exposures": uv_exposures}
+    return {"cartel": list(cartel), "exposures": cartel_exposures}
 
 
-def precompute_exposures(output_path, max_workers):
+def precompute_exposures(output_path, max_workers, cartel_size):
     check_output(["make", "./build/hops"], cwd="cpp")
 
-    pairs = [(u, v) for u in nodes for v in nodes if u < v]
+    cartels = list(combinations(nodes, cartel_size))
     exposures = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(compute_uv_exposures, pair) for pair in pairs]
+        futures = [executor.submit(compute_cartel_exposures, cartel) for cartel in cartels]
         for future in tqdm(
             as_completed(futures),
-            total=len(futures),
-            desc="Processing malicious node pairs",
+            total=len(cartels),
+            desc=f"Processing malicious {cartel_size}-node cartels",
         ):
             exposures.append(future.result())
 
@@ -74,12 +82,12 @@ def precompute_exposures(output_path, max_workers):
         json.dump(exposures, f)
 
 
-def eligible_pair_count(u, v):
-    without_uv = graph.copy()
-    without_uv.remove_nodes_from([u, v])
+def eligible_pair_count(cartel):
+    without_cartel = graph.copy()
+    without_cartel.remove_nodes_from(cartel)
     return sum(
         len(component) * (len(component) - 1)
-        for component in nx.connected_components(without_uv)
+        for component in nx.connected_components(without_cartel)
     )
 
 
@@ -92,15 +100,14 @@ def analyze_exposures(exposures, thresholds):
     percentages_by_threshold = {threshold: [] for threshold in thresholds}
 
     for cartel_result in exposures:
-        u = cartel_result["u"]
-        v = cartel_result["v"]
-        eligible_count = eligible_pair_count(u, v)
+        cartel = cartel_nodes_from_result(cartel_result)
+        eligible_count = eligible_pair_count(cartel)
         if eligible_count == 0:
             continue
 
         if len(cartel_result["exposures"]) != eligible_count:
             raise ValueError(
-                f"Exposure count for cartel {{{u}, {v}}} is "
+                f"Exposure count for cartel {{{', '.join(map(str, cartel))}}} is "
                 f"{len(cartel_result['exposures'])}, expected {eligible_count}"
             )
 
@@ -132,7 +139,7 @@ def print_latex_rows(summary):
 
 def main():
     parser = ArgumentParser(
-        description="Precompute or analyze two-relay GÉANT HS exposure data."
+        description="Precompute or analyze multi-relay GÉANT HS exposure data."
     )
     parser.add_argument(
         "--precompute",
@@ -143,7 +150,14 @@ def main():
         "--exposures",
         type=Path,
         default=DEFAULT_EXPOSURES_PATH,
-        help="path to the precomputed two-relay exposure JSON",
+        help="path to the precomputed exposure JSON",
+    )
+    parser.add_argument(
+        "--cartel-size",
+        type=int,
+        choices=(2, 3),
+        default=3,
+        help="number of malicious relay nodes used with --precompute",
     )
     parser.add_argument(
         "--workers",
@@ -154,7 +168,7 @@ def main():
     args = parser.parse_args()
 
     if args.precompute:
-        precompute_exposures(args.exposures, args.workers)
+        precompute_exposures(args.exposures, args.workers, args.cartel_size)
         return
 
     exposures = load_exposures(args.exposures)
