@@ -29,6 +29,14 @@ class Graph:
         node_to_idx = {v: i for i, v in enumerate(nodes)}
         adj_list = [[node_to_idx[u] for u in g.neighbors(v)] for v in nodes]
         return cls(adj_list=adj_list, node_names=nodes)
+    
+    def to_nx(self) -> nx.Graph:
+        g = nx.Graph()
+        g.add_nodes_from(range(len(self.adj_list)))
+        for u, neighbors in enumerate(self.adj_list):
+            for v in neighbors:
+                g.add_edge(u, v)
+        return g
 
 
 def _repo_root_from_file() -> Path:
