@@ -74,6 +74,15 @@ def compute_exposures(graph: Graph, s, t, variant: str = 'HS',
     one, two, three = _aggregate_hits(visited, runs, n)
     return ExposureStats(one=one, two=two, three=three)
 
+@memory.cache
+def compute_all_exposures(graph: Graph) -> dict[tuple[int, int], ExposureStats]:
+    return dict(zip(
+        idx_pairs,
+        Parallel(n_jobs=-1, prefer='threads')(
+            delayed(compute_exposures)(graph, s, t)
+            for s, t in tqdm(idx_pairs, desc='Computing exposures')
+        )
+    ))
 
 @memory.cache
 def get_eligible_sets(graph: Graph, s: int, t: int, mx_size: int = 3) -> list[tuple[int, ...]]:
@@ -92,29 +101,38 @@ def get_eligible_sets(graph: Graph, s: int, t: int, mx_size: int = 3) -> list[tu
             eligible_sets.append(removed)
     return eligible_sets
 
+@dataclass
+class EligibleSets:
+    ofSzOne: dict[tuple[int,int], list[int]]
+    ofSzTwo: dict[tuple[int,int], list[tuple[int, int]]]
+    ofSzThree: dict[tuple[int, int], list[tuple[int, int, int]]]
+
+@memory.cache
+def get_all_eligible_sets(graph: Graph) -> EligibleSets:
+    ofSzOne = {}
+    ofSzTwo = {}
+    ofSzThree = {}
+    for s, t in tqdm(idx_pairs, desc='Computing eligible sets'):
+        ofSzOne[(s, t)] = [s, t]
+        ofSzTwo[(s, t)] = [tup for tup in get_eligible_sets(graph, s, t) if len(tup) == 2]
+        ofSzThree[(s, t)] = [tup for tup in get_eligible_sets(graph, s, t) if len(tup) == 3]
+    return EligibleSets(ofSzOne=ofSzOne, ofSzTwo=ofSzTwo, ofSzThree=ofSzThree)
+
 if __name__ == '__main__':
     geant = read_graph('geant')
     n = len(geant.adj_list)
     idx_pairs = list(combinations(range(n), 2))
 
-    all_exposures: dict[tuple, ExposureStats] = dict(zip(
-        idx_pairs,
-        Parallel(n_jobs=-1, prefer='threads')(
-            delayed(compute_exposures)(geant, s, t)
-            for s, t in tqdm(idx_pairs, desc='Computing exposures')
-        )
-    ))
+    print("loading all exposures for all (s,t) pairs...")
+    all_exposures = compute_all_exposures(geant)
 
-    eligible_three: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
-    for s, t in tqdm(idx_pairs, desc='Computing eligible sets'):
-        eligible_three[(s, t)] = [
-            tup for tup in get_eligible_sets(geant, s, t) if len(tup) == 3
-        ]
+    print("loading all eligible sets for all (s,t) pairs...")
+    eligible_sets = get_all_eligible_sets(geant)
 
     max_prob = 0.0
     max_st = max_uvw = None
     for (s, t), stats in tqdm(all_exposures.items(), desc='Computing max 3-node exposure'):
-        for uvw in eligible_three.get((s, t), ()):
+        for uvw in eligible_sets.ofSzThree.get((s, t), ()):
             prob = float(stats.three[uvw])
             if prob > max_prob:
                 max_prob = prob
