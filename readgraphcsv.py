@@ -1,9 +1,3 @@
-"""
-Helpers for loading the built-in graph topologies shipped with the repo.
-"""
-
-from __future__ import annotations
-
 import csv
 from pathlib import Path
 import sys
@@ -11,8 +5,6 @@ from typing import Any, Literal
 
 import networkx as nx
 import polars as pl
-
-BuiltinGraphName = Literal["geant", "nsfnet", "secoqc"]
 
 
 def _repo_root_from_file() -> Path:
@@ -22,26 +14,9 @@ def _repo_root_from_file() -> Path:
             return candidate
     raise FileNotFoundError(f"Could not locate git repo root from {__file__}")
 
-
-DEFAULT_GRAPHS_DIR = _repo_root_from_file() / "graphs"
-
-
-def read_graph(graph_name: BuiltinGraphName, graphs_dir: Path | None = None) -> nx.Graph:
-    base_dir = graphs_dir if graphs_dir is not None else DEFAULT_GRAPHS_DIR
+def read_graph(graph_name: Literal["geant", "nsfnet", "secoqc"], graphs_dir: Path | None = None) -> nx.Graph:
+    base_dir = graphs_dir if graphs_dir is not None else _repo_root_from_file() / "graphs"
     return _read_graph_from_edges_csv(base_dir / graph_name / "edges.csv")
-
-
-def read_geant_graph(graphs_dir: Path | None = None) -> nx.Graph:
-    return read_graph("geant", graphs_dir=graphs_dir)
-
-
-def read_nsfnet_graph(graphs_dir: Path | None = None) -> nx.Graph:
-    return read_graph("nsfnet", graphs_dir=graphs_dir)
-
-
-def read_secoqc_graph(graphs_dir: Path | None = None) -> nx.Graph:
-    return read_graph("secoqc", graphs_dir=graphs_dir)
-
 
 def synthetic_graph_snapshot(nodes: int, graphs_dir: Path | None = None) -> nx.Graph:
     if nodes < 1 or nodes > 99:
