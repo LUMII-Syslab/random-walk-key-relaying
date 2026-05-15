@@ -8,6 +8,7 @@ import networkx as nx
 import polars as pl
 
 
+# this graph is unweighted
 @dataclass
 class Graph:
     """Adjacency-list graph. node_names[i] is the label of node i (optional)."""
