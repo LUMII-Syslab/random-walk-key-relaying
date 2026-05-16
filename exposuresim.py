@@ -286,10 +286,10 @@ def run_for_graph(label: str, graph: Graph, tau: float,
     st_kappa = {st: nx.node_connectivity(g_nx, *st)
                 for st in tqdm(ordered, desc='kappa')}
 
-    print('  computing Suurballe paths with k=min(2, kappa)...')
+    print('  computing Suurballe paths with k=kappa(s,t) (all disjoint paths)...')
     st_path_sets: dict[tuple[int, int], list[frozenset]] = {}
     for st in tqdm(ordered, desc='suurballe'):
-        k = min(2, st_kappa[st])
+        k = st_kappa[st]
         paths = suurballe(graph, st[0], st[1], k) if k > 0 else []
         st_path_sets[st] = [frozenset(p) for p in paths]
 
