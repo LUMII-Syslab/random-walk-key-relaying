@@ -5,6 +5,7 @@
 #include <random>
 #include <vector>
 #include "graph.hpp"
+#include "lerw.hpp"
 #include "pair_vconn.hpp"
 #include "sieve.hpp"
 #include "utils.hpp"
@@ -91,19 +92,6 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
     // p = min(p, max_consume_prob);
     return r <= p;
-}
-
-vector<int> erase_loops(vector<int> history){
-    vector<int> res;
-    map<int,size_t> lst_occ;
-    for(size_t i=0;i<history.size();i++)
-        lst_occ[history[i]]=i;
-    for(size_t i=0;i<history.size();i++){
-        int x = history[i];
-        while(i!=lst_occ[x]) i++;
-        res.push_back(x);
-    }
-    return res;
 }
 
 static bool valid_rw_variant(const string &w) {
@@ -196,7 +184,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                     opts.max_consume_prob
                 )
             ){
-                auto path = erase_loops(e.history);
+                auto path = erase_loops_from_history(e.history);
                 double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
                 int nxt = path[path.size()-2];
                 double wait_time = enqueue_on_link(e.time, e.receiver, nxt);

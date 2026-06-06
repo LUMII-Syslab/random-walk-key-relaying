@@ -1,0 +1,347 @@
+#include <algorithm>
+#include <cctype>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <numeric>
+#include <queue>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include "graph.hpp"
+#include "lerw.hpp"
+#include "walk.hpp"
+
+using namespace std;
+
+struct Options {
+    string src_node;
+    string tgt_node;
+    string edges_csv;
+    int cartel_size = 1;
+    int no_of_runs = 10000;
+    string rw_variant = "HS";
+};
+
+struct HitCounts {
+    vector<int> single;
+    vector<vector<int>> pair;
+    unordered_map<uint64_t, int> triple;
+};
+
+static uint64_t triple_key(int u, int v, int w, int n) {
+    return (
+        (static_cast<uint64_t>(u) * n + static_cast<uint64_t>(v)) * n +
+        static_cast<uint64_t>(w)
+    );
+}
+
+static void record_path_hits(const vector<int> &path, HitCounts &hits, int n) {
+    // Loop-erased paths visit each node at most once; skip sort/dedup.
+    const size_t len = path.size();
+    for (int u : path) {
+        hits.single[u]++;
+    }
+    for (size_t i = 0; i < len; i++) {
+        const int u = path[i];
+        for (size_t j = i + 1; j < len; j++) {
+            const int v = path[j];
+            const int a = min(u, v);
+            const int b = max(u, v);
+            hits.pair[a][b]++;
+            for (size_t k = j + 1; k < len; k++) {
+                int nodes[3] = {u, path[j], path[k]};
+                sort(nodes, nodes + 3);
+                hits.triple[triple_key(nodes[0], nodes[1], nodes[2], n)]++;
+            }
+        }
+    }
+}
+
+static int cartel_union_hit_count(const vector<int> &cartel, const HitCounts &hits) {
+    const int n = static_cast<int>(hits.single.size());
+    if (cartel.size() == 1) {
+        return hits.single[cartel[0]];
+    }
+    int u = cartel[0];
+    int v = cartel[1];
+    if (u > v) swap(u, v);
+    int union_hits = hits.single[cartel[0]] + hits.single[cartel[1]] - hits.pair[u][v];
+    if (cartel.size() == 3) {
+        int a = cartel[0];
+        int b = cartel[1];
+        int c = cartel[2];
+        vector<int> sorted = {a, b, c};
+        sort(sorted.begin(), sorted.end());
+        auto it = hits.triple.find(triple_key(sorted[0], sorted[1], sorted[2], n));
+        int tri = it == hits.triple.end() ? 0 : it->second;
+        union_hits += hits.single[c] -
+            hits.pair[min(a, c)][max(a, c)] -
+            hits.pair[min(b, c)][max(b, c)] +
+            tri;
+    }
+    return union_hits;
+}
+
+static double cartel_exposure(
+    const vector<int> &cartel,
+    int runs,
+    const HitCounts &hits
+) {
+    return static_cast<double>(cartel_union_hit_count(cartel, hits)) / runs;
+}
+
+static uint64_t cartel_key(const vector<int> &cartel, int n) {
+    uint64_t key = 0;
+    for (int u : cartel) {
+        key = key * static_cast<uint64_t>(n) + static_cast<uint64_t>(u);
+    }
+    return key;
+}
+
+static bool cartel_is_eligible(
+    const vector<int> &cartel,
+    int src,
+    int tgt,
+    const vector<vector<int>> &adj,
+    vector<char> &blocked,
+    vector<char> &seen,
+    queue<int> &q
+) {
+    fill(blocked.begin(), blocked.end(), 0);
+    fill(seen.begin(), seen.end(), 0);
+    for (int u : cartel) {
+        if (u == src || u == tgt) return false;
+        blocked[u] = 1;
+    }
+    seen[src] = 1;
+    q.push(src);
+    while (!q.empty()) {
+        const int u = q.front();
+        q.pop();
+        if (u == tgt) return true;
+        for (int v : adj[u]) {
+            if (!blocked[v] && !seen[v]) {
+                seen[v] = 1;
+                q.push(v);
+            }
+        }
+    }
+    return false;
+}
+
+static void merge_hits(HitCounts &dst, const HitCounts &src, int n) {
+    for (int u = 0; u < n; u++) {
+        dst.single[u] += src.single[u];
+        for (int v = u + 1; v < n; v++) {
+            dst.pair[u][v] += src.pair[u][v];
+        }
+    }
+    for (const auto &[key, count] : src.triple) {
+        dst.triple[key] += count;
+    }
+}
+
+static string format_cartel_nodes(const Graph &graph, const vector<int> &cartel) {
+    ostringstream out;
+    for (size_t i = 0; i < cartel.size(); i++) {
+        if (i > 0) out << ' ';
+        out << graph.node_name(cartel[i]);
+    }
+    return out.str();
+}
+
+static void print_usage(const char *prog) {
+    cerr << "Usage: " << prog
+         << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
+            "(--cartel-size|-m) <int> (--edges-csv|-e) <path> "
+            "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>]" << endl;
+}
+
+static Options parse_args(int argc, char **argv) {
+    Options opts;
+    auto fail = [&](const string &msg) {
+        cerr << msg << endl;
+        print_usage(argv[0]);
+        exit(1);
+    };
+    auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
+        if (has_inline) {
+            if (inline_value.empty()) fail("Missing value for " + string(flag));
+            return string(inline_value);
+        }
+        if (i + 1 >= argc) fail("Missing value for " + string(flag));
+        return argv[++i];
+    };
+
+    for (int i = 1; i < argc; i++) {
+        string_view arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            exit(0);
+        }
+        size_t eq = arg.find('=');
+        bool has_inline = eq != string_view::npos;
+        string_view flag = has_inline ? arg.substr(0, eq) : arg;
+        string_view inline_value = has_inline ? arg.substr(eq + 1) : string_view{};
+
+        if (flag == "--src-node" || flag == "-s") {
+            opts.src_node = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--tgt-node" || flag == "-t") {
+            opts.tgt_node = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--edges-csv" || flag == "-e") {
+            opts.edges_csv = require_value(i, flag, has_inline, inline_value);
+        } else if (flag == "--cartel-size" || flag == "-m") {
+            opts.cartel_size = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--no-of-runs" || flag == "-n") {
+            opts.no_of_runs = stoi(require_value(i, flag, has_inline, inline_value));
+        } else if (flag == "--rw-variant" || flag == "-w") {
+            opts.rw_variant = require_value(i, flag, has_inline, inline_value);
+        } else {
+            fail("Unknown argument: " + string(arg));
+        }
+    }
+
+    if (opts.src_node.empty() || opts.tgt_node.empty() || opts.edges_csv.empty()) {
+        fail("Source, target, and edges CSV are required");
+    }
+    if (opts.cartel_size < 1 || opts.cartel_size > 3) {
+        fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
+    }
+    if (opts.no_of_runs <= 0) {
+        fail("--no-of-runs must be > 0");
+    }
+    return opts;
+}
+
+int main(int argc, char **argv) {
+    Options opts = parse_args(argc, argv);
+    Graph graph(opts.edges_csv);
+    const vector<vector<int>> &adj = graph.adj_list();
+    const int n = graph.node_count();
+    const int src = graph.node_index(opts.src_node);
+    const int tgt = graph.node_index(opts.tgt_node);
+
+    if (!make_rw_token(opts.rw_variant, src, tgt, 0, n)) {
+        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
+        return 1;
+    }
+
+    const unsigned int hw_threads = thread::hardware_concurrency();
+    int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
+    thread_count = min(thread_count, opts.no_of_runs);
+
+    vector<HitCounts> local_hits(thread_count);
+    for (HitCounts &lh : local_hits) {
+        lh.single.assign(n, 0);
+        lh.pair.assign(n, vector<int>(n, 0));
+    }
+
+    auto run_chunk = [&](int tid, int start_run, int end_run) {
+        HitCounts &hits = local_hits[tid];
+        for (int run = start_run; run < end_run; run++) {
+            record_path_hits(
+                sample_loop_erased_path(adj, opts.rw_variant, src, tgt, run, n),
+                hits,
+                n
+            );
+        }
+    };
+
+    vector<thread> workers;
+    workers.reserve(thread_count);
+    int base_runs = opts.no_of_runs / thread_count;
+    int extra_runs = opts.no_of_runs % thread_count;
+    int next_start = 0;
+    for (int tid = 0; tid < thread_count; tid++) {
+        const int chunk = base_runs + (tid < extra_runs ? 1 : 0);
+        const int start_run = next_start;
+        const int end_run = start_run + chunk;
+        workers.emplace_back(run_chunk, tid, start_run, end_run);
+        next_start = end_run;
+    }
+    try {
+        for (thread &worker : workers) {
+            worker.join();
+        }
+    } catch (const exception &ex) {
+        cerr << ex.what() << endl;
+        return 1;
+    }
+
+    HitCounts hits;
+    hits.single.assign(n, 0);
+    hits.pair.assign(n, vector<int>(n, 0));
+    for (const HitCounts &lh : local_hits) {
+        merge_hits(hits, lh, n);
+    }
+
+    vector<int> cartel(opts.cartel_size);
+    double sum_all = 0.0;
+    double sum_eligible = 0.0;
+    long long count_all = 0;
+    long long count_eligible = 0;
+    double max_exposure_eligible = -1.0;
+    vector<int> max_exposure_eligible_cartel;
+    vector<char> blocked(n, 0);
+    vector<char> seen(n, 0);
+    queue<int> bfs_q;
+    unordered_map<uint64_t, bool> eligible_cache;
+
+    function<void(int, int)> walk_combinations = [&](int start, int depth) {
+        if (depth == opts.cartel_size) {
+            const double exposure = cartel_exposure(cartel, opts.no_of_runs, hits);
+            sum_all += exposure;
+            count_all++;
+            const uint64_t key = cartel_key(cartel, n);
+            auto it = eligible_cache.find(key);
+            bool eligible;
+            if (it == eligible_cache.end()) {
+                eligible = cartel_is_eligible(cartel, src, tgt, adj, blocked, seen, bfs_q);
+                eligible_cache[key] = eligible;
+            } else {
+                eligible = it->second;
+            }
+            if (eligible) {
+                sum_eligible += exposure;
+                count_eligible++;
+                if (exposure > max_exposure_eligible) {
+                    max_exposure_eligible = exposure;
+                    max_exposure_eligible_cartel = cartel;
+                }
+            }
+            return;
+        }
+        for (int i = start; i <= n - (opts.cartel_size - depth); i++) {
+            cartel[depth] = i;
+            walk_combinations(i + 1, depth + 1);
+        }
+    };
+    walk_combinations(0, 0);
+
+    cout << fixed << setprecision(6);
+    cout << "context: " << opts.src_node << " -> " << opts.tgt_node
+         << " (" << opts.rw_variant << ", " << opts.no_of_runs << " runs, cartel_size="
+         << opts.cartel_size << ")" << endl;
+    cout << "mean_exposure_all: "
+         << (count_all ? sum_all / count_all : 0.0) << endl;
+    cout << "mean_exposure_eligible: "
+         << (count_eligible ? sum_eligible / count_eligible : 0.0) << endl;
+    if (count_eligible > 0) {
+        cout << "max_exposure_eligible: " << max_exposure_eligible << endl;
+        cout << "max_exposure_eligible_cartel: "
+             << format_cartel_nodes(graph, max_exposure_eligible_cartel) << endl;
+    } else {
+        cout << "max_exposure_eligible: n/a" << endl;
+        cout << "max_exposure_eligible_cartel: n/a" << endl;
+    }
+    cout << "total_cartels: " << count_all << endl;
+    cout << "eligible_cartels: " << count_eligible << endl;
+    return 0;
+}

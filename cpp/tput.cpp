@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 #include "graph.hpp"
+#include "lerw.hpp"
 #include "walk.hpp"
 
 using namespace std;
@@ -100,16 +101,6 @@ struct RunResult {
 
 Options parse_args(int argc, char **argv);
 void print_usage(const char *prog_name);
-unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count);
-vector<int> erase_loops_from_history(const vector<int> &history);
-vector<int> sample_loop_erased_path(
-    const vector<vector<int>> &adj,
-    const string &rw_variant,
-    int src_idx,
-    int tgt_idx,
-    int seed,
-    int node_count
-);
 RunResult run_single_simulation(QkdNetwork &net, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
@@ -206,69 +197,6 @@ Options parse_args(int argc, char **argv) {
     return opts;
 }
 
-unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count) {
-    if (rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
-    if (rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
-    return nullptr;
-}
-
-vector<int> erase_loops_from_history(const vector<int> &history) {
-    vector<int> loop_erased_history;
-    loop_erased_history.reserve(history.size());
-    map<int, size_t> first_pos;
-    for (int node : history) {
-        auto it = first_pos.find(node);
-        if (it == first_pos.end()) {
-            first_pos[node] = loop_erased_history.size();
-            loop_erased_history.push_back(node);
-            continue;
-        }
-
-        size_t keep_until = it->second;
-        for (size_t idx = keep_until + 1; idx < loop_erased_history.size(); idx++) {
-            first_pos.erase(loop_erased_history[idx]);
-        }
-        loop_erased_history.resize(keep_until + 1);
-    }
-    return loop_erased_history;
-}
-
-vector<int> sample_loop_erased_path(
-    const vector<vector<int>> &adj,
-    const string &rw_variant,
-    int src_idx,
-    int tgt_idx,
-    int seed,
-    int node_count
-) {
-    unique_ptr<RwToken> token = make_base_token(rw_variant, src_idx, tgt_idx, seed, node_count);
-    if (!token) throw runtime_error("Unknown random walk variant: " + rw_variant);
-
-    int position = src_idx;
-    int hops = 0;
-    vector<int> history = {src_idx};
-    while (position != tgt_idx) {
-        int next = token->choose_next_and_update(position, adj[position]);
-        position = next;
-        history.push_back(position);
-        hops++;
-        if (hops > 100000) {
-            throw runtime_error("Random walk exceeded 100000 steps while sampling loop-erased path");
-        }
-    }
-    vector<int> loop_erased_path = erase_loops_from_history(history);
-    if (loop_erased_path.size() < 2) {
-        throw runtime_error("Loop-erased path must contain at least one hop");
-    }
-    if (loop_erased_path.front() != src_idx || loop_erased_path.back() != tgt_idx) {
-        throw runtime_error("Loop-erased path has invalid endpoints");
-    }
-    return loop_erased_path;
-}
-
 RunResult run_single_simulation(
     QkdNetwork &net,
     int src_idx,
@@ -304,7 +232,7 @@ RunResult run_single_simulation(
             );
             pkt->token = make_unique<FixedPathToken>(std::move(loop_erased_path));
         } else {
-            pkt->token = make_base_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
+            pkt->token = make_rw_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
         }
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
         int next = pkt->token->choose_next_and_update(source_node, adj[source_node]);

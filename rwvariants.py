@@ -1,8 +1,15 @@
 from typing import Literal
+from dataclasses import dataclass, field
 from numba import njit
 from numba.typed import List as NumbaList
-from readgraphcsv import Graph, read_graph
 import numpy as np
+
+
+@dataclass
+class Graph:
+    adj_list: list[list[int]]
+    node_names: list | None = None
+    _cache: dict = field(default_factory=dict, repr=False, compare=False)
 
 
 @njit(cache=True)
@@ -187,7 +194,10 @@ def random_walk(graph: Graph, s: int, t: int,
 
 
 if __name__ == '__main__':
-    geant = read_graph('geant')
+    from graphs import get_graph_int_adj_list
+
+    geant_adj = get_graph_int_adj_list('GEANT')
+    geant = Graph(adj_list=[geant_adj[i] for i in range(len(geant_adj))])
     for variant in ('R', 'NB', 'LRV', 'HS'):
         single = random_walk(geant, 0, 1, variant)
         erased = random_walk(geant, 0, 1, variant, loop_erase=True)

@@ -13,6 +13,7 @@
 #include <fstream>
 
 #include "graph.hpp"
+#include "lerw.hpp"
 #include "walk.hpp"
 using namespace std;
 
@@ -179,15 +180,6 @@ static bool should_ignore_event(const vector<IgnoreRule> &rules, const ReportedE
     }, ev);
 }
 
-unique_ptr<RwToken> make_base_token(const string &rw_variant, int src_idx, int tgt_idx, int seed, int node_count) {
-    if (rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
-    if (rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
-    if (rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
-    return nullptr;
-}
-
 int get_rng_seed() {
     static int seed_offset = 0;
     seed_offset++;
@@ -253,7 +245,7 @@ SimulationOutput run_simulation(const Options &opts, const Graph &graph) {
         pkt->source = src_idx;
         pkt->prev_hop = src_idx;
         pkt->hops = 0;
-        pkt->token = make_base_token(opts.rw_variant, src_idx, src_idx, get_rng_seed(), node_count);
+        pkt->token = make_rw_token(opts.rw_variant, src_idx, src_idx, get_rng_seed(), node_count);
         if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
 
         int next = pkt->token->choose_next_and_update(src_idx, graph.neighbors(src_idx));

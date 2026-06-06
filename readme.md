@@ -61,3 +61,39 @@ Python package requirement installation
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+## Hardcoded graph adjacency lists
+
+Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`,
+`GEANT` in `graphs/__init__.py`). That lets callers pass a graph name alone —
+useful for joblib cache keys, where hashing a short string is cheaper than
+serializing a full adjacency list, and avoids rereading edge CSVs from disk on
+every cache lookup. The synthetic generated graph (integer vertices, prefix
+snapshots) lives in `graphs/generated/`.
+
+## Node-disjoint paths (`suurballe.py`)
+
+[`suurballe.py`](suurballe.py) implements Suurballe's algorithm for finding
+`k` node-disjoint source–target paths of minimum total hop count in an
+undirected, unweighted graph (Suurballe, *Networks* 4, 1974).
+
+```py
+from graphs import get_graph_int_adj_list
+from suurballe import suurballe
+
+adj = get_graph_int_adj_list("GEANT")
+paths = suurballe(adj, s=0, t=1, k=2)
+```
+
+The input is a `dict[int, list[int]]` with contiguous keys `0 .. n-1`. Each
+returned path is a list of node indices from `s` to `t`; internal vertices are
+not shared across paths. Pass `k` equal to the local vertex connectivity
+between `s` and `t` (e.g. from NetworkX) to obtain a maximum node-disjoint
+path set.
+
+Used by [`test_suurballe.py`](test_suurballe.py) for multipath (MP) protection analysis.
+Integration tests against GÉANT are in [`test_suurballe.py`](test_suurballe.py):
+
+```bash
+pytest test_suurballe.py
+```

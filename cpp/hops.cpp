@@ -15,6 +15,7 @@
 #include <string_view>
 #include <set>
 #include "graph.hpp"
+#include "lerw.hpp"
 #include "walk.hpp"
 using namespace std;
 
@@ -110,7 +111,6 @@ bool read_reusable_cache_output(
     vector<vector<int>> &cohit_count_lerw,
     unordered_map<uint64_t, int> &trihit_count_lerw
 );
-vector<int> erase_loops_from_history(const vector<int> &history);
 vector<string> parse_node_list(const string &node_list);
 string trim_copy(string s);
 uint64_t triple_key(int first, int second, int third, int node_count);
@@ -154,12 +154,7 @@ int main(int argc, char **argv) {
     }
 
     auto make_token = [&](int seed) -> unique_ptr<RwToken> {
-        if (opts.rw_variant == "R") return make_unique<RToken>(src_idx, tgt_idx, seed);
-        if (opts.rw_variant == "NB") return make_unique<NbToken>(src_idx, tgt_idx, seed);
-        if (opts.rw_variant == "LRV") return make_unique<LrvToken>(src_idx, tgt_idx, seed);
-        if (opts.rw_variant == "NC") return make_unique<NcToken>(src_idx, tgt_idx, seed, node_count);
-        if (opts.rw_variant == "HS") return make_unique<HsToken>(src_idx, tgt_idx, seed);
-        return nullptr;
+        return make_rw_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
     };
     if (!make_token(0)) {
         cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
@@ -187,23 +182,9 @@ int main(int argc, char **argv) {
         unordered_map<uint64_t, int> &local_trihits_lerw = local_trihit_counts_lerw[tid];
         for (int i = start_run; i < end_run; i++) {
             unique_ptr<RwToken> token = make_token(i);
-            int position = src_idx;
-            int hops_raw = 0;
-            set<int> seen_nodes_raw = {position};
-            vector<int> history;
-            history.push_back(position);
-            while (position != tgt_idx) {
-                int next = token->choose_next_and_update(position, adj[position]);
-                position = next;
-                seen_nodes_raw.insert(position);
-                history.push_back(position);
-                hops_raw++;
-                if (hops_raw > 100000) {
-                    throw runtime_error("Random walk exceeded 100000 steps");
-                }
-            }
-
-            // Loop-erasure post-processing (LERW).
+            vector<int> history = sample_random_walk_history(adj, *token, src_idx, tgt_idx);
+            int hops_raw = static_cast<int>(history.size()) - 1;
+            set<int> seen_nodes_raw(history.begin(), history.end());
             vector<int> history_lerw = erase_loops_from_history(history);
             set<int> seen_nodes_lerw(history_lerw.begin(), history_lerw.end());
             vector<int> seen_nodes_lerw_list(seen_nodes_lerw.begin(), seen_nodes_lerw.end());
@@ -818,25 +799,4 @@ void print_cartel_result(ostream &out, const Options &opts, double cartel_hit_pr
     }
     out << endl;
     out << "cartel_hit_prob_lerw: " << cartel_hit_prob_lerw << endl;
-}
-
-vector<int> erase_loops_from_history(const vector<int> &history) {
-    vector<int> loop_erased_history;
-    loop_erased_history.reserve(history.size());
-    unordered_map<int, size_t> first_pos;
-    for (int node : history) {
-        auto it = first_pos.find(node);
-        if (it == first_pos.end()) {
-            first_pos[node] = loop_erased_history.size();
-            loop_erased_history.push_back(node);
-            continue;
-        }
-
-        size_t keep_until = it->second;
-        for (size_t idx = keep_until + 1; idx < loop_erased_history.size(); idx++) {
-            first_pos.erase(loop_erased_history[idx]);
-        }
-        loop_erased_history.resize(keep_until + 1);
-    }
-    return loop_erased_history;
 }
