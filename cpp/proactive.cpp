@@ -14,6 +14,7 @@
 
 #include "cli.hpp"
 #include "graph.hpp"
+#include "qkdn.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
 using namespace std;
