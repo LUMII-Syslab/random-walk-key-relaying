@@ -1,403 +1,158 @@
-#include <iostream>
 #include <algorithm>
+#include <cmath>
 #include <cctype>
-#include <cstdint>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <functional>
+#include <iomanip>
+#include <iostream>
 #include <memory>
 #include <numeric>
 #include <sstream>
-#include <thread>
-#include <unordered_map>
-#include <vector>
+#include <string>
 #include <string_view>
-#include <set>
+#include <thread>
+#include <vector>
+
 #include "graph.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
-using namespace std;
 
-const string REUSABLE_CACHE_MAGIC = "RWKR_HOPS_REUSABLE_CACHE_V2";
+using namespace std;
 
 struct Options {
     int no_of_runs = 1000;
-    string src_node = "";
-    string tgt_node = "";
-    string rw_variant = "LRV";
-    string edges_csv = "";
-    vector<string> cartel_nodes;
+    string src_node;
+    string tgt_node;
+    string rw_variant = "HS";
+    string edges_csv;
     bool record_paths = false;
     bool erase_loops = false;
 };
 
-struct HopStats {
-    int min_hops, max_hops;
-    double mean_hops;
-    int q1_hops, q2_hops, q3_hops;
-    double max_hit_prob;
-    string max_hit_node;
-    double max_hit_prob_lerw;
-    string max_hit_node_lerw;
-    double cartel_hit_prob_lerw = 0.0;
-    vector<vector<string>> paths;
-
-    void print(ostream &out, Options opts) const {
-        out << "context: " << opts.src_node << " -> " << opts.tgt_node << " (" << opts.rw_variant << ", "<< opts.no_of_runs<< " runs)" << endl;
-        out << "min_hops: " << min_hops << endl;
-        out << "max_hops: " << max_hops << endl;
-        out << "mean_hops: " << mean_hops << endl;
-        out << "q1_hops: " << q1_hops << endl;
-        out << "q2_hops: " << q2_hops << endl;
-        out << "q3_hops: " << q3_hops << endl;
-        out << "max_hit_prob: " << max_hit_prob << endl;
-        out << "max_hit_node: " << max_hit_node << endl;
-        out << "max_hit_prob_lerw: " << max_hit_prob_lerw << endl;
-        out << "max_hit_node_lerw: " << max_hit_node_lerw << endl;
-        if(!opts.cartel_nodes.empty()){
-            out << "cartel_nodes:";
-            for(const string &node : opts.cartel_nodes){
-                out << " " << node;
-            }
-            out << endl;
-            out << "cartel_hit_prob_lerw: " << cartel_hit_prob_lerw << endl;
-        }
-        if(opts.record_paths){
-            out << "path_count: " << paths.size() << endl;
-            for(size_t i = 0; i < paths.size(); i++){
-                string zero_padded_i = to_string(i);
-                while(zero_padded_i.size()<to_string(paths.size()-1).size())
-                    zero_padded_i = "0" + zero_padded_i;
-                out << "path "<<zero_padded_i<<":";
-                for(const string &node : paths[i]){
-                    out << " " << node;
-                }
-                out << endl;
-            }
-        }
-    }
+struct HopSummary {
+    int min_hops = 0;
+    int p25 = 0;
+    int p50 = 0;
+    int p75 = 0;
+    int p90 = 0;
+    int p95 = 0;
+    int p99 = 0;
+    int max_hops = 0;
+    double mean = 0.0;
+    double sd = 0.0;
+    double ci_low = 0.0;
+    double ci_high = 0.0;
 };
 
-Options parse_args(int argc, char **argv);
-void print_usage(const char *prog_name);
-HopStats compute_stats(
-    const vector<int> &hop_counts,
-    const vector<int> &hit_count,
-    const vector<int> &hit_count_lerw,
-    const Graph &graph,
-    int src_idx,
-    int tgt_idx,
-    int no_of_runs
-);
-filesystem::path cache_dir_from_argv0(const char *argv0);
-bool uses_reusable_cartel_cache(const Options &opts);
-string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj, bool reusable_cartel_cache);
-bool try_print_cached_output(const filesystem::path &cache_file, const Options &opts, const Graph &graph);
-void write_cache_output(const filesystem::path &cache_file, const string &output);
-void write_reusable_cache_output(
-    const filesystem::path &cache_file,
-    const string &base_output,
-    const Graph &graph,
-    const vector<int> &hit_count_lerw,
-    const vector<vector<int>> &cohit_count_lerw,
-    const unordered_map<uint64_t, int> &trihit_count_lerw
-);
-bool read_reusable_cache_output(
-    const filesystem::path &cache_file,
-    const Graph &graph,
-    string &base_output,
-    vector<int> &hit_count_lerw,
-    vector<vector<int>> &cohit_count_lerw,
-    unordered_map<uint64_t, int> &trihit_count_lerw
-);
-vector<string> parse_node_list(const string &node_list);
-string trim_copy(string s);
-uint64_t triple_key(int first, int second, int third, int node_count);
-double cartel_hit_probability_lerw(
-    const Options &opts,
-    const Graph &graph,
-    const vector<int> &hit_count_lerw,
-    const vector<vector<int>> &cohit_count_lerw,
-    const unordered_map<uint64_t, int> &trihit_count_lerw
-);
-void print_cartel_result(ostream &out, const Options &opts, double cartel_hit_prob_lerw);
-
-int main(int argc, char **argv) {
-    Options opts = parse_args(argc, argv);
-    Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
-    const auto &adj = graph.adj_list();
-
-    int src_idx = graph.node_index(opts.src_node);
-    int tgt_idx = graph.node_index(opts.tgt_node);
-    const int node_count = static_cast<int>(adj.size());
-    vector<char> is_cartel_node(node_count, 0);
-    for (const string &node_name : opts.cartel_nodes) {
-        is_cartel_node[graph.node_index(node_name)] = 1;
-    }
-    filesystem::path cache_dir = cache_dir_from_argv0(argv[0]);
-    bool reusable_cartel_cache = uses_reusable_cartel_cache(opts);
-    string cache_key = cache_key_for_run(opts, graph, adj, reusable_cartel_cache);
-    filesystem::path cache_file = cache_dir / (cache_key + ".txt");
-    if (try_print_cached_output(cache_file, opts, graph)) {
-        return 0;
-    }
-
-    vector<int> hop_counts(opts.no_of_runs, 0);
-    vector<int> hit_count(node_count, 0);
-    vector<int> hit_count_lerw(node_count, 0);
-    vector<vector<int>> cohit_count_lerw(node_count, vector<int>(node_count, 0));
-    unordered_map<uint64_t, int> trihit_count_lerw;
-    vector<vector<string>> recorded_paths;
-    if (opts.record_paths) {
-        recorded_paths.resize(opts.no_of_runs);
-    }
-
-    auto make_token = [&](int seed) -> unique_ptr<RwToken> {
-        return make_rw_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
-    };
-    if (!make_token(0)) {
-        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
-        return 1;
-    }
-
-    unsigned int hw_threads = thread::hardware_concurrency();
-    int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
-    thread_count = min(thread_count, opts.no_of_runs);
-    vector<vector<int>> local_hit_counts(thread_count, vector<int>(node_count, 0));
-    vector<vector<int>> local_hit_counts_lerw(thread_count, vector<int>(node_count, 0));
-    vector<vector<vector<int>>> local_cohit_counts_lerw(
-        thread_count,
-        vector<vector<int>>(node_count, vector<int>(node_count, 0))
-    );
-    vector<unordered_map<uint64_t, int>> local_trihit_counts_lerw(thread_count);
-    vector<int> local_cartel_hit_counts(thread_count, 0);
-    vector<thread> workers;
-    workers.reserve(thread_count);
-
-    auto run_chunk = [&](int tid, int start_run, int end_run) -> void {
-        vector<int> &local_hits = local_hit_counts[tid];
-        vector<int> &local_hits_lerw = local_hit_counts_lerw[tid];
-        vector<vector<int>> &local_cohits_lerw = local_cohit_counts_lerw[tid];
-        unordered_map<uint64_t, int> &local_trihits_lerw = local_trihit_counts_lerw[tid];
-        for (int i = start_run; i < end_run; i++) {
-            unique_ptr<RwToken> token = make_token(i);
-            vector<int> history = sample_random_walk_history(adj, *token, src_idx, tgt_idx);
-            int hops_raw = static_cast<int>(history.size()) - 1;
-            set<int> seen_nodes_raw(history.begin(), history.end());
-            vector<int> history_lerw = erase_loops_from_history(history);
-            set<int> seen_nodes_lerw(history_lerw.begin(), history_lerw.end());
-            vector<int> seen_nodes_lerw_list(seen_nodes_lerw.begin(), seen_nodes_lerw.end());
-
-            int hops_effective = opts.erase_loops ? static_cast<int>(history_lerw.size()) - 1 : hops_raw;
-            hop_counts[i] = hops_effective;
-
-            // Hits for the raw walk (always), independent of --erase-loops.
-            for (int node : seen_nodes_raw) {
-                local_hits[node]++;
-            }
-
-            // Hits for the loop-erased walk always.
-            for (int node : seen_nodes_lerw) {
-                local_hits_lerw[node]++;
-            }
-            for (size_t a = 0; a < seen_nodes_lerw_list.size(); a++) {
-                for (size_t b = a + 1; b < seen_nodes_lerw_list.size(); b++) {
-                    local_cohits_lerw[seen_nodes_lerw_list[a]][seen_nodes_lerw_list[b]]++;
-                    for (size_t c = b + 1; c < seen_nodes_lerw_list.size(); c++) {
-                        local_trihits_lerw[
-                            triple_key(
-                                seen_nodes_lerw_list[a],
-                                seen_nodes_lerw_list[b],
-                                seen_nodes_lerw_list[c],
-                                node_count
-                            )
-                        ]++;
-                    }
-                }
-            }
-            if (!opts.cartel_nodes.empty()) {
-                for (int node : seen_nodes_lerw) {
-                    if (is_cartel_node[node]) {
-                        local_cartel_hit_counts[tid]++;
-                        break;
-                    }
-                }
-            }
-            if (opts.record_paths) {
-                vector<string> path_names;
-                const vector<int> &history_to_record = opts.erase_loops ? history_lerw : history;
-                path_names.reserve(history_to_record.size());
-                for (int node : history_to_record) {
-                    path_names.push_back(graph.node_name(node));
-                }
-                recorded_paths[i] = std::move(path_names);
-            }
-        }
-    };
-
-    int base_runs = opts.no_of_runs / thread_count;
-    int extra_runs = opts.no_of_runs % thread_count;
-    int next_start = 0;
-    for (int tid = 0; tid < thread_count; tid++) {
-        int chunk_size = base_runs + (tid < extra_runs ? 1 : 0);
-        int start_run = next_start;
-        int end_run = start_run + chunk_size;
-        workers.emplace_back(run_chunk, tid, start_run, end_run);
-        next_start = end_run;
-    }
-    for (thread &worker : workers) {
-        worker.join();
-    }
-
-    for (int tid = 0; tid < thread_count; tid++) {
-        for (int node = 0; node < node_count; node++) {
-            hit_count[node] += local_hit_counts[tid][node];
-            hit_count_lerw[node] += local_hit_counts_lerw[tid][node];
-            for (int other = node + 1; other < node_count; other++) {
-                cohit_count_lerw[node][other] += local_cohit_counts_lerw[tid][node][other];
-            }
-        }
-        for (const auto &[key, count] : local_trihit_counts_lerw[tid]) {
-            trihit_count_lerw[key] += count;
-        }
-    }
-    int cartel_hit_count_lerw = accumulate(
-        local_cartel_hit_counts.begin(),
-        local_cartel_hit_counts.end(),
-        0
-    );
-
-    HopStats stats = compute_stats(
-        hop_counts,
-        hit_count,
-        hit_count_lerw,
-        graph,
-        src_idx,
-        tgt_idx,
-        opts.no_of_runs
-    );
-    if (!opts.cartel_nodes.empty()) {
-        if (opts.cartel_nodes.size() <= 3) {
-            stats.cartel_hit_prob_lerw = cartel_hit_probability_lerw(
-                opts,
-                graph,
-                hit_count_lerw,
-                cohit_count_lerw,
-                trihit_count_lerw
-            );
-        } else {
-            stats.cartel_hit_prob_lerw = static_cast<double>(cartel_hit_count_lerw) / opts.no_of_runs;
-        }
-    }
-    if (opts.record_paths) {
-        stats.paths = std::move(recorded_paths);
-    }
-    ostringstream out;
-    if (reusable_cartel_cache) {
-        Options base_opts = opts;
-        base_opts.cartel_nodes.clear();
-        stats.print(out, base_opts);
-        if (!opts.cartel_nodes.empty()) {
-            print_cartel_result(out, opts, stats.cartel_hit_prob_lerw);
-        }
-    } else {
-        stats.print(out, opts);
-    }
-    string output = out.str();
-    cout << output;
-    if (reusable_cartel_cache) {
-        ostringstream base_out;
-        Options base_opts = opts;
-        base_opts.cartel_nodes.clear();
-        stats.print(base_out, base_opts);
-        write_reusable_cache_output(
-            cache_file,
-            base_out.str(),
-            graph,
-            hit_count_lerw,
-            cohit_count_lerw,
-            trihit_count_lerw
-        );
-    } else {
-        write_cache_output(cache_file, output);
-    }
-    return 0;
+static int percentile(const vector<int> &sorted, double p) {
+    if (sorted.empty()) return 0;
+    const int idx = static_cast<int>((sorted.size() - 1) * p);
+    return sorted[idx];
 }
 
-void print_usage(const char *prog_name) {
-    cerr << "Usage: " << prog_name
+static HopSummary summarize_hops(const vector<int> &hop_counts) {
+    vector<int> sorted = hop_counts;
+    sort(sorted.begin(), sorted.end());
+
+    const int n = static_cast<int>(hop_counts.size());
+    const double sum = accumulate(hop_counts.begin(), hop_counts.end(), 0.0);
+    const double mean = n ? sum / n : 0.0;
+
+    double var = 0.0;
+    for (int hops : hop_counts) {
+        const double d = hops - mean;
+        var += d * d;
+    }
+    const double sd = n > 1 ? sqrt(var / (n - 1)) : 0.0;
+    const double margin = n ? 1.96 * sd / sqrt(static_cast<double>(n)) : 0.0;
+
+    HopSummary s;
+    s.min_hops = sorted.front();
+    s.p25 = percentile(sorted, 0.25);
+    s.p50 = percentile(sorted, 0.50);
+    s.p75 = percentile(sorted, 0.75);
+    s.p90 = percentile(sorted, 0.90);
+    s.p95 = percentile(sorted, 0.95);
+    s.p99 = percentile(sorted, 0.99);
+    s.max_hops = sorted.back();
+    s.mean = mean;
+    s.sd = sd;
+    s.ci_low = mean - margin;
+    s.ci_high = mean + margin;
+    return s;
+}
+
+static void print_summary(ostream &out, const Options &opts, const HopSummary &s) {
+    out << "context: " << opts.src_node << " -> " << opts.tgt_node
+        << " (" << opts.rw_variant << ", " << opts.no_of_runs << " runs";
+    if (opts.erase_loops) out << ", loop-erased";
+    out << ")" << endl;
+    out << "min: " << s.min_hops << endl;
+    out << "p25: " << s.p25 << endl;
+    out << "median / p50: " << s.p50 << endl;
+    out << "p75: " << s.p75 << endl;
+    out << "p90: " << s.p90 << endl;
+    out << "p95: " << s.p95 << endl;
+    out << "p99: " << s.p99 << endl;
+    out << "max: " << s.max_hops << endl;
+    out << fixed << setprecision(1);
+    out << "mean: " << s.mean << endl;
+    out << "sd: " << s.sd << endl;
+    out << "95% CI for mean: [" << s.ci_low << ", " << s.ci_high << "]" << endl;
+}
+
+static void print_usage(const char *prog) {
+    cerr << "Usage: " << prog
          << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
             "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>] "
-           "[(--edges-csv|-e) <path>] [--record-paths] [--erase-loops] "
-           "[(--cartel|--cartel-nodes) <node[,node...]>]" << endl;
+            "[(--edges-csv|-e) <path>] [--record-paths] [--erase-loops]" << endl;
 }
 
-Options parse_args(int argc, char **argv){
+static Options parse_args(int argc, char **argv) {
     Options opts;
-    auto fail = [&](const string &msg) -> void {
+    auto fail = [&](const string &msg) {
         cerr << msg << endl;
         print_usage(argv[0]);
         exit(1);
     };
-
     auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
         if (has_inline) {
-            if (inline_value.empty()) {
-                fail("Missing value for " + string(flag));
-            }
+            if (inline_value.empty()) fail("Missing value for " + string(flag));
             return string(inline_value);
         }
-        if (i + 1 >= argc) {
-            fail("Missing value for " + string(flag));
-        }
+        if (i + 1 >= argc) fail("Missing value for " + string(flag));
         return argv[++i];
     };
 
-    for(int i=1;i<argc;i++){
+    for (int i = 1; i < argc; i++) {
         string_view arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             print_usage(argv[0]);
             exit(0);
         }
+        const size_t eq = arg.find('=');
+        const bool has_inline = eq != string_view::npos;
+        const string_view flag = has_inline ? arg.substr(0, eq) : arg;
+        const string_view inline_value = has_inline ? arg.substr(eq + 1) : string_view{};
 
-        size_t eq_pos = arg.find('=');
-        bool has_inline = eq_pos != string_view::npos;
-        string_view flag = has_inline ? arg.substr(0, eq_pos) : arg;
-        string_view inline_value = has_inline ? arg.substr(eq_pos + 1) : string_view{};
-
-        if(flag == "--no-of-runs" || flag == "-n"){
+        if (flag == "--no-of-runs" || flag == "-n") {
             opts.no_of_runs = stoi(require_value(i, flag, has_inline, inline_value));
-        }
-        else if(flag == "--src-node" || flag == "-s"){
+        } else if (flag == "--src-node" || flag == "-s") {
             opts.src_node = require_value(i, flag, has_inline, inline_value);
-        }
-        else if(flag == "--tgt-node" || flag == "-t"){
+        } else if (flag == "--tgt-node" || flag == "-t") {
             opts.tgt_node = require_value(i, flag, has_inline, inline_value);
-        }
-        else if(flag == "--rw-variant" || flag == "-w"){
+        } else if (flag == "--rw-variant" || flag == "-w") {
             opts.rw_variant = require_value(i, flag, has_inline, inline_value);
-        }
-        else if(flag == "--edges-csv" || flag == "-e"){
+        } else if (flag == "--edges-csv" || flag == "-e") {
             opts.edges_csv = require_value(i, flag, has_inline, inline_value);
-        }
-        else if(flag == "--cartel" || flag == "--cartel-nodes"){
-            opts.cartel_nodes = parse_node_list(require_value(i, flag, has_inline, inline_value));
-            if (opts.cartel_nodes.empty()) {
-                fail("Cartel must contain at least one node");
-            }
-        }
-        else if(flag == "--record-paths"){
+        } else if (flag == "--record-paths") {
             opts.record_paths = true;
-        }
-        else if(flag == "--erase-loops"){
+        } else if (flag == "--erase-loops") {
             opts.erase_loops = true;
-        }
-        else{
+        } else {
             fail("Unknown argument: " + string(arg));
         }
     }
-    if(opts.src_node.empty() || opts.tgt_node.empty()){
+
+    if (opts.src_node.empty() || opts.tgt_node.empty()) {
         fail("Source and target nodes are required");
     }
     if (opts.no_of_runs <= 0) {
@@ -406,397 +161,78 @@ Options parse_args(int argc, char **argv){
     return opts;
 }
 
-HopStats compute_stats(
-    const vector<int> &hop_counts,
-    const vector<int> &hit_count,
-    const vector<int> &hit_count_lerw,
-    const Graph &graph,
-    int src_idx,
-    int tgt_idx,
-    int no_of_runs
-) {
-    auto percentile_value = [](const vector<int> &sorted_values, double p) -> int {
-        int idx = static_cast<int>((sorted_values.size() - 1) * p);
-        return sorted_values[idx];
-    };
+int main(int argc, char **argv) {
+    Options opts = parse_args(argc, argv);
+    Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+    const auto &adj = graph.adj_list();
+    const int src = graph.node_index(opts.src_node);
+    const int tgt = graph.node_index(opts.tgt_node);
+    const int n = graph.node_count();
 
-    vector<int> sorted_hops = hop_counts;
-    sort(sorted_hops.begin(), sorted_hops.end());
+    if (!make_rw_token(opts.rw_variant, src, tgt, 0, n)) {
+        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
+        return 1;
+    }
 
-    int min_hops = sorted_hops.front();
-    int max_hops = sorted_hops.back();
-    double mean_hops = static_cast<double>(accumulate(hop_counts.begin(), hop_counts.end(), 0LL)) / no_of_runs;
-    int q1_hops = percentile_value(sorted_hops, 0.25);
-    int q2_hops = percentile_value(sorted_hops, 0.50);
-    int q3_hops = percentile_value(sorted_hops, 0.75);
+    vector<int> hop_counts(opts.no_of_runs);
+    vector<vector<string>> paths;
+    if (opts.record_paths) {
+        paths.resize(opts.no_of_runs);
+    }
 
-    auto max_hit = [&](const vector<int> &counts) -> pair<int, int> {
-        int best_count = 0;
-        int best_node = -1;
-        for (int node = 0; node < static_cast<int>(counts.size()); node++) {
-            int count = counts[node];
-            if (node == src_idx || node == tgt_idx) continue;
-            if (count > best_count) {
-                best_count = count;
-                best_node = node;
+    const unsigned int hw = thread::hardware_concurrency();
+    int thread_count = static_cast<int>(hw == 0 ? 1 : hw);
+    thread_count = min(thread_count, opts.no_of_runs);
+
+    auto run_chunk = [&](int start_run, int end_run) {
+        for (int run = start_run; run < end_run; run++) {
+            unique_ptr<RwToken> token = make_rw_token(opts.rw_variant, src, tgt, run, n);
+            vector<int> history = sample_random_walk_history(adj, *token, src, tgt);
+            vector<int> lerw = erase_loops_from_history(history);
+            const vector<int> &effective = opts.erase_loops ? lerw : history;
+            hop_counts[run] = static_cast<int>(effective.size()) - 1;
+
+            if (opts.record_paths) {
+                vector<string> names;
+                names.reserve(effective.size());
+                for (int node : effective) {
+                    names.push_back(graph.node_name(node));
+                }
+                paths[run] = std::move(names);
             }
         }
-        return {best_node, best_count};
     };
 
-    auto [max_hit_node_eff, max_hit_count_eff] = max_hit(hit_count);
-    auto [max_hit_node_lerw, max_hit_count_lerw] = max_hit(hit_count_lerw);
-
-    HopStats stats;
-    stats.min_hops = min_hops;
-    stats.max_hops = max_hops;
-    stats.mean_hops = mean_hops;
-    stats.q1_hops = q1_hops;
-    stats.q2_hops = q2_hops;
-    stats.q3_hops = q3_hops;
-    stats.max_hit_prob = static_cast<double>(max_hit_count_eff) / no_of_runs;
-    stats.max_hit_node = max_hit_node_eff == -1 ? "N/A" : graph.node_name(max_hit_node_eff);
-    stats.max_hit_prob_lerw = static_cast<double>(max_hit_count_lerw) / no_of_runs;
-    stats.max_hit_node_lerw = max_hit_node_lerw == -1 ? "N/A" : graph.node_name(max_hit_node_lerw);
-    return stats;
-}
-
-filesystem::path cache_dir_from_argv0(const char *argv0) {
-    (void)argv0;
-
-    if (const char *cache_dir = getenv("RWKR_CACHE_DIR"); cache_dir != nullptr && cache_dir[0] != '\0') {
-        return filesystem::path(cache_dir);
+    vector<thread> workers;
+    workers.reserve(thread_count);
+    int base = opts.no_of_runs / thread_count;
+    int extra = opts.no_of_runs % thread_count;
+    int next = 0;
+    for (int tid = 0; tid < thread_count; tid++) {
+        const int chunk = base + (tid < extra ? 1 : 0);
+        const int start = next;
+        next += chunk;
+        workers.emplace_back(run_chunk, start, next);
+    }
+    try {
+        for (thread &w : workers) w.join();
+    } catch (const exception &ex) {
+        cerr << ex.what() << endl;
+        return 1;
     }
 
-    error_code ec;
-    filesystem::path temp_dir = filesystem::temp_directory_path(ec);
-    if (!ec && !temp_dir.empty()) {
-        return temp_dir / "random-walk-key-relaying-cache";
-    }
-    return filesystem::path("/tmp/random-walk-key-relaying-cache");
-}
+    print_summary(cout, opts, summarize_hops(hop_counts));
 
-bool uses_reusable_cartel_cache(const Options &opts) {
-    return !opts.record_paths && opts.cartel_nodes.size() <= 3;
-}
-
-string cache_key_for_run(const Options &opts, const Graph &graph, const vector<vector<int>> &adj, bool reusable_cartel_cache) {
-    ostringstream fingerprint;
-    fingerprint << "hops-cache-v6";
-    fingerprint << "|runs=" << opts.no_of_runs;
-    fingerprint << "|src=" << opts.src_node;
-    fingerprint << "|tgt=" << opts.tgt_node;
-    fingerprint << "|variant=" << opts.rw_variant;
-    fingerprint << "|record_paths=" << (opts.record_paths ? 1 : 0);
-    fingerprint << "|erase_loops=" << (opts.erase_loops ? 1 : 0);
-    fingerprint << "|reusable_cartel_cache=" << (reusable_cartel_cache ? 1 : 0);
-    if (!reusable_cartel_cache) {
-        fingerprint << "|cartel_nodes=";
-        for (const string &node : opts.cartel_nodes) {
-            fingerprint << node << ",";
+    if (opts.record_paths) {
+        cout << "path_count: " << paths.size() << endl;
+        const int width = static_cast<int>(to_string(paths.size() - 1).size());
+        for (size_t i = 0; i < paths.size(); i++) {
+            string label = to_string(i);
+            while (static_cast<int>(label.size()) < width) label = "0" + label;
+            cout << "path " << label << ":";
+            for (const string &node : paths[i]) cout << " " << node;
+            cout << endl;
         }
     }
-
-    vector<string> canonical_edges;
-    for (int u = 0; u < static_cast<int>(adj.size()); u++) {
-        string u_name = graph.node_name(u);
-        for (int v : adj[u]) {
-            if (u > v) continue;
-            string v_name = graph.node_name(v);
-            if (v_name < u_name) {
-                canonical_edges.push_back(v_name + "|" + u_name);
-            } else {
-                canonical_edges.push_back(u_name + "|" + v_name);
-            }
-        }
-    }
-    sort(canonical_edges.begin(), canonical_edges.end());
-    fingerprint << "|edge_count=" << canonical_edges.size();
-    for (const string &edge : canonical_edges) {
-        fingerprint << "|e=" << edge;
-    }
-    size_t key = hash<string>{}(fingerprint.str());
-    return to_string(key);
-}
-
-vector<string> parse_node_list(const string &node_list) {
-    stringstream ss(node_list);
-    string node;
-    set<string> seen;
-    while (getline(ss, node, ',')) {
-        node = trim_copy(node);
-        if (node.empty()) continue;
-        seen.insert(node);
-    }
-    return vector<string>(seen.begin(), seen.end());
-}
-
-string trim_copy(string s) {
-    while (!s.empty() && isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
-    size_t start = 0;
-    while (start < s.size() && isspace(static_cast<unsigned char>(s[start]))) start++;
-    return s.substr(start);
-}
-
-bool try_print_cached_output(const filesystem::path &cache_file, const Options &opts, const Graph &graph) {
-    if (!filesystem::exists(cache_file)) {
-        return false;
-    }
-    ifstream in(cache_file);
-    if (!in.is_open()) {
-        return false;
-    }
-    if (uses_reusable_cartel_cache(opts)) {
-        in.close();
-        string base_output;
-        vector<int> hit_count_lerw;
-        vector<vector<int>> cohit_count_lerw;
-        unordered_map<uint64_t, int> trihit_count_lerw;
-        if (!read_reusable_cache_output(
-                cache_file,
-                graph,
-                base_output,
-                hit_count_lerw,
-                cohit_count_lerw,
-                trihit_count_lerw
-            )) {
-            return false;
-        }
-        cout << base_output;
-        if (!opts.cartel_nodes.empty()) {
-            double cartel_hit_prob = cartel_hit_probability_lerw(
-                opts,
-                graph,
-                hit_count_lerw,
-                cohit_count_lerw,
-                trihit_count_lerw
-            );
-            print_cartel_result(cout, opts, cartel_hit_prob);
-        }
-        return true;
-    }
-    cout << in.rdbuf();
-    return true;
-}
-
-void write_cache_output(const filesystem::path &cache_file, const string &output) {
-    error_code ec;
-    filesystem::create_directories(cache_file.parent_path(), ec);
-    ofstream out(cache_file);
-    if (!out.is_open()) {
-        return;
-    }
-    out << output;
-}
-
-void write_reusable_cache_output(
-    const filesystem::path &cache_file,
-    const string &base_output,
-    const Graph &graph,
-    const vector<int> &hit_count_lerw,
-    const vector<vector<int>> &cohit_count_lerw,
-    const unordered_map<uint64_t, int> &trihit_count_lerw
-) {
-    error_code ec;
-    filesystem::create_directories(cache_file.parent_path(), ec);
-    ofstream out(cache_file);
-    if (!out.is_open()) {
-        return;
-    }
-
-    out << REUSABLE_CACHE_MAGIC << endl;
-    out << "BEGIN_OUTPUT" << endl;
-    out << base_output;
-    out << "END_OUTPUT" << endl;
-    out << "BEGIN_HIT_LERW" << endl;
-    for (int node = 0; node < static_cast<int>(hit_count_lerw.size()); node++) {
-        out << node << " " << hit_count_lerw[node] << " " << graph.node_name(node) << endl;
-    }
-    out << "END_HIT_LERW" << endl;
-    out << "BEGIN_COHIT_LERW" << endl;
-    for (int u = 0; u < static_cast<int>(cohit_count_lerw.size()); u++) {
-        for (int v = u + 1; v < static_cast<int>(cohit_count_lerw[u].size()); v++) {
-            if (cohit_count_lerw[u][v] == 0) continue;
-            out << u << " " << v << " " << cohit_count_lerw[u][v]
-                << " " << graph.node_name(u) << " " << graph.node_name(v) << endl;
-        }
-    }
-    out << "END_COHIT_LERW" << endl;
-    out << "BEGIN_TRIHIT_LERW" << endl;
-    const int node_count = static_cast<int>(cohit_count_lerw.size());
-    for (const auto &[key, count] : trihit_count_lerw) {
-        if (count == 0) continue;
-        uint64_t rest = key;
-        int w = static_cast<int>(rest % node_count);
-        rest /= node_count;
-        int v = static_cast<int>(rest % node_count);
-        int u = static_cast<int>(rest / node_count);
-        out << u << " " << v << " " << w << " " << count
-            << " " << graph.node_name(u) << " " << graph.node_name(v) << " " << graph.node_name(w) << endl;
-    }
-    out << "END_TRIHIT_LERW" << endl;
-}
-
-bool read_reusable_cache_output(
-    const filesystem::path &cache_file,
-    const Graph &graph,
-    string &base_output,
-    vector<int> &hit_count_lerw,
-    vector<vector<int>> &cohit_count_lerw,
-    unordered_map<uint64_t, int> &trihit_count_lerw
-) {
-    ifstream in(cache_file);
-    if (!in.is_open()) {
-        return false;
-    }
-
-    string line;
-    if (!getline(in, line) || line != REUSABLE_CACHE_MAGIC) {
-        return false;
-    }
-    if (!getline(in, line) || line != "BEGIN_OUTPUT") {
-        return false;
-    }
-
-    ostringstream output;
-    while (getline(in, line)) {
-        if (line == "END_OUTPUT") break;
-        output << line << endl;
-    }
-    if (!in || line != "END_OUTPUT") {
-        return false;
-    }
-
-    const int node_count = static_cast<int>(graph.adj_list().size());
-    hit_count_lerw.assign(node_count, 0);
-    cohit_count_lerw.assign(node_count, vector<int>(node_count, 0));
-    trihit_count_lerw.clear();
-
-    if (!getline(in, line) || line != "BEGIN_HIT_LERW") {
-        return false;
-    }
-    while (getline(in, line)) {
-        if (line == "END_HIT_LERW") break;
-        stringstream ss(line);
-        int node = -1;
-        int count = 0;
-        if (!(ss >> node >> count)) {
-            return false;
-        }
-        if (node < 0 || node >= node_count) {
-            return false;
-        }
-        hit_count_lerw[node] = count;
-    }
-    if (!in || line != "END_HIT_LERW") {
-        return false;
-    }
-
-    if (!getline(in, line) || line != "BEGIN_COHIT_LERW") {
-        return false;
-    }
-    while (getline(in, line)) {
-        if (line == "END_COHIT_LERW") break;
-        stringstream ss(line);
-        int u = -1;
-        int v = -1;
-        int count = 0;
-        if (!(ss >> u >> v >> count)) {
-            return false;
-        }
-        if (u < 0 || u >= node_count || v < 0 || v >= node_count || u == v) {
-            return false;
-        }
-        if (u > v) swap(u, v);
-        cohit_count_lerw[u][v] = count;
-    }
-    if (!in || line != "END_COHIT_LERW") {
-        return false;
-    }
-
-    if (!getline(in, line) || line != "BEGIN_TRIHIT_LERW") {
-        return false;
-    }
-    while (getline(in, line)) {
-        if (line == "END_TRIHIT_LERW") break;
-        stringstream ss(line);
-        int u = -1;
-        int v = -1;
-        int w = -1;
-        int count = 0;
-        if (!(ss >> u >> v >> w >> count)) {
-            return false;
-        }
-        if (
-            u < 0 || u >= node_count ||
-            v < 0 || v >= node_count ||
-            w < 0 || w >= node_count ||
-            u == v || u == w || v == w
-        ) {
-            return false;
-        }
-        vector<int> nodes = {u, v, w};
-        sort(nodes.begin(), nodes.end());
-        trihit_count_lerw[triple_key(nodes[0], nodes[1], nodes[2], node_count)] = count;
-    }
-    if (!in || line != "END_TRIHIT_LERW") {
-        return false;
-    }
-
-    base_output = output.str();
-    return true;
-}
-
-uint64_t triple_key(int first, int second, int third, int node_count) {
-    return (
-        (static_cast<uint64_t>(first) * node_count + static_cast<uint64_t>(second)) *
-        node_count +
-        static_cast<uint64_t>(third)
-    );
-}
-
-double cartel_hit_probability_lerw(
-    const Options &opts,
-    const Graph &graph,
-    const vector<int> &hit_count_lerw,
-    const vector<vector<int>> &cohit_count_lerw,
-    const unordered_map<uint64_t, int> &trihit_count_lerw
-) {
-    if (opts.cartel_nodes.empty()) {
-        return 0.0;
-    }
-
-    int first = graph.node_index(opts.cartel_nodes[0]);
-    if (opts.cartel_nodes.size() == 1) {
-        return static_cast<double>(hit_count_lerw[first]) / opts.no_of_runs;
-    }
-
-    int second = graph.node_index(opts.cartel_nodes[1]);
-    int u = min(first, second);
-    int v = max(first, second);
-    int union_hit_count = hit_count_lerw[first] + hit_count_lerw[second] - cohit_count_lerw[u][v];
-    if (opts.cartel_nodes.size() == 3) {
-        int third = graph.node_index(opts.cartel_nodes[2]);
-        vector<int> nodes = {first, second, third};
-        sort(nodes.begin(), nodes.end());
-        uint64_t key = triple_key(nodes[0], nodes[1], nodes[2], static_cast<int>(hit_count_lerw.size()));
-        auto trihit_it = trihit_count_lerw.find(key);
-        int trihit_count = trihit_it == trihit_count_lerw.end() ? 0 : trihit_it->second;
-        union_hit_count += (
-            hit_count_lerw[third] -
-            cohit_count_lerw[min(first, third)][max(first, third)] -
-            cohit_count_lerw[min(second, third)][max(second, third)] +
-            trihit_count
-        );
-    }
-    return static_cast<double>(union_hit_count) / opts.no_of_runs;
-}
-
-void print_cartel_result(ostream &out, const Options &opts, double cartel_hit_prob_lerw) {
-    out << "cartel_nodes:";
-    for (const string &node : opts.cartel_nodes) {
-        out << " " << node;
-    }
-    out << endl;
-    out << "cartel_hit_prob_lerw: " << cartel_hit_prob_lerw << endl;
+    return 0;
 }

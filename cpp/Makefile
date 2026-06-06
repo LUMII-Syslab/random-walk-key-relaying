@@ -1,5 +1,4 @@
 BUILD_DIR := build
-CACHE_DIR ?= /tmp/random-walk-key-relaying-cache
 HEADERS := $(wildcard *.hpp)
 
 CXX := g++
@@ -21,7 +20,6 @@ endif
 all: $(BUILD_DIR)/hops $(BUILD_DIR)/tput $(BUILD_DIR)/proactive $(BUILD_DIR)/scouted $(BUILD_DIR)/exposure
 
 $(BUILD_DIR)/hops: hops.cpp $(HEADERS) | $(BUILD_DIR)
-	rm -rf $(CACHE_DIR)
 	$(CXX) $(CXXFLAGS) hops.cpp -o $(BUILD_DIR)/hops
 
 $(BUILD_DIR)/tput: tput.cpp $(HEADERS) | $(BUILD_DIR)
