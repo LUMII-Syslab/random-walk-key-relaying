@@ -103,6 +103,7 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_bool("--record-paths", {}, opts.record_paths);
     cli.reg_bool("--erase-loops", {}, opts.erase_loops);
     cli.parse();
+    resolve_walk_graph(opts.walk);
     validate_walk_endpoints(cli, opts.walk);
     validate_positive_runs(cli, opts.walk.no_of_runs);
     return opts;
@@ -110,7 +111,7 @@ static Options parse_args(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    Graph graph = opts.walk.edges_csv.empty() ? Graph(cin) : Graph(opts.walk.edges_csv);
+    Graph graph(opts.walk.edges_csv);
     const auto &adj = graph.adj_list();
     const int src = graph.node_index(opts.walk.src_node);
     const int tgt = graph.node_index(opts.walk.tgt_node);

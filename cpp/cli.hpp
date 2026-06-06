@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "graphs.hpp"
+
 using namespace std;
 
 struct ParsedArg {
@@ -78,6 +80,7 @@ private:
 struct WalkCliOpts {
     string src_node;
     string tgt_node;
+    string graph = "geant";
     string edges_csv;
     string rw_variant = "HS";
     int no_of_runs = 10000;
@@ -85,8 +88,8 @@ struct WalkCliOpts {
 
 struct WalkFlagOpts {
     bool include_runs = true;
+    bool include_graph = true;
     bool endpoints_optional = false;
-    bool edges_csv_required = false;
 };
 
 class CliParser {
@@ -222,12 +225,9 @@ public:
             "node",
             !wf.endpoints_optional
         );
-        note_usage(
-            "--edges-csv",
-            "-e",
-            "path",
-            wf.edges_csv_required
-        );
+        if (wf.include_graph) {
+            note_usage("--graph", "-g", "nsfnet|geant|edgelist_filepath.csv", false);
+        }
         note_usage("--rw-variant", "-w", "name", false);
         if (wf.include_runs) {
             note_usage("--no-of-runs", "-n", "int", false);
@@ -235,7 +235,9 @@ public:
 
         reg_string_impl("--src-node", "-s", opts.src_node);
         reg_string_impl("--tgt-node", "-t", opts.tgt_node);
-        reg_string_impl("--edges-csv", "-e", opts.edges_csv);
+        if (wf.include_graph) {
+            reg_string_impl("--graph", "-g", opts.graph);
+        }
         reg_string_impl("--rw-variant", "-w", opts.rw_variant);
         if (wf.include_runs) {
             reg_int_impl("--no-of-runs", "-n", opts.no_of_runs);
@@ -296,10 +298,8 @@ inline void validate_walk_endpoints_pair(const CliParser &cli, const WalkCliOpts
     }
 }
 
-inline void validate_edges_csv(const CliParser &cli, const WalkCliOpts &opts) {
-    if (opts.edges_csv.empty()) {
-        cli.fail("--edges-csv is required");
-    }
+inline void resolve_walk_graph(WalkCliOpts &opts) {
+    opts.edges_csv = resolve_graph_spec(opts.graph);
 }
 
 inline void validate_positive_runs(const CliParser &cli, int no_of_runs) {

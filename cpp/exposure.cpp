@@ -172,11 +172,10 @@ static Options parse_args(int argc, char **argv) {
     CliParser cli(argc, argv);
     WalkFlagOpts walk_flags;
     walk_flags.endpoints_optional = true;
-    walk_flags.edges_csv_required = true;
     cli.reg_walk_flags(opts.walk, walk_flags);
     cli.reg_int("--cartel-size", "-m", opts.cartel_size, true);
     cli.parse();
-    validate_edges_csv(cli, opts.walk);
+    resolve_walk_graph(opts.walk);
     validate_walk_endpoints_pair(cli, opts.walk);
     if (opts.walk.src_node.empty()) {
         cli.fail("Source and target nodes are required for exposure simulation");

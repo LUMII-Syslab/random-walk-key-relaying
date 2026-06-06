@@ -63,7 +63,7 @@ pip install -r requirements.txt
 
 ## Retrieving graph adjacency lists
 
-Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`, `GEANT` in `graphs/__init__.py`).
+Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`, `GEANT` in `graphs/__init__.py`) and in `cpp/graphs.hpp` for the C++ binaries (`nsfnet`, `geant`).
 That lets callers pass a graph name alone, which is useful for joblib cache keys, where hashing a short string is cheaper than serializing a full adjacency list, and avoids rereading edge CSVs from disk on every cache lookup.
 The synthetic generated graph (integer vertices, prefix snapshots) lives in `graphs/generated/`.
 
@@ -90,30 +90,36 @@ Integration tests against GÉANT are in [`test_suurballe.py`](test_suurballe.py)
 pytest test_suurballe.py
 ```
 
+## C++ tools
+
+Build from `cpp/` (`make` uses `-O2` by default; `DEBUG=1 make` for debug symbols):
+
+```bash
+cd cpp
+make
+```
+
+Walk simulators take `-g` / `--graph`: a built-in name (`nsfnet`, `geant`) or a path to an edges CSV.
+Default graph is `geant`.
+Run commands below assume the current working directory is `cpp/`.
+
 ## Random walk hop statistics (`cpp/build/hops`)
 
 Monte Carlo distribution of hop counts for random walks from `s` to `t`.
 Runs are parallelized across CPU cores.
-Default walk variant is HS with 1000 samples.
-
-Build and run from `cpp/`:
+Default graph is GÉANT, walk variant HS, 1000 samples.
 
 ```bash
-cd cpp
-make build/hops
+./build/hops -s PRA -t VIE -n 10000
 
-./build/hops \
-  -s SEA -t ATL \
-  -e ../graphs/nsfnet/edges.csv \
-  -n 10000 \
-  -w HS
+./build/hops -s SEA -t ATL -g nsfnet -n 10000 --erase-loops
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `-s`, `--src-node` | Source node name (required) |
 | `-t`, `--tgt-node` | Target node name (required) |
-| `-e`, `--edges-csv` | Edge list CSV (`Source,Target,...`); omit to read graph from stdin |
+| `-g`, `--graph` | `nsfnet`, `geant`, or path to edges CSV (default `geant`) |
 | `-n`, `--no-of-runs` | Monte Carlo samples (default 1000) |
 | `-w`, `--rw-variant` | Walk variant: `R`, `NB`, `LRV`, `NC`, `HS` (default `HS`) |
 | `--erase-loops` | Count hops on the loop-erased path instead of the raw walk |
@@ -143,26 +149,20 @@ sd: 1.4
 Estimates random flow cartel exposure for a fixed source-target pair: the probability that a loop-erased random walk from `s` to `t` visits at least one node in a cartel.
 For cartel sizes 2 and 3, exposure uses inclusion-exclusion on single/pair/triple visit counts accumulated over many walk samples (HS + loop erasure by default).
 
-Build and run from `cpp/`:
-
 ```bash
-cd cpp
-make build/exposure
+./build/exposure -s SEA -t ATL -g nsfnet -m 2 -n 10000
 
-./build/exposure \
-  -s SEA -t ATL \
-  -m 2 \
-  -e ../graphs/nsfnet/edges.csv \
-  -n 10000 \
-  -w HS
+./build/exposure -s PRA -t VIE -m 2 -n 10000
 ```
+
+The second command uses the default GÉANT graph.
 
 | Flag | Meaning |
 |------|---------|
-| `-s`, `--src-node` | Source node name |
-| `-t`, `--tgt-node` | Target node name |
+| `-s`, `--src-node` | Source node name (required for simulation) |
+| `-t`, `--tgt-node` | Target node name (required for simulation) |
+| `-g`, `--graph` | `nsfnet`, `geant`, or path to edges CSV (default `geant`) |
 | `-m`, `--cartel-size` | Cartel size (1, 2, or 3) |
-| `-e`, `--edges-csv` | Edge list CSV (`Source,Target,...`) |
 | `-n`, `--no-of-runs` | Monte Carlo samples (default 10000) |
 | `-w`, `--rw-variant` | Walk variant: `R`, `NB`, `LRV`, `NC`, `HS` (default `HS`) |
 

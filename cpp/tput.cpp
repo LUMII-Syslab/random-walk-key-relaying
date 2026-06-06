@@ -104,7 +104,7 @@ TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    QkdNetwork net = opts.walk.edges_csv.empty() ? QkdNetwork(cin) : QkdNetwork(opts.walk.edges_csv);
+    QkdNetwork net(opts.walk.edges_csv);
 
     int src_idx = net.node_index(opts.walk.src_node);
     int tgt_idx = net.node_index(opts.walk.tgt_node);
@@ -131,6 +131,7 @@ Options parse_args(int argc, char **argv) {
     cli.reg_bool("--print-arrival-times", {}, opts.print_arrival_times);
     cli.parse();
 
+    resolve_walk_graph(opts.walk);
     validate_walk_endpoints(cli, opts.walk);
     if (opts.chunk_size_bits <= 0) cli.fail("--chunk-size-bits must be > 0");
     if (opts.link_buff_sz_bits <= 0) cli.fail("--link-buff-sz-bits must be > 0");
