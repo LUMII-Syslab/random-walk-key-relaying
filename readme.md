@@ -90,9 +90,9 @@ Integration tests against GÉANT are in [`test_suurballe.py`](test_suurballe.py)
 pytest test_suurballe.py
 ```
 
-## Cartel exposure (`cpp/build/exposure`)
+## Random Flow Cartel exposure (`cpp/build/exposure`)
 
-Estimates cartel exposure for a fixed source-target pair: the probability that a loop-erased random walk from `s` to `t` visits at least one node in a cartel.
+Estimates random flow cartel exposure for a fixed source-target pair: the probability that a loop-erased random walk from `s` to `t` visits at least one node in a cartel.
 For cartel sizes 2 and 3, exposure uses inclusion-exclusion on single/pair/triple visit counts accumulated over many walk samples (HS + loop erasure by default).
 
 Build and run from `cpp/`:
