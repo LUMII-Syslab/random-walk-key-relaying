@@ -8,12 +8,11 @@ Node and edge CSV files are stored in the `graphs/` directory.
 
 | Graph   | Nodes | Edges | Avg Degree | Description |
 |---------|-------|-------|------------|-------------|
-| SECOQC  | 6     | 8     | 2.67       | Vienna metro-scale QKD testbed (2004–2008) |
+| SECOQC  | 6     | 8     | 2.67       | Vienna metro-scale QKD testbed (2004-2008) |
 | NSFNET  | 14    | 21    | 3.00       | US academic backbone topology (1991) |
 | GÉANT   | 43    | 59    | 2.74       | Pan-European research network (links >1000km pruned) |
 
-Distances are calculated for pairs of nodes using the Haversine formula
-based on latitude and longitude from the nodes CSV.
+Distances are calculated for pairs of nodes using the Haversine formula based on latitude and longitude from the nodes CSV.
 
 ```py
 R_KM = 6371.0088  # mean Earth radius in km
@@ -62,20 +61,15 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Hardcoded graph adjacency lists
+## Retrieving graph adjacency lists
 
-Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`,
-`GEANT` in `graphs/__init__.py`). That lets callers pass a graph name alone —
-useful for joblib cache keys, where hashing a short string is cheaper than
-serializing a full adjacency list, and avoids rereading edge CSVs from disk on
-every cache lookup. The synthetic generated graph (integer vertices, prefix
-snapshots) lives in `graphs/generated/`.
+Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`, `GEANT` in `graphs/__init__.py`).
+That lets callers pass a graph name alone, which is useful for joblib cache keys, where hashing a short string is cheaper than serializing a full adjacency list, and avoids rereading edge CSVs from disk on every cache lookup.
+The synthetic generated graph (integer vertices, prefix snapshots) lives in `graphs/generated/`.
 
 ## Node-disjoint paths (`suurballe.py`)
 
-[`suurballe.py`](suurballe.py) implements Suurballe's algorithm for finding
-`k` node-disjoint source–target paths of minimum total hop count in an
-undirected, unweighted graph (Suurballe, *Networks* 4, 1974).
+[`suurballe.py`](suurballe.py) implements Suurballe's algorithm for finding `k` node-disjoint source-target paths of minimum total hop count in an undirected, unweighted graph (Suurballe, *Networks* 4, 1974).
 
 ```py
 from graphs import get_graph_int_adj_list
@@ -85,15 +79,60 @@ adj = get_graph_int_adj_list("GEANT")
 paths = suurballe(adj, s=0, t=1, k=2)
 ```
 
-The input is a `dict[int, list[int]]` with contiguous keys `0 .. n-1`. Each
-returned path is a list of node indices from `s` to `t`; internal vertices are
-not shared across paths. Pass `k` equal to the local vertex connectivity
-between `s` and `t` (e.g. from NetworkX) to obtain a maximum node-disjoint
-path set.
+The input is a `dict[int, list[int]]` with contiguous keys `0 .. n-1`.
+Each returned path is a list of node indices from `s` to `t`; internal vertices are not shared across paths.
+Pass `k` equal to the local vertex connectivity between `s` and `t` (e.g. from NetworkX) to obtain a maximum node-disjoint path set.
 
 Used by [`test_suurballe.py`](test_suurballe.py) for multipath (MP) protection analysis.
 Integration tests against GÉANT are in [`test_suurballe.py`](test_suurballe.py):
 
 ```bash
 pytest test_suurballe.py
+```
+
+## Cartel exposure (`cpp/build/exposure`)
+
+Estimates cartel exposure for a fixed source-target pair: the probability that a loop-erased random walk from `s` to `t` visits at least one node in a cartel.
+For cartel sizes 2 and 3, exposure uses inclusion-exclusion on single/pair/triple visit counts accumulated over many walk samples (HS + loop erasure by default).
+
+Build and run from `cpp/`:
+
+```bash
+cd cpp
+DEBUG=0 make build/exposure
+
+./build/exposure \
+  -s SEA -t ATL \
+  -m 2 \
+  -e ../graphs/nsfnet/edges.csv \
+  -n 10000 \
+  -w HS
+```
+
+| Flag | Meaning |
+|------|---------|
+| `-s`, `--src-node` | Source node name |
+| `-t`, `--tgt-node` | Target node name |
+| `-m`, `--cartel-size` | Cartel size (1, 2, or 3) |
+| `-e`, `--edges-csv` | Edge list CSV (`Source,Target,...`) |
+| `-n`, `--no-of-runs` | Monte Carlo samples (default 10000) |
+| `-w`, `--rw-variant` | Walk variant: `R`, `NB`, `LRV`, `NC`, `HS` (default `HS`) |
+
+The tool enumerates every cartel of size `m` and reports:
+
+- `mean_exposure_all`: average exposure over all cartels
+- `mean_exposure_eligible`: average over eligible cartels only; neither `s` nor `t` is in the cartel, and `s`-`t` stays connected after removing cartel nodes
+- `max_exposure_eligible` / `max_exposure_eligible_cartel`: worst eligible cartel and its nodes
+- `total_cartels`, `eligible_cartels`: counts for context
+
+Example output:
+
+```
+context: SEA -> ATL (HS, 10000 runs, cartel_size=2)
+mean_exposure_all: 0.666214
+mean_exposure_eligible: 0.532700
+max_exposure_eligible: 0.893000
+max_exposure_eligible_cartel: CMI HOU
+total_cartels: 91
+eligible_cartels: 65
 ```

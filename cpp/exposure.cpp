@@ -30,6 +30,10 @@ struct Options {
 };
 
 struct HitCounts {
+    // Marginals over loop-erased s->t walks (one run = one sample):
+    // single[u]     = #runs visiting u
+    // pair[u,v]     = #runs visiting both u and v  (u < v)
+    // triple[u,v,w] = #runs visiting u, v, and w   (u < v < w)
     vector<int> single;
     vector<vector<int>> pair;
     unordered_map<uint64_t, int> triple;
@@ -43,6 +47,7 @@ static uint64_t triple_key(int u, int v, int w, int n) {
 }
 
 static void record_path_hits(const vector<int> &path, HitCounts &hits, int n) {
+    // Accumulate single/pair/triple co-occurrence counts for one LERW path.
     // Loop-erased paths visit each node at most once; skip sort/dedup.
     const size_t len = path.size();
     for (int u : path) {
@@ -64,6 +69,13 @@ static void record_path_hits(const vector<int> &path, HitCounts &hits, int n) {
     }
 }
 
+// #runs where at least one cartel node lies on the loop-erased walk.
+//
+// Exposure is P(at least one cartel node on path). We never store per-run bitsets;
+// instead inclusion-exclusion on the marginals in HitCounts:
+//   |A ∪ B|     = |A| + |B| - |A ∩ B|
+//   |A ∪ B ∪ C| = |A| + |B| + |C| - pairwise intersections + |A ∩ B ∩ C|
+// Cartel size is limited to 3 because we only aggregate up to triple hits.
 static int cartel_union_hit_count(const vector<int> &cartel, const HitCounts &hits) {
     const int n = static_cast<int>(hits.single.size());
     if (cartel.size() == 1) {
@@ -105,6 +117,7 @@ static uint64_t cartel_key(const vector<int> &cartel, int n) {
     return key;
 }
 
+// Eligible cartel: neither endpoint is in C, and s remains connected to t in G \\ C.
 static bool cartel_is_eligible(
     const vector<int> &cartel,
     int src,
@@ -243,6 +256,7 @@ int main(int argc, char **argv) {
         lh.pair.assign(n, vector<int>(n, 0));
     }
 
+    // Phase 1: Monte Carlo — sample LERW paths and aggregate hit marginals.
     auto run_chunk = [&](int tid, int start_run, int end_run) {
         HitCounts &hits = local_hits[tid];
         for (int run = start_run; run < end_run; run++) {
@@ -294,6 +308,7 @@ int main(int argc, char **argv) {
     queue<int> bfs_q;
     unordered_map<uint64_t, bool> eligible_cache;
 
+    // Phase 2: enumerate all cartels of size m; exposure via inclusion-exclusion.
     function<void(int, int)> walk_combinations = [&](int start, int depth) {
         if (depth == opts.cartel_size) {
             const double exposure = cartel_exposure(cartel, opts.no_of_runs, hits);
