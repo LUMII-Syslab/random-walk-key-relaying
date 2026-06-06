@@ -90,6 +90,54 @@ Integration tests against GÉANT are in [`test_suurballe.py`](test_suurballe.py)
 pytest test_suurballe.py
 ```
 
+## Random walk hop statistics (`cpp/build/hops`)
+
+Monte Carlo distribution of hop counts for random walks from `s` to `t`.
+Runs are parallelized across CPU cores.
+Default walk variant is HS with 1000 samples.
+
+Build and run from `cpp/`:
+
+```bash
+cd cpp
+make build/hops
+
+./build/hops \
+  -s SEA -t ATL \
+  -e ../graphs/nsfnet/edges.csv \
+  -n 10000 \
+  -w HS
+```
+
+| Flag | Meaning |
+|------|---------|
+| `-s`, `--src-node` | Source node name (required) |
+| `-t`, `--tgt-node` | Target node name (required) |
+| `-e`, `--edges-csv` | Edge list CSV (`Source,Target,...`); omit to read graph from stdin |
+| `-n`, `--no-of-runs` | Monte Carlo samples (default 1000) |
+| `-w`, `--rw-variant` | Walk variant: `R`, `NB`, `LRV`, `NC`, `HS` (default `HS`) |
+| `--erase-loops` | Count hops on the loop-erased path instead of the raw walk |
+| `--record-paths` | Print each sampled path after the summary |
+
+Reports min, percentiles (p25 through p99), max, mean, standard deviation, and a 95% CI for the mean.
+
+Example output:
+
+```
+context: SEA -> ATL (HS, 1000 runs)
+min: 3
+p25: 4
+median / p50: 5
+p75: 6
+p90: 7
+p95: 8
+p99: 9
+max: 11
+mean: 5.2
+sd: 1.4
+95% CI for mean: [5.1, 5.3]
+```
+
 ## Random Flow Cartel exposure (`cpp/build/exposure`)
 
 Estimates random flow cartel exposure for a fixed source-target pair: the probability that a loop-erased random walk from `s` to `t` visits at least one node in a cartel.
@@ -99,7 +147,7 @@ Build and run from `cpp/`:
 
 ```bash
 cd cpp
-DEBUG=0 make build/exposure
+make build/exposure
 
 ./build/exposure \
   -s SEA -t ATL \
