@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -32,6 +33,23 @@ inline bool flag_is(string_view flag, string_view long_name, string_view short_n
         return true;
     }
     return !short_name.empty() && flag == short_name;
+}
+
+inline string context_format_value(string_view value) {
+    if (value.find_first_of(" \t\"") != string_view::npos) {
+        ostringstream out;
+        out << '"';
+        for (char c : value) {
+            if (c == '"') {
+                out << "\\\"";
+            } else {
+                out << c;
+            }
+        }
+        out << '"';
+        return out.str();
+    }
+    return string(value);
 }
 
 class ArgParser {
@@ -153,13 +171,19 @@ public:
         reg(long_name, {}, std::move(handler));
     }
 
+    void reg_context(string_view short_name, function<string()> getter) {
+        context_fields_.push_back({string(short_name), std::move(getter)});
+    }
+
     void reg_string_impl(string_view long_name, string_view short_name, string &target) {
+        reg_context(short_name, [&target]() { return target; });
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = cli.require_value(i, parsed.flag, parsed);
         });
     }
 
     void reg_int_impl(string_view long_name, string_view short_name, int &target) {
+        reg_context(long_name, [&target]() { return to_string(target); });
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = stoi(cli.require_value(i, parsed.flag, parsed));
         });
@@ -172,6 +196,7 @@ public:
         bool required = false
     ) {
         note_usage_flag(long_name, short_name, required);
+        reg_context(long_name, [&target]() { return target ? "true" : "false"; });
         reg(long_name, short_name, [&](CliParser &, int &, const ParsedArg &) {
             target = true;
         });
@@ -207,6 +232,11 @@ public:
         string_view metavar = "float"
     ) {
         note_usage(long_name, short_name, metavar, required);
+        reg_context(long_name, [&target]() {
+            ostringstream out;
+            out << target;
+            return out.str();
+        });
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = stod(cli.require_value(i, parsed.flag, parsed));
         });
@@ -262,7 +292,26 @@ public:
         args_.fail(msg);
     }
 
+    void write_context(ostream &out) const {
+        out << "context:";
+        for (const ContextField &field : context_fields_) {
+            out << ' ' << field.name << '=' << context_format_value(field.getter());
+        }
+        out << endl;
+    }
+
+    string format_context() const {
+        ostringstream out;
+        write_context(out);
+        return out.str();
+    }
+
 private:
+    struct ContextField {
+        string name;
+        function<string()> getter;
+    };
+
     struct FlagSpec {
         string_view long_name;
         string_view short_name;
@@ -283,6 +332,7 @@ private:
     char **argv_;
     ArgParser args_;
     vector<string> usage_parts_;
+    vector<ContextField> context_fields_;
     vector<FlagSpec> flags_;
 };
 

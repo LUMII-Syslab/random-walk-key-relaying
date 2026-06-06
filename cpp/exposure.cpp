@@ -24,6 +24,7 @@ using namespace std;
 struct Options {
     WalkCliOpts walk;
     int cartel_size = 1;
+    string context;
 };
 
 struct HitCounts {
@@ -184,6 +185,7 @@ static Options parse_args(int argc, char **argv) {
         cli.fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
     }
     validate_positive_runs(cli, opts.walk.no_of_runs);
+    opts.context = cli.format_context();
     return opts;
 }
 
@@ -296,9 +298,7 @@ int main(int argc, char **argv) {
     walk_combinations(0, 0);
 
     cout << fixed << setprecision(6);
-    cout << "context: " << opts.walk.src_node << " -> " << opts.walk.tgt_node
-         << " (" << opts.walk.rw_variant << ", " << opts.walk.no_of_runs << " runs, cartel_size="
-         << opts.cartel_size << ")" << endl;
+    cout << opts.context;
     cout << "mean_exposure_all: "
          << (count_all ? sum_all / count_all : 0.0) << endl;
     cout << "mean_exposure_eligible: "

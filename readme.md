@@ -130,18 +130,18 @@ Reports min, percentiles (p25 through p99), max, mean, standard deviation, and a
 Example output:
 
 ```
-context: SEA -> ATL (HS, 1000 runs)
-min: 3
+context: -s=PAR -t=MIL -g=geant -w=HS --no-of-runs=1000 --record-paths=false --erase-loops=false
+min: 2
 p25: 4
-median / p50: 5
-p75: 6
-p90: 7
-p95: 8
-p99: 9
-max: 11
-mean: 5.2
-sd: 1.4
-95% CI for mean: [5.1, 5.3]
+median / p50: 8
+p75: 16
+p90: 26
+p95: 31
+p99: 44
+max: 69
+mean: 11.1
+sd: 9.9
+95% CI for mean: [10.5, 11.7]
 ```
 
 ## Random Flow Cartel exposure (`cpp/build/exposure`)
@@ -176,7 +176,7 @@ The tool enumerates every cartel of size `m` and reports:
 Example output:
 
 ```
-context: SEA -> ATL (HS, 10000 runs, cartel_size=2)
+context: -s=SEA -t=ATL -g=nsfnet -w=HS -n=10000 -m=2
 mean_exposure_all: 0.666214
 mean_exposure_eligible: 0.532700
 max_exposure_eligible: 0.893000

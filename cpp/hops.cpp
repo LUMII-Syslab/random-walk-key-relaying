@@ -21,6 +21,7 @@ struct Options {
     WalkCliOpts walk;
     bool record_paths = false;
     bool erase_loops = false;
+    string context;
 };
 
 struct HopSummary {
@@ -77,10 +78,7 @@ static HopSummary summarize_hops(const vector<int> &hop_counts) {
 }
 
 static void print_summary(ostream &out, const Options &opts, const HopSummary &s) {
-    out << "context: " << opts.walk.src_node << " -> " << opts.walk.tgt_node
-        << " (" << opts.walk.rw_variant << ", " << opts.walk.no_of_runs << " runs";
-    if (opts.erase_loops) out << ", loop-erased";
-    out << ")" << endl;
+    out << opts.context;
     out << "min: " << s.min_hops << endl;
     out << "p25: " << s.p25 << endl;
     out << "median / p50: " << s.p50 << endl;
@@ -106,6 +104,7 @@ static Options parse_args(int argc, char **argv) {
     resolve_walk_graph(opts.walk);
     validate_walk_endpoints(cli, opts.walk);
     validate_positive_runs(cli, opts.walk.no_of_runs);
+    opts.context = cli.format_context();
     return opts;
 }
 
