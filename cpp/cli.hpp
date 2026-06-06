@@ -3,8 +3,10 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace std;
@@ -81,13 +83,64 @@ struct WalkCliOpts {
     int no_of_runs = 10000;
 };
 
+struct WalkFlagOpts {
+    bool include_runs = true;
+    bool endpoints_optional = false;
+    bool edges_csv_required = false;
+};
+
 class CliParser {
 public:
-    using UsageFn = ArgParser::UsageFn;
     using FlagHandler = function<void(CliParser &, int &, const ParsedArg &)>;
 
-    CliParser(int argc, char **argv, UsageFn usage)
-        : argc_(argc), argv_(argv), args_(argc, argv, std::move(usage)) {}
+    CliParser(int argc, char **argv)
+        : argc_(argc),
+          argv_(argv),
+          args_(argc, argv, [this](const char *prog) { print_usage(prog); }) {}
+
+    void note_usage(
+        string_view long_name,
+        string_view short_name,
+        string_view metavar,
+        bool required
+    ) {
+        ostringstream part;
+        part << (required ? "(" : "[(");
+        part << long_name;
+        if (!short_name.empty()) {
+            part << '|' << short_name;
+        }
+        part << ')';
+        if (!metavar.empty()) {
+            part << " <" << metavar << '>';
+        }
+        if (!required) {
+            part << ']';
+        }
+        usage_parts_.push_back(part.str());
+    }
+
+    void note_usage_flag(string_view long_name, string_view short_name, bool required) {
+        ostringstream part;
+        if (required) {
+            part << '(' << long_name;
+        } else {
+            part << '[' << long_name;
+        }
+        if (!short_name.empty()) {
+            part << '|' << short_name;
+        }
+        part << (required ? ")" : "]");
+        usage_parts_.push_back(part.str());
+    }
+
+    void print_usage(const char *prog) const {
+        cerr << "Usage: " << prog;
+        for (const string &part : usage_parts_) {
+            cerr << ' ' << part;
+        }
+        cerr << endl;
+    }
 
     void reg(string_view long_name, string_view short_name, FlagHandler handler) {
         flags_.push_back(FlagSpec{long_name, short_name, std::move(handler)});
@@ -97,37 +150,95 @@ public:
         reg(long_name, {}, std::move(handler));
     }
 
-    void reg_bool(string_view long_name, string_view short_name, bool &target) {
-        reg(long_name, short_name, [&](CliParser &, int &, const ParsedArg &) {
-            target = true;
-        });
-    }
-
-    void reg_string(string_view long_name, string_view short_name, string &target) {
+    void reg_string_impl(string_view long_name, string_view short_name, string &target) {
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = cli.require_value(i, parsed.flag, parsed);
         });
     }
 
-    void reg_int(string_view long_name, string_view short_name, int &target) {
+    void reg_int_impl(string_view long_name, string_view short_name, int &target) {
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = stoi(cli.require_value(i, parsed.flag, parsed));
         });
     }
 
-    void reg_double(string_view long_name, string_view short_name, double &target) {
+    void reg_bool(
+        string_view long_name,
+        string_view short_name,
+        bool &target,
+        bool required = false
+    ) {
+        note_usage_flag(long_name, short_name, required);
+        reg(long_name, short_name, [&](CliParser &, int &, const ParsedArg &) {
+            target = true;
+        });
+    }
+
+    void reg_string(
+        string_view long_name,
+        string_view short_name,
+        string &target,
+        bool required = false,
+        string_view metavar = "str"
+    ) {
+        note_usage(long_name, short_name, metavar, required);
+        reg_string_impl(long_name, short_name, target);
+    }
+
+    void reg_int(
+        string_view long_name,
+        string_view short_name,
+        int &target,
+        bool required = false,
+        string_view metavar = "int"
+    ) {
+        note_usage(long_name, short_name, metavar, required);
+        reg_int_impl(long_name, short_name, target);
+    }
+
+    void reg_double(
+        string_view long_name,
+        string_view short_name,
+        double &target,
+        bool required = false,
+        string_view metavar = "float"
+    ) {
+        note_usage(long_name, short_name, metavar, required);
         reg(long_name, short_name, [&](CliParser &cli, int &i, const ParsedArg &parsed) {
             target = stod(cli.require_value(i, parsed.flag, parsed));
         });
     }
 
-    void reg_walk_flags(WalkCliOpts &opts, bool include_runs = true) {
-        reg_string("--src-node", "-s", opts.src_node);
-        reg_string("--tgt-node", "-t", opts.tgt_node);
-        reg_string("--edges-csv", "-e", opts.edges_csv);
-        reg_string("--rw-variant", "-w", opts.rw_variant);
-        if (include_runs) {
-            reg_int("--no-of-runs", "-n", opts.no_of_runs);
+    void reg_walk_flags(WalkCliOpts &opts, WalkFlagOpts wf = {}) {
+        note_usage(
+            "--src-node",
+            "-s",
+            "node",
+            !wf.endpoints_optional
+        );
+        note_usage(
+            "--tgt-node",
+            "-t",
+            "node",
+            !wf.endpoints_optional
+        );
+        note_usage(
+            "--edges-csv",
+            "-e",
+            "path",
+            wf.edges_csv_required
+        );
+        note_usage("--rw-variant", "-w", "name", false);
+        if (wf.include_runs) {
+            note_usage("--no-of-runs", "-n", "int", false);
+        }
+
+        reg_string_impl("--src-node", "-s", opts.src_node);
+        reg_string_impl("--tgt-node", "-t", opts.tgt_node);
+        reg_string_impl("--edges-csv", "-e", opts.edges_csv);
+        reg_string_impl("--rw-variant", "-w", opts.rw_variant);
+        if (wf.include_runs) {
+            reg_int_impl("--no-of-runs", "-n", opts.no_of_runs);
         }
     }
 
@@ -169,12 +280,25 @@ private:
     int argc_;
     char **argv_;
     ArgParser args_;
+    vector<string> usage_parts_;
     vector<FlagSpec> flags_;
 };
 
 inline void validate_walk_endpoints(const CliParser &cli, const WalkCliOpts &opts) {
     if (opts.src_node.empty() || opts.tgt_node.empty()) {
         cli.fail("Source and target nodes are required");
+    }
+}
+
+inline void validate_walk_endpoints_pair(const CliParser &cli, const WalkCliOpts &opts) {
+    if (opts.src_node.empty() != opts.tgt_node.empty()) {
+        cli.fail("Provide both --src-node and --tgt-node, or omit both");
+    }
+}
+
+inline void validate_edges_csv(const CliParser &cli, const WalkCliOpts &opts) {
+    if (opts.edges_csv.empty()) {
+        cli.fail("--edges-csv is required");
     }
 }
 

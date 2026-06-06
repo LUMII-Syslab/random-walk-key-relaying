@@ -3,7 +3,6 @@
 #include <cctype>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -96,17 +95,10 @@ static void print_summary(ostream &out, const Options &opts, const HopSummary &s
     out << "95% CI for mean: [" << s.ci_low << ", " << s.ci_high << "]" << endl;
 }
 
-static void print_usage(const char *prog) {
-    cerr << "Usage: " << prog
-         << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
-            "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>] "
-            "[(--edges-csv|-e) <path>] [--record-paths] [--erase-loops]" << endl;
-}
-
 static Options parse_args(int argc, char **argv) {
     Options opts;
     opts.walk.no_of_runs = 1000;
-    CliParser cli(argc, argv, print_usage);
+    CliParser cli(argc, argv);
     cli.reg_walk_flags(opts.walk);
     cli.reg_bool("--record-paths", {}, opts.record_paths);
     cli.reg_bool("--erase-loops", {}, opts.erase_loops);
@@ -124,7 +116,8 @@ int main(int argc, char **argv) {
     const int tgt = graph.node_index(opts.walk.tgt_node);
     const int n = graph.node_count();
 
-    if (!make_rw_token(opts.walk.rw_variant, src, tgt, 0, n)) {
+    const RwVariant variant = parse_rw_variant(opts.walk.rw_variant);
+    if (variant == RwVariant::Unknown) {
         cerr << "Unknown random walk variant: " << opts.walk.rw_variant << endl;
         return 1;
     }
@@ -140,11 +133,15 @@ int main(int argc, char **argv) {
     thread_count = min(thread_count, opts.walk.no_of_runs);
 
     auto run_chunk = [&](int start_run, int end_run) {
+        WalkSampleScratch scratch;
+        scratch.prepare_buffers(n);
+        vector<int> lerw;
         for (int run = start_run; run < end_run; run++) {
-            unique_ptr<RwToken> token = make_rw_token(opts.walk.rw_variant, src, tgt, run, n);
-            vector<int> history = sample_random_walk_history(adj, *token, src, tgt);
-            vector<int> lerw = erase_loops_from_history(history);
-            const vector<int> &effective = opts.erase_loops ? lerw : history;
+            sample_random_walk_history(scratch, adj, variant, src, tgt, run, n);
+            if (opts.erase_loops) {
+                lerw = erase_loops_from_history(scratch.history);
+            }
+            const vector<int> &effective = opts.erase_loops ? lerw : scratch.history;
             hop_counts[run] = static_cast<int>(effective.size()) - 1;
 
             if (opts.record_paths) {

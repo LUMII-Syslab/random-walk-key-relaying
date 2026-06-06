@@ -88,8 +88,6 @@ struct Options {
     string ignore_events = "";     // comma-separated list of event kinds to suppress (e.g. "recv_chunk,key_establ")
     string ignore_events_csv = ""; // legacy: optional path to ignore-rules file (still supported)
 };
-
-void print_usage(const char *prog_name);
 Options parse_args(int argc, char **argv);
 struct SimulationOutput {
     vector<ReportedEvent> reported;
@@ -458,14 +456,6 @@ static vector<string> parse_src_nodes_csv(const string &s) {
     return out;
 }
 
-void print_usage(const char *prog_name) {
-    cerr << "Usage: " << prog_name
-         << " (--src-nodes|-S) <n1,n2,...> (--rw-variant|-w) <name> "
-            "(--duration-s|-d) <seconds> "
-            "[--sieve-table-sz <int>] [--watermark-sz <int>] "
-            "[(--edges-csv|-e) <path>] [--ignore-events <csv>] [--ignore-events-csv <path>]" << endl;
-}
-
 static bool valid_rw_variant(const string &w) {
     return w == "R" || w == "NB" || w == "LRV" || w == "NC" || w == "HS";
 }
@@ -476,15 +466,18 @@ Options parse_args(int argc, char **argv) {
     bool have_rw = false;
     bool have_duration = false;
 
-    CliParser cli(argc, argv, print_usage);
+    CliParser cli(argc, argv);
+    cli.note_usage("--src-nodes", "-S", "n1,n2,...", true);
     cli.reg("--src-nodes", "-S", [&](CliParser &c, int &i, const ParsedArg &p) {
         opts.src_nodes = parse_src_nodes_csv(c.require_value(i, p.flag, p));
         have_src_nodes = true;
     });
+    cli.note_usage("--rw-variant", "-w", "name", true);
     cli.reg("--rw-variant", "-w", [&](CliParser &c, int &i, const ParsedArg &p) {
         opts.rw_variant = c.require_value(i, p.flag, p);
         have_rw = true;
     });
+    cli.note_usage("--duration-s", "-d", "seconds", true);
     cli.reg("--duration-s", "-d", [&](CliParser &c, int &i, const ParsedArg &p) {
         opts.duration_s = stod(c.require_value(i, p.flag, p));
         have_duration = true;

@@ -98,7 +98,6 @@ struct RunResult {
 };
 
 Options parse_args(int argc, char **argv);
-void print_usage(const char *prog_name);
 RunResult run_single_simulation(QkdNetwork &net, int src_idx, int tgt_idx, const Options &opts, int seed_offset);
 TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
@@ -115,22 +114,13 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-void print_usage(const char *prog_name) {
-    cerr << "Usage: " << prog_name
-         << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
-            "[(--rw-variant|-w) <name>] "
-            "[(--edges-csv|-e) <path>] "
-            "[--chunk-size-bits <int>] [--link-buff-sz-bits <int>] "
-            "[--qkd-skr-bits-per-s <float>] [--latency-s <float>] "
-            "[--sim-duration-s <float>] [--relay-buffer-sz-chunks <int>] "
-            "[--erase-loops] [--print-arrival-times]" << endl;
-}
-
 Options parse_args(int argc, char **argv) {
     Options opts;
     opts.walk.rw_variant = "LRV";
-    CliParser cli(argc, argv, print_usage);
-    cli.reg_walk_flags(opts.walk, /*include_runs=*/false);
+    CliParser cli(argc, argv);
+    WalkFlagOpts walk_flags;
+    walk_flags.include_runs = false;
+    cli.reg_walk_flags(opts.walk, walk_flags);
     cli.reg_int("--chunk-size-bits", {}, opts.chunk_size_bits);
     cli.reg_int("--link-buff-sz-bits", {}, opts.link_buff_sz_bits);
     cli.reg_double("--qkd-skr-bits-per-s", {}, opts.qkd_skr_bits_per_s);

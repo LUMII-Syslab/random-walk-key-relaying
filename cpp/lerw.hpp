@@ -46,25 +46,25 @@ inline vector<int> erase_loops_from_history(const vector<int> &history) {
     return loop_erased_history;
 }
 
-inline vector<int> sample_random_walk_history(
+inline void sample_loop_erased_path(
+    WalkSampleScratch &scratch,
+    vector<int> &out,
     const vector<vector<int>> &adj,
-    RwToken &token,
+    RwVariant variant,
     int src_idx,
     int tgt_idx,
+    int seed,
+    int node_count,
     int max_steps = 100000
 ) {
-    int position = src_idx;
-    vector<int> history = {src_idx};
-    int hops = 0;
-    while (position != tgt_idx) {
-        int next = token.choose_next_and_update(position, adj[position]);
-        position = next;
-        history.push_back(position);
-        if (++hops > max_steps) {
-            throw runtime_error("Random walk exceeded " + to_string(max_steps) + " steps");
-        }
+    sample_random_walk_history(scratch, adj, variant, src_idx, tgt_idx, seed, node_count, max_steps);
+    out = erase_loops_from_history(scratch.history);
+    if (out.size() < 2) {
+        throw runtime_error("Loop-erased path must contain at least one hop");
     }
-    return history;
+    if (out.front() != src_idx || out.back() != tgt_idx) {
+        throw runtime_error("Loop-erased path has invalid endpoints");
+    }
 }
 
 inline vector<int> sample_loop_erased_path(
@@ -76,19 +76,13 @@ inline vector<int> sample_loop_erased_path(
     int node_count,
     int max_steps = 100000
 ) {
-    unique_ptr<RwToken> token = make_rw_token(rw_variant, src_idx, tgt_idx, seed, node_count);
-    if (!token) {
+    const RwVariant variant = parse_rw_variant(rw_variant);
+    if (variant == RwVariant::Unknown) {
         throw runtime_error("Unknown random walk variant: " + rw_variant);
     }
-
-    vector<int> loop_erased_path = erase_loops_from_history(
-        sample_random_walk_history(adj, *token, src_idx, tgt_idx, max_steps)
-    );
-    if (loop_erased_path.size() < 2) {
-        throw runtime_error("Loop-erased path must contain at least one hop");
-    }
-    if (loop_erased_path.front() != src_idx || loop_erased_path.back() != tgt_idx) {
-        throw runtime_error("Loop-erased path has invalid endpoints");
-    }
-    return loop_erased_path;
+    WalkSampleScratch scratch;
+    scratch.prepare_buffers(node_count);
+    vector<int> out;
+    sample_loop_erased_path(scratch, out, adj, variant, src_idx, tgt_idx, seed, node_count, max_steps);
+    return out;
 }

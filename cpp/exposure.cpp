@@ -167,22 +167,19 @@ static string format_cartel_nodes(const Graph &graph, const vector<int> &cartel)
     return out.str();
 }
 
-static void print_usage(const char *prog) {
-    cerr << "Usage: " << prog
-         << " (--src-node|-s) <node> (--tgt-node|-t) <node> "
-            "(--cartel-size|-m) <int> (--edges-csv|-e) <path> "
-            "[(--no-of-runs|-n) <int>] [(--rw-variant|-w) <name>]" << endl;
-}
-
 static Options parse_args(int argc, char **argv) {
     Options opts;
-    CliParser cli(argc, argv, print_usage);
-    cli.reg_walk_flags(opts.walk);
-    cli.reg_int("--cartel-size", "-m", opts.cartel_size);
+    CliParser cli(argc, argv);
+    WalkFlagOpts walk_flags;
+    walk_flags.endpoints_optional = true;
+    walk_flags.edges_csv_required = true;
+    cli.reg_walk_flags(opts.walk, walk_flags);
+    cli.reg_int("--cartel-size", "-m", opts.cartel_size, true);
     cli.parse();
-    validate_walk_endpoints(cli, opts.walk);
-    if (opts.walk.edges_csv.empty()) {
-        cli.fail("Source, target, and edges CSV are required");
+    validate_edges_csv(cli, opts.walk);
+    validate_walk_endpoints_pair(cli, opts.walk);
+    if (opts.walk.src_node.empty()) {
+        cli.fail("Source and target nodes are required for exposure simulation");
     }
     if (opts.cartel_size < 1 || opts.cartel_size > 3) {
         cli.fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
@@ -199,7 +196,8 @@ int main(int argc, char **argv) {
     const int src = graph.node_index(opts.walk.src_node);
     const int tgt = graph.node_index(opts.walk.tgt_node);
 
-    if (!make_rw_token(opts.walk.rw_variant, src, tgt, 0, n)) {
+    const RwVariant variant = parse_rw_variant(opts.walk.rw_variant);
+    if (variant == RwVariant::Unknown) {
         cerr << "Unknown random walk variant: " << opts.walk.rw_variant << endl;
         return 1;
     }
@@ -217,12 +215,12 @@ int main(int argc, char **argv) {
     // Phase 1: Monte Carlo — sample LERW paths and aggregate hit marginals.
     auto run_chunk = [&](int tid, int start_run, int end_run) {
         HitCounts &hits = local_hits[tid];
+        WalkSampleScratch scratch;
+        scratch.prepare_buffers(n);
+        vector<int> lerw;
         for (int run = start_run; run < end_run; run++) {
-            record_path_hits(
-                sample_loop_erased_path(adj, opts.walk.rw_variant, src, tgt, run, n),
-                hits,
-                n
-            );
+            sample_loop_erased_path(scratch, lerw, adj, variant, src, tgt, run, n);
+            record_path_hits(lerw, hits, n);
         }
     };
 
