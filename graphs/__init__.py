@@ -38,6 +38,9 @@ def str_adj_list_to_int_adj_list(adj_list: dict[str, list[str]]) -> dict[int, li
     int_adj_list = {node_idx[node]: [node_idx[n] for n in adj_list[node]] for node in adj_list}
     return int_adj_list
 
+def get_graph_int_adj_list(graph_name: Literal["NSFNET", "GEANT"]) -> dict[int, list[int]]:
+    return str_adj_list_to_int_adj_list(get_graph_str_adj_list(graph_name))
+
 # If we have converted to int adj list, and wish to retrieve the name of a node
 def node_idx_to_name(idx: int, str_adj_list: dict[str, list[str]]) -> str:
     return sorted(str_adj_list.keys())[idx]
