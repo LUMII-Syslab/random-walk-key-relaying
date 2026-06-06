@@ -1,8 +1,8 @@
 """Suurballe's algorithm for K node-disjoint s-t paths.
 
-The graph from `readgraphcsv.Graph` is undirected and unweighted, so every arc
-has unit length and the "minimum total length" objective of Suurballe (1974)
-reduces to "minimum total hop count".
+The input is an undirected, unweighted adjacency list (integer node indices), so
+every arc has unit length and the "minimum total length" objective of Suurballe
+(1974) reduces to "minimum total hop count".
 
 Implementation follows the Suurballe-Tarjan formulation, equivalent to the
 node-splitting / canonic-network reduction discussed in Sections 6 and 8 of
@@ -26,20 +26,20 @@ from __future__ import annotations
 
 import heapq
 
-from readgraphcsv import Graph
 
-
-def suurballe(graph: Graph, s: int, t: int, k: int) -> list[list[int]]:
+def suurballe(adj_list: dict[int, list[int]], s: int, t: int, k: int) -> list[list[int]]:
     """Return ``k`` node-disjoint s-t paths with minimum total hop count.
 
-    Each path is a list of node indices starting with ``s`` and ending with
-    ``t``. Internal nodes are not shared between any two returned paths.
+    ``adj_list[u]`` lists the neighbors of node ``u``. Keys must be the
+    contiguous indices ``0 .. len(adj_list)-1``. Each path is a list of node
+    indices starting with ``s`` and ending with ``t``. Internal nodes are not
+    shared between any two returned paths.
 
     Raises ``ValueError`` if ``s == t``, if the indices are out of range, if
     ``k`` is negative, or if the graph contains fewer than ``k`` node-disjoint
     s-t paths.
     """
-    n = len(graph.adj_list)
+    n = len(adj_list)
     if not (0 <= s < n and 0 <= t < n):
         raise ValueError(f"terminal out of range: s={s}, t={t}, n={n}")
     if s == t:
@@ -79,7 +79,7 @@ def suurballe(graph: Graph, s: int, t: int, k: int) -> list[list[int]]:
     # Edge arcs. Suppress arcs into s_in or out of t_out: they cannot occur on
     # any s -> t path and would only inflate the search.
     for u in range(n):
-        for v in graph.adj_list[u]:
+        for v in adj_list[u]:
             if v <= u:
                 continue
             if u != t and v != s:
