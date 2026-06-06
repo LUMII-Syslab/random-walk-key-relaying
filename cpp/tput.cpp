@@ -116,7 +116,6 @@ int main(int argc, char **argv) {
 
 Options parse_args(int argc, char **argv) {
     Options opts;
-    opts.walk.rw_variant = "LRV";
     CliParser cli(argc, argv);
     WalkFlagOpts walk_flags;
     walk_flags.include_runs = false;

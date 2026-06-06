@@ -79,7 +79,7 @@ struct InternalEventGreater {
  */
 struct Options {
     vector<string> src_nodes;
-    string rw_variant;
+    string rw_variant = "HS";
     double duration_s = 0.0;
     int sieve_table_sz = 32;
     int watermark_sz = 16;
@@ -463,7 +463,6 @@ static bool valid_rw_variant(const string &w) {
 Options parse_args(int argc, char **argv) {
     Options opts;
     bool have_src_nodes = false;
-    bool have_rw = false;
     bool have_duration = false;
 
     CliParser cli(argc, argv);
@@ -472,11 +471,7 @@ Options parse_args(int argc, char **argv) {
         opts.src_nodes = parse_src_nodes_csv(c.require_value(i, p.flag, p));
         have_src_nodes = true;
     });
-    cli.note_usage("--rw-variant", "-w", "name", true);
-    cli.reg("--rw-variant", "-w", [&](CliParser &c, int &i, const ParsedArg &p) {
-        opts.rw_variant = c.require_value(i, p.flag, p);
-        have_rw = true;
-    });
+    cli.reg_string("--rw-variant", "-w", opts.rw_variant);
     cli.note_usage("--duration-s", "-d", "seconds", true);
     cli.reg("--duration-s", "-d", [&](CliParser &c, int &i, const ParsedArg &p) {
         opts.duration_s = stod(c.require_value(i, p.flag, p));
@@ -491,9 +486,6 @@ Options parse_args(int argc, char **argv) {
 
     if (!have_src_nodes || opts.src_nodes.empty()) {
         cli.fail("Non-empty --src-nodes is required (comma-separated node names)");
-    }
-    if (!have_rw || opts.rw_variant.empty()) {
-        cli.fail("--rw-variant is required");
     }
     if (!valid_rw_variant(opts.rw_variant)) {
         cli.fail("Unknown random walk variant: " + opts.rw_variant);
