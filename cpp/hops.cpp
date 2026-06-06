@@ -11,6 +11,7 @@
 #include <thread>
 #include <vector>
 
+#include "cli.hpp"
 #include "graph.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
@@ -18,11 +19,7 @@
 using namespace std;
 
 struct Options {
-    int no_of_runs = 1000;
-    string src_node;
-    string tgt_node;
-    string rw_variant = "HS";
-    string edges_csv;
+    WalkCliOpts walk;
     bool record_paths = false;
     bool erase_loops = false;
 };
@@ -81,8 +78,8 @@ static HopSummary summarize_hops(const vector<int> &hop_counts) {
 }
 
 static void print_summary(ostream &out, const Options &opts, const HopSummary &s) {
-    out << "context: " << opts.src_node << " -> " << opts.tgt_node
-        << " (" << opts.rw_variant << ", " << opts.no_of_runs << " runs";
+    out << "context: " << opts.walk.src_node << " -> " << opts.walk.tgt_node
+        << " (" << opts.walk.rw_variant << ", " << opts.walk.no_of_runs << " runs";
     if (opts.erase_loops) out << ", loop-erased";
     out << ")" << endl;
     out << "min: " << s.min_hops << endl;
@@ -108,85 +105,43 @@ static void print_usage(const char *prog) {
 
 static Options parse_args(int argc, char **argv) {
     Options opts;
-    auto fail = [&](const string &msg) {
-        cerr << msg << endl;
-        print_usage(argv[0]);
-        exit(1);
-    };
-    auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
-        if (has_inline) {
-            if (inline_value.empty()) fail("Missing value for " + string(flag));
-            return string(inline_value);
-        }
-        if (i + 1 >= argc) fail("Missing value for " + string(flag));
-        return argv[++i];
-    };
-
-    for (int i = 1; i < argc; i++) {
-        string_view arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
-            print_usage(argv[0]);
-            exit(0);
-        }
-        const size_t eq = arg.find('=');
-        const bool has_inline = eq != string_view::npos;
-        const string_view flag = has_inline ? arg.substr(0, eq) : arg;
-        const string_view inline_value = has_inline ? arg.substr(eq + 1) : string_view{};
-
-        if (flag == "--no-of-runs" || flag == "-n") {
-            opts.no_of_runs = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--src-node" || flag == "-s") {
-            opts.src_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--tgt-node" || flag == "-t") {
-            opts.tgt_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--rw-variant" || flag == "-w") {
-            opts.rw_variant = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--edges-csv" || flag == "-e") {
-            opts.edges_csv = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--record-paths") {
-            opts.record_paths = true;
-        } else if (flag == "--erase-loops") {
-            opts.erase_loops = true;
-        } else {
-            fail("Unknown argument: " + string(arg));
-        }
-    }
-
-    if (opts.src_node.empty() || opts.tgt_node.empty()) {
-        fail("Source and target nodes are required");
-    }
-    if (opts.no_of_runs <= 0) {
-        fail("--no-of-runs must be > 0");
-    }
+    opts.walk.no_of_runs = 1000;
+    CliParser cli(argc, argv, print_usage);
+    cli.reg_walk_flags(opts.walk);
+    cli.reg_bool("--record-paths", {}, opts.record_paths);
+    cli.reg_bool("--erase-loops", {}, opts.erase_loops);
+    cli.parse();
+    validate_walk_endpoints(cli, opts.walk);
+    validate_positive_runs(cli, opts.walk.no_of_runs);
     return opts;
 }
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    Graph graph = opts.edges_csv.empty() ? Graph(cin) : Graph(opts.edges_csv);
+    Graph graph = opts.walk.edges_csv.empty() ? Graph(cin) : Graph(opts.walk.edges_csv);
     const auto &adj = graph.adj_list();
-    const int src = graph.node_index(opts.src_node);
-    const int tgt = graph.node_index(opts.tgt_node);
+    const int src = graph.node_index(opts.walk.src_node);
+    const int tgt = graph.node_index(opts.walk.tgt_node);
     const int n = graph.node_count();
 
-    if (!make_rw_token(opts.rw_variant, src, tgt, 0, n)) {
-        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
+    if (!make_rw_token(opts.walk.rw_variant, src, tgt, 0, n)) {
+        cerr << "Unknown random walk variant: " << opts.walk.rw_variant << endl;
         return 1;
     }
 
-    vector<int> hop_counts(opts.no_of_runs);
+    vector<int> hop_counts(opts.walk.no_of_runs);
     vector<vector<string>> paths;
     if (opts.record_paths) {
-        paths.resize(opts.no_of_runs);
+        paths.resize(opts.walk.no_of_runs);
     }
 
     const unsigned int hw = thread::hardware_concurrency();
     int thread_count = static_cast<int>(hw == 0 ? 1 : hw);
-    thread_count = min(thread_count, opts.no_of_runs);
+    thread_count = min(thread_count, opts.walk.no_of_runs);
 
     auto run_chunk = [&](int start_run, int end_run) {
         for (int run = start_run; run < end_run; run++) {
-            unique_ptr<RwToken> token = make_rw_token(opts.rw_variant, src, tgt, run, n);
+            unique_ptr<RwToken> token = make_rw_token(opts.walk.rw_variant, src, tgt, run, n);
             vector<int> history = sample_random_walk_history(adj, *token, src, tgt);
             vector<int> lerw = erase_loops_from_history(history);
             const vector<int> &effective = opts.erase_loops ? lerw : history;
@@ -205,8 +160,8 @@ int main(int argc, char **argv) {
 
     vector<thread> workers;
     workers.reserve(thread_count);
-    int base = opts.no_of_runs / thread_count;
-    int extra = opts.no_of_runs % thread_count;
+    int base = opts.walk.no_of_runs / thread_count;
+    int extra = opts.walk.no_of_runs % thread_count;
     int next = 0;
     for (int tid = 0; tid < thread_count; tid++) {
         const int chunk = base + (tid < extra ? 1 : 0);

@@ -12,6 +12,7 @@
 #include <memory>
 #include <fstream>
 
+#include "cli.hpp"
 #include "graph.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
@@ -471,86 +472,50 @@ static bool valid_rw_variant(const string &w) {
 
 Options parse_args(int argc, char **argv) {
     Options opts;
-    auto fail = [&](const string &msg) -> void {
-        cerr << msg << endl;
-        print_usage(argv[0]);
-        exit(1);
-    };
-
-    auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
-        if (has_inline) {
-            if (inline_value.empty()) {
-                fail("Missing value for " + string(flag));
-            }
-            return string(inline_value);
-        }
-        if (i + 1 >= argc) {
-            fail("Missing value for " + string(flag));
-        }
-        return argv[++i];
-    };
-
     bool have_src_nodes = false;
     bool have_rw = false;
     bool have_duration = false;
 
-    for (int i = 1; i < argc; i++) {
-        string_view arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
-            print_usage(argv[0]);
-            exit(0);
-        }
-
-        size_t eq_pos = arg.find('=');
-        bool has_inline = eq_pos != string_view::npos;
-        string_view flag = has_inline ? arg.substr(0, eq_pos) : arg;
-        string_view inline_value = has_inline ? arg.substr(eq_pos + 1) : string_view{};
-
-        if (flag == "--src-nodes" || flag == "-S") {
-            string raw = require_value(i, flag, has_inline, inline_value);
-            opts.src_nodes = parse_src_nodes_csv(raw);
-            have_src_nodes = true;
-        } else if (flag == "--rw-variant" || flag == "-w") {
-            opts.rw_variant = require_value(i, flag, has_inline, inline_value);
-            have_rw = true;
-        } else if (flag == "--duration-s" || flag == "-d") {
-            opts.duration_s = stod(require_value(i, flag, has_inline, inline_value));
-            have_duration = true;
-        } else if (flag == "--sieve-table-sz") {
-            opts.sieve_table_sz = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--watermark-sz") {
-            opts.watermark_sz = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--edges-csv" || flag == "-e") {
-            opts.edges_csv = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--ignore-events") {
-            opts.ignore_events = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--ignore-events-csv") {
-            opts.ignore_events_csv = require_value(i, flag, has_inline, inline_value);
-        } else {
-            fail("Unknown argument: " + string(arg));
-        }
-    }
+    CliParser cli(argc, argv, print_usage);
+    cli.reg("--src-nodes", "-S", [&](CliParser &c, int &i, const ParsedArg &p) {
+        opts.src_nodes = parse_src_nodes_csv(c.require_value(i, p.flag, p));
+        have_src_nodes = true;
+    });
+    cli.reg("--rw-variant", "-w", [&](CliParser &c, int &i, const ParsedArg &p) {
+        opts.rw_variant = c.require_value(i, p.flag, p);
+        have_rw = true;
+    });
+    cli.reg("--duration-s", "-d", [&](CliParser &c, int &i, const ParsedArg &p) {
+        opts.duration_s = stod(c.require_value(i, p.flag, p));
+        have_duration = true;
+    });
+    cli.reg_int("--sieve-table-sz", {}, opts.sieve_table_sz);
+    cli.reg_int("--watermark-sz", {}, opts.watermark_sz);
+    cli.reg_string("--edges-csv", "-e", opts.edges_csv);
+    cli.reg_string("--ignore-events", {}, opts.ignore_events);
+    cli.reg_string("--ignore-events-csv", {}, opts.ignore_events_csv);
+    cli.parse();
 
     if (!have_src_nodes || opts.src_nodes.empty()) {
-        fail("Non-empty --src-nodes is required (comma-separated node names)");
+        cli.fail("Non-empty --src-nodes is required (comma-separated node names)");
     }
     if (!have_rw || opts.rw_variant.empty()) {
-        fail("--rw-variant is required");
+        cli.fail("--rw-variant is required");
     }
     if (!valid_rw_variant(opts.rw_variant)) {
-        fail("Unknown random walk variant: " + opts.rw_variant);
+        cli.fail("Unknown random walk variant: " + opts.rw_variant);
     }
     if (!have_duration) {
-        fail("--duration-s is required");
+        cli.fail("--duration-s is required");
     }
     if (opts.duration_s <= 0.0) {
-        fail("--duration-s must be > 0");
+        cli.fail("--duration-s must be > 0");
     }
     if (opts.sieve_table_sz <= 0) {
-        fail("--sieve-table-sz must be > 0");
+        cli.fail("--sieve-table-sz must be > 0");
     }
     if (opts.watermark_sz <= 0) {
-        fail("--watermark-sz must be > 0");
+        cli.fail("--watermark-sz must be > 0");
     }
     return opts;
 }

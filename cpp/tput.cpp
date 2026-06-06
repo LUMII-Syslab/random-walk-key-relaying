@@ -7,6 +7,7 @@
 #include <queue>
 #include <string_view>
 #include <vector>
+#include "cli.hpp"
 #include "graph.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
@@ -14,10 +15,7 @@
 using namespace std;
 
 struct Options {
-    string src_node = "";
-    string tgt_node = "";
-    string rw_variant = "LRV";
-    string edges_csv = "";
+    WalkCliOpts walk;
     bool erase_loops = false;
     bool print_arrival_times = false;
 
@@ -106,10 +104,10 @@ TputStats compute_tput_stats(const RunResult &run, const Options &opts);
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    QkdNetwork net = opts.edges_csv.empty() ? QkdNetwork(cin) : QkdNetwork(opts.edges_csv);
+    QkdNetwork net = opts.walk.edges_csv.empty() ? QkdNetwork(cin) : QkdNetwork(opts.walk.edges_csv);
 
-    int src_idx = net.node_index(opts.src_node);
-    int tgt_idx = net.node_index(opts.tgt_node);
+    int src_idx = net.node_index(opts.walk.src_node);
+    int tgt_idx = net.node_index(opts.walk.tgt_node);
 
     RunResult run = run_single_simulation(net, src_idx, tgt_idx, opts, 0);
     TputStats stats = compute_tput_stats(run, opts);
@@ -130,69 +128,26 @@ void print_usage(const char *prog_name) {
 
 Options parse_args(int argc, char **argv) {
     Options opts;
-    auto fail = [&](const string &msg) -> void {
-        cerr << msg << endl;
-        print_usage(argv[0]);
-        exit(1);
-    };
+    opts.walk.rw_variant = "LRV";
+    CliParser cli(argc, argv, print_usage);
+    cli.reg_walk_flags(opts.walk, /*include_runs=*/false);
+    cli.reg_int("--chunk-size-bits", {}, opts.chunk_size_bits);
+    cli.reg_int("--link-buff-sz-bits", {}, opts.link_buff_sz_bits);
+    cli.reg_double("--qkd-skr-bits-per-s", {}, opts.qkd_skr_bits_per_s);
+    cli.reg_double("--latency-s", {}, opts.latency_s);
+    cli.reg_double("--sim-duration-s", {}, opts.sim_duration_s);
+    cli.reg_int("--relay-buffer-sz-chunks", {}, opts.relay_buffer_sz_chunks);
+    cli.reg_bool("--erase-loops", {}, opts.erase_loops);
+    cli.reg_bool("--print-arrival-times", {}, opts.print_arrival_times);
+    cli.parse();
 
-    auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
-        if (has_inline) {
-            if (inline_value.empty()) fail("Missing value for " + string(flag));
-            return string(inline_value);
-        }
-        if (i + 1 >= argc) fail("Missing value for " + string(flag));
-        return argv[++i];
-    };
-
-    for (int i = 1; i < argc; i++) {
-        string_view arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
-            print_usage(argv[0]);
-            exit(0);
-        }
-
-        size_t eq_pos = arg.find('=');
-        bool has_inline = eq_pos != string_view::npos;
-        string_view flag = has_inline ? arg.substr(0, eq_pos) : arg;
-        string_view inline_value = has_inline ? arg.substr(eq_pos + 1) : string_view{};
-
-        if (flag == "--src-node" || flag == "-s") {
-            opts.src_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--tgt-node" || flag == "-t") {
-            opts.tgt_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--rw-variant" || flag == "-w") {
-            opts.rw_variant = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--edges-csv" || flag == "-e") {
-            opts.edges_csv = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--chunk-size-bits") {
-            opts.chunk_size_bits = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--link-buff-sz-bits") {
-            opts.link_buff_sz_bits = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--qkd-skr-bits-per-s") {
-            opts.qkd_skr_bits_per_s = stod(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--latency-s") {
-            opts.latency_s = stod(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--sim-duration-s") {
-            opts.sim_duration_s = stod(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--relay-buffer-sz-chunks") {
-            opts.relay_buffer_sz_chunks = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--erase-loops") {
-            opts.erase_loops = true;
-        } else if (flag == "--print-arrival-times") {
-            opts.print_arrival_times = true;
-        } else {
-            fail("Unknown argument: " + string(arg));
-        }
-    }
-
-    if (opts.src_node.empty() || opts.tgt_node.empty()) fail("Source and target nodes are required");
-    if (opts.chunk_size_bits <= 0) fail("--chunk-size-bits must be > 0");
-    if (opts.link_buff_sz_bits <= 0) fail("--link-buff-sz-bits must be > 0");
-    if (opts.qkd_skr_bits_per_s <= 0) fail("--qkd-skr-bits-per-s must be > 0");
-    if (opts.latency_s < 0) fail("--latency-s must be >= 0");
-    if (opts.sim_duration_s <= 0) fail("--sim-duration-s must be > 0");
-    if (opts.relay_buffer_sz_chunks <= 0) fail("--relay-buffer-sz-chunks must be > 0");
+    validate_walk_endpoints(cli, opts.walk);
+    if (opts.chunk_size_bits <= 0) cli.fail("--chunk-size-bits must be > 0");
+    if (opts.link_buff_sz_bits <= 0) cli.fail("--link-buff-sz-bits must be > 0");
+    if (opts.qkd_skr_bits_per_s <= 0) cli.fail("--qkd-skr-bits-per-s must be > 0");
+    if (opts.latency_s < 0) cli.fail("--latency-s must be >= 0");
+    if (opts.sim_duration_s <= 0) cli.fail("--sim-duration-s must be > 0");
+    if (opts.relay_buffer_sz_chunks <= 0) cli.fail("--relay-buffer-sz-chunks must be > 0");
 
     return opts;
 }
@@ -224,7 +179,7 @@ RunResult run_single_simulation(
         if (opts.erase_loops) {
             vector<int> loop_erased_path = sample_loop_erased_path(
                 adj,
-                opts.rw_variant,
+                opts.walk.rw_variant,
                 source_node,
                 tgt_idx,
                 seed,
@@ -232,9 +187,9 @@ RunResult run_single_simulation(
             );
             pkt->token = make_unique<FixedPathToken>(std::move(loop_erased_path));
         } else {
-            pkt->token = make_rw_token(opts.rw_variant, src_idx, tgt_idx, seed, node_count);
+            pkt->token = make_rw_token(opts.walk.rw_variant, src_idx, tgt_idx, seed, node_count);
         }
-        if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.rw_variant);
+        if (!pkt->token) throw runtime_error("Unknown random walk variant: " + opts.walk.rw_variant);
         int next = pkt->token->choose_next_and_update(source_node, adj[source_node]);
         pkt->hops = 1;
         if (pkt->hops > 1000) throw runtime_error("Random walk exceeded 1000 steps");

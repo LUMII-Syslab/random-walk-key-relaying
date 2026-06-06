@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "cli.hpp"
 #include "graph.hpp"
 #include "lerw.hpp"
 #include "walk.hpp"
@@ -21,12 +22,8 @@
 using namespace std;
 
 struct Options {
-    string src_node;
-    string tgt_node;
-    string edges_csv;
+    WalkCliOpts walk;
     int cartel_size = 1;
-    int no_of_runs = 10000;
-    string rw_variant = "HS";
 };
 
 struct HitCounts {
@@ -179,76 +176,37 @@ static void print_usage(const char *prog) {
 
 static Options parse_args(int argc, char **argv) {
     Options opts;
-    auto fail = [&](const string &msg) {
-        cerr << msg << endl;
-        print_usage(argv[0]);
-        exit(1);
-    };
-    auto require_value = [&](int &i, string_view flag, bool has_inline, string_view inline_value) -> string {
-        if (has_inline) {
-            if (inline_value.empty()) fail("Missing value for " + string(flag));
-            return string(inline_value);
-        }
-        if (i + 1 >= argc) fail("Missing value for " + string(flag));
-        return argv[++i];
-    };
-
-    for (int i = 1; i < argc; i++) {
-        string_view arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
-            print_usage(argv[0]);
-            exit(0);
-        }
-        size_t eq = arg.find('=');
-        bool has_inline = eq != string_view::npos;
-        string_view flag = has_inline ? arg.substr(0, eq) : arg;
-        string_view inline_value = has_inline ? arg.substr(eq + 1) : string_view{};
-
-        if (flag == "--src-node" || flag == "-s") {
-            opts.src_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--tgt-node" || flag == "-t") {
-            opts.tgt_node = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--edges-csv" || flag == "-e") {
-            opts.edges_csv = require_value(i, flag, has_inline, inline_value);
-        } else if (flag == "--cartel-size" || flag == "-m") {
-            opts.cartel_size = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--no-of-runs" || flag == "-n") {
-            opts.no_of_runs = stoi(require_value(i, flag, has_inline, inline_value));
-        } else if (flag == "--rw-variant" || flag == "-w") {
-            opts.rw_variant = require_value(i, flag, has_inline, inline_value);
-        } else {
-            fail("Unknown argument: " + string(arg));
-        }
-    }
-
-    if (opts.src_node.empty() || opts.tgt_node.empty() || opts.edges_csv.empty()) {
-        fail("Source, target, and edges CSV are required");
+    CliParser cli(argc, argv, print_usage);
+    cli.reg_walk_flags(opts.walk);
+    cli.reg_int("--cartel-size", "-m", opts.cartel_size);
+    cli.parse();
+    validate_walk_endpoints(cli, opts.walk);
+    if (opts.walk.edges_csv.empty()) {
+        cli.fail("Source, target, and edges CSV are required");
     }
     if (opts.cartel_size < 1 || opts.cartel_size > 3) {
-        fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
+        cli.fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
     }
-    if (opts.no_of_runs <= 0) {
-        fail("--no-of-runs must be > 0");
-    }
+    validate_positive_runs(cli, opts.walk.no_of_runs);
     return opts;
 }
 
 int main(int argc, char **argv) {
     Options opts = parse_args(argc, argv);
-    Graph graph(opts.edges_csv);
+    Graph graph(opts.walk.edges_csv);
     const vector<vector<int>> &adj = graph.adj_list();
     const int n = graph.node_count();
-    const int src = graph.node_index(opts.src_node);
-    const int tgt = graph.node_index(opts.tgt_node);
+    const int src = graph.node_index(opts.walk.src_node);
+    const int tgt = graph.node_index(opts.walk.tgt_node);
 
-    if (!make_rw_token(opts.rw_variant, src, tgt, 0, n)) {
-        cerr << "Unknown random walk variant: " << opts.rw_variant << endl;
+    if (!make_rw_token(opts.walk.rw_variant, src, tgt, 0, n)) {
+        cerr << "Unknown random walk variant: " << opts.walk.rw_variant << endl;
         return 1;
     }
 
     const unsigned int hw_threads = thread::hardware_concurrency();
     int thread_count = static_cast<int>(hw_threads == 0 ? 1 : hw_threads);
-    thread_count = min(thread_count, opts.no_of_runs);
+    thread_count = min(thread_count, opts.walk.no_of_runs);
 
     vector<HitCounts> local_hits(thread_count);
     for (HitCounts &lh : local_hits) {
@@ -261,7 +219,7 @@ int main(int argc, char **argv) {
         HitCounts &hits = local_hits[tid];
         for (int run = start_run; run < end_run; run++) {
             record_path_hits(
-                sample_loop_erased_path(adj, opts.rw_variant, src, tgt, run, n),
+                sample_loop_erased_path(adj, opts.walk.rw_variant, src, tgt, run, n),
                 hits,
                 n
             );
@@ -270,8 +228,8 @@ int main(int argc, char **argv) {
 
     vector<thread> workers;
     workers.reserve(thread_count);
-    int base_runs = opts.no_of_runs / thread_count;
-    int extra_runs = opts.no_of_runs % thread_count;
+    int base_runs = opts.walk.no_of_runs / thread_count;
+    int extra_runs = opts.walk.no_of_runs % thread_count;
     int next_start = 0;
     for (int tid = 0; tid < thread_count; tid++) {
         const int chunk = base_runs + (tid < extra_runs ? 1 : 0);
@@ -311,7 +269,7 @@ int main(int argc, char **argv) {
     // Phase 2: enumerate all cartels of size m; exposure via inclusion-exclusion.
     function<void(int, int)> walk_combinations = [&](int start, int depth) {
         if (depth == opts.cartel_size) {
-            const double exposure = cartel_exposure(cartel, opts.no_of_runs, hits);
+            const double exposure = cartel_exposure(cartel, opts.walk.no_of_runs, hits);
             sum_all += exposure;
             count_all++;
             const uint64_t key = cartel_key(cartel, n);
@@ -341,8 +299,8 @@ int main(int argc, char **argv) {
     walk_combinations(0, 0);
 
     cout << fixed << setprecision(6);
-    cout << "context: " << opts.src_node << " -> " << opts.tgt_node
-         << " (" << opts.rw_variant << ", " << opts.no_of_runs << " runs, cartel_size="
+    cout << "context: " << opts.walk.src_node << " -> " << opts.walk.tgt_node
+         << " (" << opts.walk.rw_variant << ", " << opts.walk.no_of_runs << " runs, cartel_size="
          << opts.cartel_size << ")" << endl;
     cout << "mean_exposure_all: "
          << (count_all ? sum_all / count_all : 0.0) << endl;
