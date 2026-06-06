@@ -3,8 +3,8 @@ HEADERS := $(wildcard *.hpp)
 
 CXX := g++
 
-# Set DEBUG=0 for optimized builds.
-DEBUG ?= 1
+# Set DEBUG=1 for debug builds.
+DEBUG ?= 0
 
 CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic -pthread
 ifeq ($(DEBUG),1)
