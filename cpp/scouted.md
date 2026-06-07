@@ -53,7 +53,7 @@ At block close:
 
 Cartel size is derived from **local vertex connectivity** \(\kappa(src,tgt)\), computed on demand via split-vertex max flow in `Graph::vertex_connectivity`:
 
-- \(m = \min(3,\ \max(0,\ \kappa(src,tgt)-1))\), then capped by `--cartel-size-limit`.
+- \(m = \min(\texttt{--cartel-size-limit},\ \max(0,\ \kappa(src,tgt)-1))\) with default and maximum limit 3.
 
 Intermediate vertices \(x \notin \{s,t\}\) are split into \(x_1 \to x_2\) (capacity 1); each undirected edge \(\{u,v\}\) becomes directed arcs \((u_2,v_1)\) and \((v_2,u_1)\) (capacity 1). Max \(s \to t\) flow equals \(\kappa(s,t)\).
 

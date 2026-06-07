@@ -3,15 +3,117 @@
 #include <memory>
 #include <queue>
 #include <random>
+#include <sstream>
 #include <vector>
+#include <boost/dynamic_bitset.hpp>
+#include "cli.hpp"
 #include "graph.hpp"
 #include "lerw.hpp"
-#include "sieve.hpp"
 #include "utils.hpp"
 #include "walk.hpp"
-#include "cartel.hpp"
 
 using namespace std;
+
+namespace cartel {
+struct Result {
+    int max_seen = 0;
+    vector<int> nodes;
+};
+
+static Result worst_case_coverage(
+    const vector<boost::dynamic_bitset<>> &covered_chunks_by_node,
+    int src,
+    int tgt,
+    int cartel_sz
+) {
+    Result res;
+    if (cartel_sz <= 0) return res;
+    cartel_sz = min(cartel_sz, 3);
+
+    const int n = static_cast<int>(covered_chunks_by_node.size());
+    if (n == 0) return res;
+
+    vector<int> candidates;
+    candidates.reserve(n);
+    for (int v = 0; v < n; v++) {
+        if (v == src || v == tgt) continue;
+        if (covered_chunks_by_node[v].none()) continue;
+        candidates.push_back(v);
+    }
+    if (candidates.empty()) return res;
+    if (static_cast<int>(candidates.size()) < cartel_sz) cartel_sz = static_cast<int>(candidates.size());
+    if (cartel_sz <= 0) return res;
+
+    auto coverage1 = [&](int a) -> int {
+        return static_cast<int>(covered_chunks_by_node[a].count());
+    };
+    auto coverage2 = [&](int a, int b) -> int {
+        boost::dynamic_bitset<> tmp = covered_chunks_by_node[a];
+        tmp |= covered_chunks_by_node[b];
+        return static_cast<int>(tmp.count());
+    };
+    auto coverage3 = [&](int a, int b, int c) -> int {
+        boost::dynamic_bitset<> tmp = covered_chunks_by_node[a];
+        tmp |= covered_chunks_by_node[b];
+        tmp |= covered_chunks_by_node[c];
+        return static_cast<int>(tmp.count());
+    };
+
+    if (cartel_sz == 1) {
+        int best_v = -1;
+        int best = 0;
+        for (int v : candidates) {
+            int cov = coverage1(v);
+            if (cov > best) {
+                best = cov;
+                best_v = v;
+            }
+        }
+        res.max_seen = best;
+        if (best_v != -1) res.nodes = {best_v};
+        return res;
+    }
+
+    if (cartel_sz == 2) {
+        int best_a = -1, best_b = -1;
+        int best = 0;
+        for (size_t i = 0; i < candidates.size(); i++) {
+            for (size_t j = i + 1; j < candidates.size(); j++) {
+                int a = candidates[i], b = candidates[j];
+                int cov = coverage2(a, b);
+                if (cov > best) {
+                    best = cov;
+                    best_a = a;
+                    best_b = b;
+                }
+            }
+        }
+        res.max_seen = best;
+        if (best_a != -1) res.nodes = {best_a, best_b};
+        return res;
+    }
+
+    int best_a = -1, best_b = -1, best_c = -1;
+    int best = 0;
+    for (size_t i = 0; i < candidates.size(); i++) {
+        for (size_t j = i + 1; j < candidates.size(); j++) {
+            for (size_t k = j + 1; k < candidates.size(); k++) {
+                int a = candidates[i], b = candidates[j], c = candidates[k];
+                int cov = coverage3(a, b, c);
+                if (cov > best) {
+                    best = cov;
+                    best_a = a;
+                    best_b = b;
+                    best_c = c;
+                }
+            }
+        }
+    }
+    res.max_seen = best;
+    if (best_a != -1) res.nodes = {best_a, best_b, best_c};
+    return res;
+}
+} // namespace cartel
 
 const double SCOUTS_PER_SECONDS = 100;
 const double CLASSICAL_DELAY_MS = 5;
@@ -21,30 +123,20 @@ const int CHUNK_SIZE_BITS = 256;
 mt19937 rng(2026);
 
 struct Options{
-    string edges_csv = "";
+    string graph = "geant";
+    string edges_csv;
     vector<string> src_nodes;
     string rw_variant = "HS"; // NB, LRV, HS
     bool verbose = false;
-    bool enable_chunk_sieve = false; // disabled by default
     int watermark_sz = 128;
     int block_chunks = 64;
     uint ttl = 200;
     int max_wait_time_s = 2;
     int required_cnt = -1;
     double max_consume_prob = 0.5;
-    int cartel_size_limit = 4; // cap cartel size (applies after any derivation)
+    int cartel_size_limit = 3; // cap cartel size (worst_case_coverage supports at most 3)
     bool report_chunk_paths = false;
-
-    void print(){
-        cout<<"edges_csv: "<<edges_csv<<endl;
-        cout<<"src_nodes: "<<join(src_nodes, ",")<<endl;
-        cout<<"rw_variant: "<<rw_variant<<endl;
-        cout<<"block_chunks: "<<block_chunks<<endl;
-        cout<<"watermark_sz: "<<watermark_sz<<endl;
-        cout<<"cartel_size_limit: "<<cartel_size_limit<<endl;
-        cout<<"report_chunk_paths: "<<(report_chunk_paths?"true":"false")<<endl;
-        cout<<"enable_chunk_sieve: "<<(enable_chunk_sieve?"true":"false")<<endl;
-    }
+    string context;
 };
 
 enum class EventType {
@@ -260,72 +352,12 @@ void run_simulation(const Options& opts, const Graph& graph){
                 chunks_received[key] = 0;
 
                 const int vconn = pair_vconn(e.origin, e.target);
-                int cartel_sz = max(0, vconn - 1);
-                cartel_sz = min(cartel_sz, 3);
-                cartel_sz = min(cartel_sz, max(0, opts.cartel_size_limit));
+                int cartel_sz = min(max(0, vconn - 1), opts.cartel_size_limit);
 
-                // Base (unsieved) honesty computation.
                 cartel::Result cr = cartel::worst_case_coverage(blk.covered_chunks_by_node, e.origin, e.target, cartel_sz);
                 int honesty = opts.block_chunks - cr.max_seen;
                 if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
                     honesty /= 2;
-                }
-
-                // Optional ChunkSieve: prune rows (chunks) before computing honesty.
-                if (opts.enable_chunk_sieve) {
-                    // Build a compact boolean table rows=chunks, cols=relay nodes (excluding endpoints),
-                    // and remember which original node index each table column corresponds to.
-                    vector<int> relay_nodes;
-                    relay_nodes.reserve(static_cast<size_t>(graph.node_count()));
-                    for (int v = 0; v < graph.node_count(); v++) {
-                        if (v == e.origin || v == e.target) continue;
-                        if (blk.covered_chunks_by_node[v].none()) continue;
-                        relay_nodes.push_back(v);
-                    }
-
-                    vector<vector<unsigned char>> table;
-                    table.assign(
-                        static_cast<size_t>(opts.block_chunks),
-                        vector<unsigned char>(relay_nodes.size(), 0)
-                    );
-                    for (int row = 0; row < opts.block_chunks; row++) {
-                        for (size_t cj = 0; cj < relay_nodes.size(); cj++) {
-                            const int v = relay_nodes[cj];
-                            table[static_cast<size_t>(row)][cj] =
-                                blk.covered_chunks_by_node[v].test(static_cast<size_t>(row)) ? 1 : 0;
-                        }
-                    }
-
-                    ChunkSieve::Result sr = ChunkSieve::sieve(table);
-                    const int kept = static_cast<int>(sr.retained_rows.size());
-
-                    // Rebuild covered_chunks_by_node with only retained rows.
-                    vector<boost::dynamic_bitset<>> reduced;
-                    reduced.reserve(blk.covered_chunks_by_node.size());
-                    for (size_t v = 0; v < blk.covered_chunks_by_node.size(); v++) {
-                        boost::dynamic_bitset<> bs(static_cast<size_t>(kept));
-                        for (int new_i = 0; new_i < kept; new_i++) {
-                            const int old_i = sr.retained_rows[static_cast<size_t>(new_i)];
-                            if (blk.covered_chunks_by_node[v].test(static_cast<size_t>(old_i))) {
-                                bs.set(static_cast<size_t>(new_i));
-                            }
-                        }
-                        reduced.push_back(std::move(bs));
-                    }
-
-                    cartel::Result cr2 = cartel::worst_case_coverage(reduced, e.origin, e.target, cartel_sz);
-                    int honesty2 = kept - cr2.max_seen;
-                    if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
-                        honesty2 /= 2;
-                    }
-
-                    if (opts.verbose && honesty2 > honesty) {
-                        cout<<"chunk_sieve increased honesty "<<honesty<<" -> "<<honesty2
-                            <<" (kept "<<kept<<"/"<<opts.block_chunks<<") "
-                            <<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<endl;
-                    }
-                    honesty = honesty2;
-                    cr = std::move(cr2);
                 }
 
                 // Reset block state for this pair.
@@ -366,106 +398,72 @@ void run_simulation(const Options& opts, const Graph& graph){
     }
 }
 
-Options parse_args(int argc, char* argv[]);
-
-int main(int argc, char* argv[]) {
-    Options opts = parse_args(argc, argv);
-    Graph graph = Graph(opts.edges_csv);
-
-    if (opts.src_nodes.empty()) {
-        opts.src_nodes.reserve(graph.node_count());
-        for (int i = 0; i < graph.node_count(); i++) {
-            opts.src_nodes.push_back(graph.node_name(i));
-        }
-    }
-
-    opts.print();
-
-    run_simulation(opts, graph);
-}
-
-void print_usage(const char* progr_name) {
-    cerr << "usage: "<<progr_name;
-    cerr << " -S <comma_separated_src_node_list>";
-    cerr << " -e <graph_edge_list_csv_file>";
-    cerr << " --rw-variant <NB|LRV|HS>";
-    cerr << " --halt-at-keys <int>";
-    cerr << " --max-consume-prob <float>";
-    cerr << " --watermark-sz <int>";
-    cerr << " --block-chunks <int>";
-    cerr << " --enable-chunk-sieve";
-    cerr << " --cartel-size-limit <int>";
-    cerr << " --report-chunk-paths";
-    cerr << endl;
-}
-
-Options parse_args(int argc, char* argv[]){
+static Options parse_args(int argc, char **argv) {
     Options opts;
+    bool have_halt_at_keys = false;
 
-    auto fail = [&](string msg) -> void {
-        cerr << msg << endl;
-        print_usage(argv[0]);
-        exit(1);
-    };
+    CliParser cli(argc, argv);
+    cli.reg_string("--graph", "-g", opts.graph);
+    cli.note_usage("--src-nodes", "-S", "n1,n2,...", false);
+    cli.reg("--src-nodes", "-S", [&](CliParser &c, int &i, const ParsedArg &p) {
+        opts.src_nodes = split(c.require_value(i, p.flag, p), ",");
+    });
+    cli.reg_context("--src-nodes", [&opts]() {
+        if (opts.src_nodes.empty()) return string("all");
+        return join(opts.src_nodes, ",");
+    });
+    cli.reg_string("--rw-variant", "-w", opts.rw_variant);
+    cli.reg_bool("--verbose", {}, opts.verbose);
+    cli.note_usage("--halt-at-keys", {}, "int", false);
+    cli.reg("--halt-at-keys", {}, [&](CliParser &c, int &i, const ParsedArg &p) {
+        opts.required_cnt = stoi(c.require_value(i, p.flag, p));
+        have_halt_at_keys = true;
+    });
+    cli.reg_context("--halt-at-keys", [&opts]() { return to_string(opts.required_cnt); });
+    cli.reg_double("--max-consume-prob", {}, opts.max_consume_prob);
+    cli.reg_int("--watermark-sz", {}, opts.watermark_sz);
+    cli.reg_int("--block-chunks", {}, opts.block_chunks);
+    cli.reg_int("--cartel-size-limit", {}, opts.cartel_size_limit);
+    cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
+    cli.parse();
 
-    set<string> seen_flags;
-
-    for(int i=1;i<argc;i++){
-        string flag = argv[i];
-        seen_flags.insert(flag);
-
-        auto read_value = [&]() -> string{
-            if(i+1>=argc) fail("flag "+flag+" requires a value");
-            return argv[++i];
-        };
-
-        if(flag=="-S"){ // source node list
-            string src_node_list=read_value();
-            opts.src_nodes = split(src_node_list,",");
-        } else if(flag=="-e"){
-            opts.edges_csv = read_value();
-        } else if(flag=="--rw-variant" || flag=="-w"){
-            opts.rw_variant = read_value();
-        } else if(flag=="--verbose"){
-            opts.verbose = true;
-        } else if(flag=="--halt-at-keys"){
-            opts.required_cnt = stoi(read_value());
-        } else if(flag=="--max-consume-prob"){
-            opts.max_consume_prob = stod(read_value());
-        } else if(flag=="--watermark-sz"){
-            opts.watermark_sz = stoi(read_value());
-        } else if(flag=="--block-chunks"){
-            opts.block_chunks = stoi(read_value());
-        } else if(flag=="--enable-chunk-sieve"){
-            opts.enable_chunk_sieve = true;
-        } else if (flag=="--cartel-size-limit") {
-            opts.cartel_size_limit = stoi(read_value());
-        } else if(flag=="--report-chunk-paths"){
-            opts.report_chunk_paths = true;
-        } else {
-            fail("unknown flag "+flag);
-        }
-
-    }
-
-    if (seen_flags.count("--halt-at-keys") == 0) {
-        // Default: halt when reaching the watermark.
+    if (!have_halt_at_keys) {
         opts.required_cnt = opts.watermark_sz;
     }
-
-    auto mandatory_flag = [&](string flag){
-        if(seen_flags.count(flag)>0) return;
-        fail("flag "+flag+" is mandatory");
-    };
-
-    mandatory_flag("-e");
-
+    opts.edges_csv = resolve_graph_spec(opts.graph);
     if (!valid_rw_variant(opts.rw_variant)) {
-        fail("invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
+        cli.fail("Invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
     }
-    if (opts.cartel_size_limit < 0) {
-        fail("--cartel-size-limit must be >= 0");
+    if (opts.block_chunks <= 0) {
+        cli.fail("--block-chunks must be > 0");
     }
-
+    if (opts.cartel_size_limit < 0 || opts.cartel_size_limit > 3) {
+        cli.fail("--cartel-size-limit must be between 0 and 3");
+    }
+    if (opts.report_chunk_paths && !opts.verbose) {
+        cli.fail("--report-chunk-paths requires --verbose");
+    }
+    opts.context = cli.format_context();
     return opts;
+}
+
+int main(int argc, char **argv) {
+    try {
+        Options opts = parse_args(argc, argv);
+        Graph graph(opts.edges_csv);
+
+        if (opts.src_nodes.empty()) {
+            opts.src_nodes.reserve(graph.node_count());
+            for (int i = 0; i < graph.node_count(); i++) {
+                opts.src_nodes.push_back(graph.node_name(i));
+            }
+        }
+
+        cout << opts.context;
+        run_simulation(opts, graph);
+        return 0;
+    } catch (const exception &ex) {
+        cerr << ex.what() << endl;
+        return 1;
+    }
 }
