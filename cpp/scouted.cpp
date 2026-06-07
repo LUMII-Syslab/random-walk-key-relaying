@@ -133,7 +133,7 @@ struct Options{
     uint ttl = 200;
     int max_wait_time_s = 2;
     int required_cnt = -1;
-    double max_consume_prob = 0.5;
+    double max_consume_prob = 1.0;
     int cartel_size_limit = 3; // cap cartel size (worst_case_coverage supports at most 3)
     bool report_chunk_paths = false;
     string context;
@@ -177,7 +177,7 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
     // double p = 1 - max(5*b*t, t);
     
     double r = (double)(rng()-rng.min())/(double)(rng.max()-rng.min());
-    // p = min(p, max_consume_prob);
+    p = min(p, max_consume_prob);
     return r <= p;
 }
 
