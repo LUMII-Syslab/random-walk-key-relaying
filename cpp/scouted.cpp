@@ -29,7 +29,7 @@ struct Options{
     bool verbose = false;
     bool enable_chunk_sieve = false; // disabled by default
     int watermark_sz = 128;
-    int block_chunks = 32;
+    int block_chunks = 64;
     uint ttl = 200;
     int max_wait_time_s = 2;
     int required_cnt = -1;

@@ -17,16 +17,13 @@ endif
 
 .PHONY: all clean
 
-all: $(BUILD_DIR)/hops $(BUILD_DIR)/tput $(BUILD_DIR)/proactive $(BUILD_DIR)/scouted $(BUILD_DIR)/exposure
+all: $(BUILD_DIR)/hops $(BUILD_DIR)/tput $(BUILD_DIR)/scouted $(BUILD_DIR)/exposure
 
 $(BUILD_DIR)/hops: hops.cpp $(HEADERS) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) hops.cpp -o $(BUILD_DIR)/hops
 
 $(BUILD_DIR)/tput: tput.cpp $(HEADERS) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) tput.cpp -o $(BUILD_DIR)/tput
-
-$(BUILD_DIR)/proactive: proactive.cpp $(HEADERS) | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) proactive.cpp -o $(BUILD_DIR)/proactive
 
 $(BUILD_DIR)/scouted: scouted.cpp $(HEADERS) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) scouted.cpp -o $(BUILD_DIR)/scouted

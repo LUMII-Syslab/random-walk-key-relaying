@@ -3,7 +3,6 @@ out/
 quick/
 build/
 out2/
-simulate_proactive
 plots/
 constructed.csv
 .venv/
