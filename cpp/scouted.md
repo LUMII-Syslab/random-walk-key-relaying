@@ -51,11 +51,11 @@ At block close:
 
 #### Cartel size selection
 
-- **Default behavior**: assumes cartel size \(m=1\) (one compromised intermediate node).
-- **`--v-conn-cartel-size`**: sets cartel size from **pairwise vertex connectivity** \(\kappa(src,tgt)\) loaded from `--v-conn-csv` (`conn.csv`):
-  - \(m = \min(3, \max(0, \kappa(src,tgt)-1))\)
-  - If `--v-conn-cartel-size` is passed without `--v-conn-csv`, the program fails.
-  - If a needed \((src,tgt)\) pair is missing from `conn.csv`, the program fails.
+Cartel size is derived from **local vertex connectivity** \(\kappa(src,tgt)\), computed on demand via split-vertex max flow in `Graph::vertex_connectivity`:
+
+- \(m = \min(3,\ \max(0,\ \kappa(src,tgt)-1))\), then capped by `--cartel-size-limit`.
+
+Intermediate vertices \(x \notin \{s,t\}\) are split into \(x_1 \to x_2\) (capacity 1); each undirected edge \(\{u,v\}\) becomes directed arcs \((u_2,v_1)\) and \((v_2,u_1)\) (capacity 1). Max \(s \to t\) flow equals \(\kappa(s,t)\).
 
 #### Parameters (current)
 
@@ -64,6 +64,6 @@ At block close:
 
 ### Output
 
-- `keys <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> [vconn=<k> cartel_sz=<m>]` (printed when a block closes; extra fields appear in `--verbose` mode)
+- `keys <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> vconn=<k> cartel_sz=<m>` (printed when a block closes in `--verbose` mode)
 - `Halted at <t> seconds` (when `--halt-at-keys` condition is satisfied)
 

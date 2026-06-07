@@ -6,7 +6,6 @@
 #include <vector>
 #include "graph.hpp"
 #include "lerw.hpp"
-#include "pair_vconn.hpp"
 #include "sieve.hpp"
 #include "utils.hpp"
 #include "walk.hpp"
@@ -23,7 +22,6 @@ mt19937 rng(2026);
 
 struct Options{
     string edges_csv = "";
-    string v_conn_csv = "";
     vector<string> src_nodes;
     string rw_variant = "HS"; // NB, LRV, HS
     bool verbose = false;
@@ -34,18 +32,15 @@ struct Options{
     int max_wait_time_s = 2;
     int required_cnt = -1;
     double max_consume_prob = 0.5;
-    bool v_conn_cartel_size = false;
     int cartel_size_limit = 4; // cap cartel size (applies after any derivation)
     bool report_chunk_paths = false;
 
     void print(){
         cout<<"edges_csv: "<<edges_csv<<endl;
-        cout<<"v_conn_csv: "<<v_conn_csv<<endl;
         cout<<"src_nodes: "<<join(src_nodes, ",")<<endl;
         cout<<"rw_variant: "<<rw_variant<<endl;
         cout<<"block_chunks: "<<block_chunks<<endl;
         cout<<"watermark_sz: "<<watermark_sz<<endl;
-        cout<<"v_conn_cartel_size: "<<(v_conn_cartel_size?"true":"false")<<endl;
         cout<<"cartel_size_limit: "<<cartel_size_limit<<endl;
         cout<<"report_chunk_paths: "<<(report_chunk_paths?"true":"false")<<endl;
         cout<<"enable_chunk_sieve: "<<(enable_chunk_sieve?"true":"false")<<endl;
@@ -107,8 +102,17 @@ static shared_ptr<RwToken> make_walk_token(const Options &opts, int src_idx) {
     throw runtime_error("Unknown --rw-variant: " + opts.rw_variant);
 }
 
-void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,int>, int>* pair_vconn){
+void run_simulation(const Options& opts, const Graph& graph){
     priority_queue<Event> pq;
+    map<pair<int,int>, int> vconn_cache;
+    auto pair_vconn = [&](int src, int tgt) -> int {
+        const pair<int,int> key{src, tgt};
+        auto it = vconn_cache.find(key);
+        if (it != vconn_cache.end()) return it->second;
+        const int kappa = graph.vertex_connectivity(src, tgt);
+        vconn_cache[key] = kappa;
+        return kappa;
+    };
 
     if (opts.block_chunks <= 0) {
         throw runtime_error("block_chunks must be > 0");
@@ -255,16 +259,9 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                 blk.received = 0;
                 chunks_received[key] = 0;
 
-                int cartel_sz = 1;
-                int vconn = -1;
-                if (opts.v_conn_cartel_size) {
-                    if (pair_vconn == nullptr) {
-                        throw runtime_error("--v-conn-cartel-size requires --v-conn-csv");
-                    }
-                    vconn = pair_vconn::lookup_or_throw(graph, *pair_vconn, e.origin, e.target);
-                    cartel_sz = max(0, vconn - 1);
-                    cartel_sz = min(cartel_sz, 3);
-                }
+                const int vconn = pair_vconn(e.origin, e.target);
+                int cartel_sz = max(0, vconn - 1);
+                cartel_sz = min(cartel_sz, 3);
                 cartel_sz = min(cartel_sz, max(0, opts.cartel_size_limit));
 
                 // Base (unsieved) honesty computation.
@@ -341,7 +338,7 @@ void run_simulation(const Options& opts, const Graph& graph, const map<pair<int,
                     string cartel_str = cartel_names.empty() ? "-" : join(cartel_names, ",");
                     cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" ";
                     cout<<cartel_str<<" "<<cr.max_seen;
-                    if (opts.v_conn_cartel_size) cout<<" vconn="<<vconn<<" cartel_sz="<<cartel_sz;
+                    cout<<" vconn="<<vconn<<" cartel_sz="<<cartel_sz;
                     cout<<endl;
                 }
                 // check if we can halt
@@ -384,15 +381,7 @@ int main(int argc, char* argv[]) {
 
     opts.print();
 
-    unique_ptr<map<pair<int,int>, int>> pair_vconn;
-    if (opts.v_conn_cartel_size) {
-        if (opts.v_conn_csv.empty()) {
-            throw runtime_error("--v-conn-cartel-size requires --v-conn-csv <file>");
-        }
-        pair_vconn = make_unique<map<pair<int,int>, int>>(pair_vconn::load_conn_csv_or_throw(graph, opts.v_conn_csv));
-    }
-
-    run_simulation(opts, graph, pair_vconn.get());
+    run_simulation(opts, graph);
 }
 
 void print_usage(const char* progr_name) {
@@ -405,8 +394,6 @@ void print_usage(const char* progr_name) {
     cerr << " --watermark-sz <int>";
     cerr << " --block-chunks <int>";
     cerr << " --enable-chunk-sieve";
-    cerr << " --v-conn-cartel-size";
-    cerr << " --v-conn-csv <conn_csv_file>";
     cerr << " --cartel-size-limit <int>";
     cerr << " --report-chunk-paths";
     cerr << endl;
@@ -451,10 +438,6 @@ Options parse_args(int argc, char* argv[]){
             opts.block_chunks = stoi(read_value());
         } else if(flag=="--enable-chunk-sieve"){
             opts.enable_chunk_sieve = true;
-        } else if(flag=="--v-conn-cartel-size"){
-            opts.v_conn_cartel_size = true;
-        } else if(flag=="--v-conn-csv"){
-            opts.v_conn_csv = read_value();
         } else if (flag=="--cartel-size-limit") {
             opts.cartel_size_limit = stoi(read_value());
         } else if(flag=="--report-chunk-paths"){

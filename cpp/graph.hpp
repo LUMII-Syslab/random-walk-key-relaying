@@ -4,7 +4,9 @@
 #include <cctype>
 #include <fstream>
 #include <istream>
+#include <limits>
 #include <map>
+#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -13,6 +15,77 @@
 #include <vector>
 
 using namespace std;
+
+namespace graph_flow {
+struct Edge {
+    int to = -1;
+    int rev = -1;
+    int cap = 0;
+};
+
+class Dinic {
+public:
+    explicit Dinic(int n) : g_(n), level_(n), ptr_(n) {}
+
+    void add_edge(int from, int to, int cap) {
+        Edge fwd{to, static_cast<int>(g_[to].size()), cap};
+        Edge rev{from, static_cast<int>(g_[from].size()), 0};
+        g_[from].push_back(fwd);
+        g_[to].push_back(rev);
+    }
+
+    int max_flow(int source, int sink) {
+        int flow = 0;
+        const int inf = numeric_limits<int>::max();
+        while (bfs(source, sink)) {
+            fill(ptr_.begin(), ptr_.end(), 0);
+            while (true) {
+                const int pushed = dfs(source, sink, inf);
+                if (pushed == 0) break;
+                flow += pushed;
+            }
+        }
+        return flow;
+    }
+
+private:
+    vector<vector<Edge>> g_;
+    vector<int> level_;
+    vector<int> ptr_;
+
+    bool bfs(int source, int sink) {
+        fill(level_.begin(), level_.end(), -1);
+        queue<int> q;
+        level_[source] = 0;
+        q.push(source);
+        while (!q.empty()) {
+            const int v = q.front();
+            q.pop();
+            for (const Edge &e : g_[v]) {
+                if (e.cap > 0 && level_[e.to] < 0) {
+                    level_[e.to] = level_[v] + 1;
+                    q.push(e.to);
+                }
+            }
+        }
+        return level_[sink] >= 0;
+    }
+
+    int dfs(int v, int sink, int pushed) {
+        if (pushed == 0 || v == sink) return pushed;
+        for (int &i = ptr_[v]; i < static_cast<int>(g_[v].size()); i++) {
+            Edge &e = g_[v][i];
+            if (e.cap <= 0 || level_[e.to] != level_[v] + 1) continue;
+            const int tr = dfs(e.to, sink, min(pushed, e.cap));
+            if (tr == 0) continue;
+            e.cap -= tr;
+            g_[e.to][e.rev].cap += tr;
+            return tr;
+        }
+        return 0;
+    }
+};
+} // namespace graph_flow
 
 struct EdgeKey {
     int u = -1;
@@ -218,5 +291,45 @@ public:
 
     vector<int> neighbors(int node_idx) const {
         return adj_[node_idx];
+    }
+
+    /** Local vertex connectivity kappa(s,t) via split-vertex max flow. */
+    int vertex_connectivity(int s, int t) const {
+        const int n = node_count();
+        if (s < 0 || s >= n || t < 0 || t >= n) {
+            throw runtime_error("vertex_connectivity: node index out of range");
+        }
+        if (s == t) return 0;
+
+        vector<int> fin(n, -1);
+        vector<int> fout(n, -1);
+        int next_id = n;
+        for (int v = 0; v < n; v++) {
+            if (v == s || v == t) continue;
+            fin[v] = next_id++;
+            fout[v] = next_id++;
+        }
+
+        graph_flow::Dinic flow(next_id);
+        for (int v = 0; v < n; v++) {
+            if (v == s || v == t) continue;
+            flow.add_edge(fin[v], fout[v], 1);
+        }
+
+        auto out_id = [&](int v) {
+            return (v == s || v == t) ? v : fout[v];
+        };
+        auto in_id = [&](int v) {
+            return (v == s || v == t) ? v : fin[v];
+        };
+
+        for (const EdgeKey &ek : edges_) {
+            const int u = ek.u;
+            const int v = ek.v;
+            flow.add_edge(out_id(u), in_id(v), 1);
+            flow.add_edge(out_id(v), in_id(u), 1);
+        }
+
+        return flow.max_flow(s, t);
     }
 };
