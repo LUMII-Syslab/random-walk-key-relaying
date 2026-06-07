@@ -14,7 +14,7 @@ Discrete-event simulation of **scout-based key relaying** on an undirected graph
 
 ### Scouts
 
-For each source, scouts are emitted at a fixed rate and do a random walk.
+For each source, scouts are emitted at a fixed rate (`--scout-emission-rate`, scouts/s, default: 100) and do a random walk.
 
 At each hop arrival over edge \((sender,receiver)\):
 
@@ -62,6 +62,8 @@ Intermediate vertices \(x \notin \{s,t\}\) are split into \(x_1 \to x_2\) (capac
 
 - `--watermark-sz <int>`: **buffer watermark** used only by `consume(...)` (accept/drop dynamics), not the block size.
 - `--block-chunks <int>`: chunks per extraction block/window (default: 16).
+- `--ttl <int>`: max scout walk length in hops and consume threshold (default: 200).
+- `--scout-emission-rate <float>`: scouts emitted per second per source (default: 100).
 
 ### Output
 

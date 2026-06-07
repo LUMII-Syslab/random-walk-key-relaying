@@ -212,7 +212,6 @@ static void apply_chunk_path_to_coverage(
     }
 }
 
-const double SCOUTS_PER_SECONDS = 100;
 const double CLASSICAL_DELAY_MS = 5;
 const double QKD_SKR_BITS_P_S = 1000;
 const int CHUNK_SIZE_BITS = 256;
@@ -223,11 +222,12 @@ struct Options{
     string graph = "geant";
     string edges_csv;
     vector<string> src_nodes;
-    string rw_variant = "HS"; // NB, LRV, HS
+    string rw_variant = "HS"; // R, NB, LRV, HS
     bool verbose = false;
     int watermark_sz = 128;
     int block_chunks = 64;
-    uint ttl = 200;
+    int ttl = 200;
+    double scout_emission_rate = 100.0;
     int max_wait_time_s = 2;
     int required_cnt = -1;
     double max_consume_prob = 1.0;
@@ -280,12 +280,13 @@ bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max
 }
 
 static bool valid_rw_variant(const string &w) {
-    return w == "NB" || w == "LRV" || w == "HS";
+    return w == "R" || w == "NB" || w == "LRV" || w == "HS";
 }
 
 static shared_ptr<RwToken> make_walk_token(const Options &opts, int src_idx) {
     const int seed = static_cast<int>(rng());
     const int tgt_idx = -1; // unknown-target mode
+    if (opts.rw_variant == "R") return make_shared<RToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "NB") return make_shared<NbToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "LRV") return make_shared<LrvToken>(src_idx, tgt_idx, seed);
     if (opts.rw_variant == "HS") return make_shared<HsToken>(src_idx, tgt_idx, seed);
@@ -311,7 +312,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         throw runtime_error("--report-chunk-paths requires --verbose");
     }
     if (!valid_rw_variant(opts.rw_variant)) {
-        throw runtime_error("Invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
+        throw runtime_error("Invalid --rw-variant (expected R, NB, LRV, or HS): " + opts.rw_variant);
     }
 
     for(string src: opts.src_nodes){
@@ -434,7 +435,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
         if(e.type == EventType::EmitScout){
-            double next_occurrence = e.time + 1/SCOUTS_PER_SECONDS;
+            double next_occurrence = e.time + 1.0 / opts.scout_emission_rate;
             pq.push(Event{next_occurrence,EventType::EmitScout,e.origin,-1,-1,nullptr,{},-1,0});
             shared_ptr<RwToken> token = make_walk_token(opts, e.origin);
             int ngh = token->choose_next_and_update(e.origin, graph.neighbors(e.origin));
@@ -592,6 +593,8 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_double("--max-consume-prob", {}, opts.max_consume_prob);
     cli.reg_int("--watermark-sz", {}, opts.watermark_sz);
     cli.reg_int("--block-chunks", {}, opts.block_chunks);
+    cli.reg_int("--ttl", {}, opts.ttl);
+    cli.reg_double("--scout-emission-rate", {}, opts.scout_emission_rate);
     cli.reg_int("--cartel-size-limit", {}, opts.cartel_size_limit);
     cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
     cli.reg_bool("--useful-scouts-only", {}, opts.useful_scouts_only);
@@ -602,10 +605,16 @@ static Options parse_args(int argc, char **argv) {
     }
     opts.edges_csv = resolve_graph_spec(opts.graph);
     if (!valid_rw_variant(opts.rw_variant)) {
-        cli.fail("Invalid --rw-variant (expected NB, LRV, or HS): " + opts.rw_variant);
+        cli.fail("Invalid --rw-variant (expected R, NB, LRV, or HS): " + opts.rw_variant);
     }
     if (opts.block_chunks <= 0) {
         cli.fail("--block-chunks must be > 0");
+    }
+    if (opts.ttl <= 0) {
+        cli.fail("--ttl must be > 0");
+    }
+    if (opts.scout_emission_rate <= 0.0) {
+        cli.fail("--scout-emission-rate must be > 0");
     }
     if (opts.cartel_size_limit < 0 || opts.cartel_size_limit > 3) {
         cli.fail("--cartel-size-limit must be between 0 and 3");
