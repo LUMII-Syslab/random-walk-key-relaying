@@ -1,9 +1,10 @@
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <queue>
 #include <random>
-#include <sstream>
+#include <set>
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
 #include "cli.hpp"
@@ -18,13 +19,15 @@ namespace cartel {
 struct Result {
     int max_seen = 0;
     vector<int> nodes;
+    bool has_max_cartel_miss = false;
 };
 
 static Result worst_case_coverage(
     const vector<boost::dynamic_bitset<>> &covered_chunks_by_node,
     int src,
     int tgt,
-    int cartel_sz
+    int cartel_sz,
+    const vector<char> *hit_nodes = nullptr
 ) {
     Result res;
     if (cartel_sz <= 0) return res;
@@ -58,18 +61,41 @@ static Result worst_case_coverage(
         tmp |= covered_chunks_by_node[c];
         return static_cast<int>(tmp.count());
     };
+    auto hit1 = [&](int a) -> int {
+        return hit_nodes != nullptr && (*hit_nodes)[static_cast<size_t>(a)] ? 1 : 0;
+    };
+    auto hit2 = [&](int a, int b) -> int {
+        return hit1(a) || hit1(b);
+    };
+    auto hit3 = [&](int a, int b, int c) -> int {
+        return hit1(a) || hit1(b) || hit1(c);
+    };
+    auto miss1 = [&](int a) -> bool {
+        return hit_nodes != nullptr && !hit1(a);
+    };
+    auto miss2 = [&](int a, int b) -> bool {
+        return hit_nodes != nullptr && !hit2(a, b);
+    };
+    auto miss3 = [&](int a, int b, int c) -> bool {
+        return hit_nodes != nullptr && !hit3(a, b, c);
+    };
 
     if (cartel_sz == 1) {
         int best_v = -1;
         int best = 0;
+        bool has_miss = false;
         for (int v : candidates) {
-            int cov = coverage1(v);
+            const int cov = coverage1(v);
             if (cov > best) {
                 best = cov;
                 best_v = v;
+                has_miss = miss1(v);
+            } else if (cov == best) {
+                has_miss = has_miss || miss1(v);
             }
         }
         res.max_seen = best;
+        res.has_max_cartel_miss = has_miss;
         if (best_v != -1) res.nodes = {best_v};
         return res;
     }
@@ -77,43 +103,114 @@ static Result worst_case_coverage(
     if (cartel_sz == 2) {
         int best_a = -1, best_b = -1;
         int best = 0;
+        bool has_miss = false;
         for (size_t i = 0; i < candidates.size(); i++) {
             for (size_t j = i + 1; j < candidates.size(); j++) {
-                int a = candidates[i], b = candidates[j];
-                int cov = coverage2(a, b);
+                const int a = candidates[i];
+                const int b = candidates[j];
+                const int cov = coverage2(a, b);
                 if (cov > best) {
                     best = cov;
                     best_a = a;
                     best_b = b;
+                    has_miss = miss2(a, b);
+                } else if (cov == best) {
+                    has_miss = has_miss || miss2(a, b);
                 }
             }
         }
         res.max_seen = best;
+        res.has_max_cartel_miss = has_miss;
         if (best_a != -1) res.nodes = {best_a, best_b};
         return res;
     }
 
     int best_a = -1, best_b = -1, best_c = -1;
     int best = 0;
+    bool has_miss = false;
     for (size_t i = 0; i < candidates.size(); i++) {
         for (size_t j = i + 1; j < candidates.size(); j++) {
             for (size_t k = j + 1; k < candidates.size(); k++) {
-                int a = candidates[i], b = candidates[j], c = candidates[k];
-                int cov = coverage3(a, b, c);
+                const int a = candidates[i];
+                const int b = candidates[j];
+                const int c = candidates[k];
+                const int cov = coverage3(a, b, c);
                 if (cov > best) {
                     best = cov;
                     best_a = a;
                     best_b = b;
                     best_c = c;
+                    has_miss = miss3(a, b, c);
+                } else if (cov == best) {
+                    has_miss = has_miss || miss3(a, b, c);
                 }
             }
         }
     }
     res.max_seen = best;
+    res.has_max_cartel_miss = has_miss;
     if (best_a != -1) res.nodes = {best_a, best_b, best_c};
     return res;
 }
 } // namespace cartel
+
+struct LerSubgraph {
+    vector<char> has_node;
+    set<pair<int, int>> has_edge;
+
+    void ensure_size(int n) {
+        if (static_cast<int>(has_node.size()) < n) {
+            has_node.resize(static_cast<size_t>(n), 0);
+        }
+    }
+
+    bool path_adds(const vector<int> &path) const {
+        for (int v : path) {
+            if (v < 0 || v >= static_cast<int>(has_node.size())) return true;
+            if (!has_node[static_cast<size_t>(v)]) return true;
+        }
+        for (size_t i = 1; i < path.size(); i++) {
+            int u = path[i - 1];
+            int v = path[i];
+            if (u > v) swap(u, v);
+            if (!has_edge.count({u, v})) return true;
+        }
+        return false;
+    }
+
+    void merge_path(const vector<int> &path) {
+        for (int v : path) {
+            if (v >= 0 && v < static_cast<int>(has_node.size())) {
+                has_node[static_cast<size_t>(v)] = 1;
+            }
+        }
+        for (size_t i = 1; i < path.size(); i++) {
+            int u = path[i - 1];
+            int v = path[i];
+            if (u > v) swap(u, v);
+            has_edge.insert({u, v});
+        }
+    }
+
+    void clear() {
+        fill(has_node.begin(), has_node.end(), 0);
+        has_edge.clear();
+    }
+};
+
+static void apply_chunk_path_to_coverage(
+    vector<boost::dynamic_bitset<>> &covered_chunks_by_node,
+    const vector<int> &path,
+    int src,
+    int tgt,
+    int chunk_idx
+) {
+    for (int x : path) {
+        if (x == src || x == tgt) continue;
+        if (x < 0 || x >= static_cast<int>(covered_chunks_by_node.size())) continue;
+        covered_chunks_by_node[x].set(static_cast<size_t>(chunk_idx));
+    }
+}
 
 const double SCOUTS_PER_SECONDS = 100;
 const double CLASSICAL_DELAY_MS = 5;
@@ -136,6 +233,7 @@ struct Options{
     double max_consume_prob = 1.0;
     int cartel_size_limit = 3; // cap cartel size (worst_case_coverage supports at most 3)
     bool report_chunk_paths = false;
+    bool useful_scouts_only = false;
     string context;
 };
 
@@ -226,8 +324,79 @@ void run_simulation(const Options& opts, const Graph& graph){
     struct BlockState {
         int received = 0;
         vector<boost::dynamic_bitset<>> covered_chunks_by_node;
+        LerSubgraph ler;
     };
     map<pair<int,int>, BlockState> blocks;
+
+    auto established_count = [&](int src, int tgt) -> int {
+        auto it = established_keys.find({src, tgt});
+        return it == established_keys.end() ? 0 : it->second;
+    };
+
+    auto remaining_watermark_nodes = [&]() -> vector<string> {
+        vector<string> remaining;
+        if (opts.required_cnt == -1) return remaining;
+        for (const string &src_name : opts.src_nodes) {
+            const int src = graph.node_index(src_name);
+            for (int i = 0; i < graph.node_count(); i++) {
+                if (i == src) continue;
+                if (established_count(src, i) >= opts.required_cnt) continue;
+                remaining.push_back(src_name + "->" + graph.node_name(i));
+            }
+        }
+        return remaining;
+    };
+
+    auto print_progress = [&]() {
+        vector<string> remaining = remaining_watermark_nodes();
+        cerr << "progress remaining=" << remaining.size() << " nodes=";
+        if (remaining.empty()) {
+            cerr << "-";
+        } else {
+            cerr << join(remaining, ",");
+        }
+        cerr << endl;
+    };
+
+    auto ensure_block_state = [&](BlockState &blk) {
+        const int n = graph.node_count();
+        if (
+            blk.covered_chunks_by_node.empty()
+            || static_cast<int>(blk.covered_chunks_by_node.size()) != n
+            || (n > 0 && static_cast<int>(blk.covered_chunks_by_node[0].size()) != opts.block_chunks)
+        ) {
+            blk.covered_chunks_by_node.assign(
+                static_cast<size_t>(n),
+                boost::dynamic_bitset<>(static_cast<size_t>(opts.block_chunks))
+            );
+            blk.ler.ensure_size(n);
+            blk.ler.clear();
+        }
+    };
+
+    auto useful_scout_allowed = [&](
+        BlockState &blk,
+        const vector<int> &ler_path,
+        int src,
+        int tgt,
+        int cartel_sz
+    ) -> bool {
+        ensure_block_state(blk);
+        if (blk.ler.path_adds(ler_path)) return true;
+        if (cartel_sz <= 0) return true;
+
+        vector<char> path_hits(static_cast<size_t>(graph.node_count()), 0);
+        for (int v : ler_path) {
+            if (v == src || v == tgt) continue;
+            if (v >= 0 && v < static_cast<int>(path_hits.size())) {
+                path_hits[static_cast<size_t>(v)] = 1;
+            }
+        }
+        const cartel::Result before = cartel::worst_case_coverage(
+            blk.covered_chunks_by_node, src, tgt, cartel_sz, &path_hits
+        );
+        return before.has_max_cartel_miss;
+    };
 
     // Total number of QKD bits already reserved for future use on each undirected link.
     // Units: bits (not chunks).
@@ -252,9 +421,17 @@ void run_simulation(const Options& opts, const Graph& graph){
         return max(time_to_gen, 0.0);
     };
 
+    auto next_progress_at = chrono::steady_clock::now() + chrono::seconds(5);
+
     while(pq.size()>0){
         Event e = pq.top();
         pq.pop();
+
+        const auto now = chrono::steady_clock::now();
+        if (now >= next_progress_at) {
+            print_progress();
+            next_progress_at = now + chrono::seconds(5);
+        }
 
         if(e.type == EventType::EmitScout){
             double next_occurrence = e.time + 1/SCOUTS_PER_SECONDS;
@@ -270,22 +447,37 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
         if(e.type == EventType::ScoutForward){
-            if(
-                e.receiver!=e.origin
+            const bool prob_ok = (
+                e.receiver != e.origin
                 && consume(
-                    established_keys[{e.origin,e.receiver}],
+                    established_keys[{e.origin, e.receiver}],
                     opts.watermark_sz,
-                    e.history.size()-1,
+                    e.history.size() - 1,
                     opts.ttl,
                     opts.max_consume_prob
                 )
-            ){
-                auto path = erase_loops_from_history(e.history);
-                double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
-                int nxt = path[path.size()-2];
-                double wait_time = enqueue_on_link(e.time, e.receiver, nxt);
-                pq.push(Event{arrives_at,EventType::ScoutReturn,e.origin,e.receiver,path[path.size()-2],nullptr,path,e.receiver,wait_time});
-                continue;
+            );
+            if (prob_ok) {
+                const vector<int> ler_path = erase_loops_from_history(e.history);
+                bool accept = true;
+                if (opts.useful_scouts_only) {
+                    const int vconn = pair_vconn(e.origin, e.receiver);
+                    const int cartel_sz = min(max(0, vconn - 1), opts.cartel_size_limit);
+                    BlockState &blk = blocks[{e.origin, e.receiver}];
+                    accept = useful_scout_allowed(
+                        blk, ler_path, e.origin, e.receiver, cartel_sz
+                    );
+                }
+                if (accept) {
+                    double arrives_at = e.time + CLASSICAL_DELAY_MS / 1000.0;
+                    int nxt = ler_path[ler_path.size() - 2];
+                    double wait_time = enqueue_on_link(e.time, e.receiver, nxt);
+                    pq.push(Event{
+                        arrives_at, EventType::ScoutReturn, e.origin, e.receiver, nxt,
+                        nullptr, ler_path, e.receiver, wait_time
+                    });
+                    continue;
+                }
             }
             int ngh = e.token->choose_next_and_update(e.receiver, graph.neighbors(e.receiver));
             vector<int> new_history = e.history;
@@ -327,23 +519,11 @@ void run_simulation(const Options& opts, const Graph& graph){
 
             auto key = make_pair(e.origin, e.target);
             BlockState &blk = blocks[key];
-            if (
-                blk.covered_chunks_by_node.empty()
-                || static_cast<int>(blk.covered_chunks_by_node.size()) != graph.node_count()
-                || (graph.node_count() > 0 && static_cast<int>(blk.covered_chunks_by_node[0].size()) != opts.block_chunks)
-            ) {
-                blk.covered_chunks_by_node.assign(
-                    graph.node_count(),
-                    boost::dynamic_bitset<>(static_cast<size_t>(opts.block_chunks))
-                );
-            }
+            ensure_block_state(blk);
 
             const int chunk_idx = blk.received;
-            for (int x : e.history) {
-                if (x == e.origin || x == e.target) continue;
-                if (x < 0 || x >= graph.node_count()) continue;
-                blk.covered_chunks_by_node[x].set(static_cast<size_t>(chunk_idx));
-            }
+            apply_chunk_path_to_coverage(blk.covered_chunks_by_node, e.history, e.origin, e.target, chunk_idx);
+            blk.ler.merge_path(e.history);
             blk.received++;
             chunks_received[key] = blk.received;
 
@@ -362,6 +542,7 @@ void run_simulation(const Options& opts, const Graph& graph){
 
                 // Reset block state for this pair.
                 for (auto &bs : blk.covered_chunks_by_node) bs.reset();
+                blk.ler.clear();
 
                 established_keys[key] += honesty;
                 if (opts.verbose) {
@@ -375,19 +556,7 @@ void run_simulation(const Options& opts, const Graph& graph){
                 }
                 // check if we can halt
                 if(opts.required_cnt!=-1){
-                    bool found_unsatisfied = false;
-                    for(string src_name: opts.src_nodes){
-                        int src = graph.node_index(src_name);
-                        for(int i=0;i<graph.node_count();i++){
-                            if(i==src) continue;
-                            if(established_keys[{src,i}]<opts.required_cnt){
-                                found_unsatisfied = true;
-                                break;
-                            }
-                        }
-                        if(found_unsatisfied) break;
-                    }
-                    if(!found_unsatisfied){
+                    if(remaining_watermark_nodes().empty()){
                         cout<<"Halted at "<<e.time<<" seconds"<<endl;
                         return;
                     }
@@ -425,6 +594,7 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_int("--block-chunks", {}, opts.block_chunks);
     cli.reg_int("--cartel-size-limit", {}, opts.cartel_size_limit);
     cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
+    cli.reg_bool("--useful-scouts-only", {}, opts.useful_scouts_only);
     cli.parse();
 
     if (!have_halt_at_keys) {

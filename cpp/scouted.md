@@ -21,6 +21,7 @@ At each hop arrival over edge \((sender,receiver)\):
 - **Drop on return-to-source** (after leaving).
 - **Drop on wait-limit**: if `observe_wait_s(time) > max_wait_time_s`, drop immediately.
 - Otherwise, receiver may **accept** with probability `consume(...)` (depends on hop count + `buffered_keys[src,tgt]` vs `watermark_sz`).
+- With **`--useful-scouts-only`**, acceptance also requires that the loop-erased scout path either adds a node or edge to the per-pair LER subgraph built from chunk histories in the current block, or leaves at least one ex-ante worst cartel that does not intersect the new path.
 
 On acceptance at `tgt`:
 
