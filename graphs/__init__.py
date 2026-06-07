@@ -31,6 +31,9 @@ def str_adj_list_to_nx_graph(adj_list: dict[str, list[str]]) -> nx.Graph:
             g.add_edge(u, v)
     return g
 
+def get_graph_nx_graph(graph_name: Literal["NSFNET", "GEANT"]) -> nx.Graph:
+    return str_adj_list_to_nx_graph(get_graph_str_adj_list(graph_name))
+
 # Sometimes conversion to int adj list grants better performance
 def str_adj_list_to_int_adj_list(adj_list: dict[str, list[str]]) -> dict[int, list[int]]:
     node_universe = sorted(set(adj_list.keys()))
