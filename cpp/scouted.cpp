@@ -1,4 +1,5 @@
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -233,6 +234,7 @@ struct Options{
     double max_consume_prob = 1.0;
     int cartel_size_limit = 3; // cap cartel size (worst_case_coverage supports at most 3)
     bool report_chunk_paths = false;
+    bool report_yield = false;
     bool useful_scouts_only = false;
     string context;
 };
@@ -322,12 +324,18 @@ void run_simulation(const Options& opts, const Graph& graph){
 
     map<pair<int,int>,int> established_keys;
     map<pair<int,int>,int> chunks_received;
+    struct YieldStats {
+        int blocks = 0;
+        int output_keys = 0;
+        int input_chunks = 0;
+    };
     struct BlockState {
         int received = 0;
         vector<boost::dynamic_bitset<>> covered_chunks_by_node;
         LerSubgraph ler;
     };
     map<pair<int,int>, BlockState> blocks;
+    map<pair<int,int>, YieldStats> yield_stats;
 
     auto established_count = [&](int src, int tgt) -> int {
         auto it = established_keys.find({src, tgt});
@@ -357,6 +365,21 @@ void run_simulation(const Options& opts, const Graph& graph){
             cerr << join(remaining, ",");
         }
         cerr << endl;
+    };
+
+    auto print_yield_report = [&]() {
+        if (!opts.report_yield) return;
+        cout << fixed << setprecision(6);
+        for (const auto &[key, ys] : yield_stats) {
+            if (ys.input_chunks == 0) continue;
+            const double rho = static_cast<double>(ys.output_keys)
+                / static_cast<double>(ys.input_chunks);
+            cout << "yield " << graph.node_name(key.first) << " "
+                 << graph.node_name(key.second) << " rho=" << rho
+                 << " output_keys=" << ys.output_keys
+                 << " input_chunks=" << ys.input_chunks
+                 << " blocks=" << ys.blocks << endl;
+        }
     };
 
     auto ensure_block_state = [&](BlockState &blk) {
@@ -546,6 +569,10 @@ void run_simulation(const Options& opts, const Graph& graph){
                 blk.ler.clear();
 
                 established_keys[key] += honesty;
+                YieldStats &ys = yield_stats[key];
+                ys.blocks++;
+                ys.output_keys += honesty;
+                ys.input_chunks += opts.block_chunks;
                 if (opts.verbose) {
                     vector<string> cartel_names;
                     for (int v : cr.nodes) cartel_names.push_back(graph.node_name(v));
@@ -559,6 +586,7 @@ void run_simulation(const Options& opts, const Graph& graph){
                 if(opts.required_cnt!=-1){
                     if(remaining_watermark_nodes().empty()){
                         cout<<"Halted at "<<e.time<<" seconds"<<endl;
+                        print_yield_report();
                         return;
                     }
                 }
@@ -566,6 +594,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
     }
+    print_yield_report();
 }
 
 static Options parse_args(int argc, char **argv) {
@@ -597,6 +626,7 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_double("--scout-emission-rate", {}, opts.scout_emission_rate);
     cli.reg_int("--cartel-size-limit", {}, opts.cartel_size_limit);
     cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
+    cli.reg_bool("--report-yield", {}, opts.report_yield);
     cli.reg_bool("--useful-scouts-only", {}, opts.useful_scouts_only);
     cli.parse();
 
