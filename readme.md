@@ -66,6 +66,9 @@ pip install -r requirements.txt
 Named topologies are also hardcoded in the Python package `graphs/` (`NSFNET`, `GEANT` in `graphs/__init__.py`) and in `cpp/graphs.hpp` for the C++ binaries (`nsfnet`, `geant`).
 That lets callers pass a graph name alone, which is useful for joblib cache keys, where hashing a short string is cheaper than serializing a full adjacency list, and avoids rereading edge CSVs from disk on every cache lookup.
 The synthetic generated graph (integer vertices, prefix snapshots) lives in `graphs/generated/`.
+The hexagonal-grid scalability topology (CC-spiral hexagon growth, 96 vertices at $N=4$) lives in `graphs/hexagon/`; regenerate with `python graphs/hexagon/gengraph.py`.
+Run mean-hop scaling snapshots with `python scalability.py`.
+Hexagon scalability (interactive plot, 37 CC-spiral milestones on the $N=4$ grid) with `python hexagonscalability.py` (`--limit 3` for a quick smoke test).
 
 ## Node-disjoint paths (`suurballe.py`)
 

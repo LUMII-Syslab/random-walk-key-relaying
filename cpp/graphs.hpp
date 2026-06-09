@@ -23,6 +23,9 @@ inline const char *named_graph_edges_csv(string_view name) {
     if (key == "geant") {
         return "../graphs/geant/edges.csv";
     }
+    if (key == "hexagon") {
+        return "../graphs/hexagon/edges.csv";
+    }
     return nullptr;
 }
 

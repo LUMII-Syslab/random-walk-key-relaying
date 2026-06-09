@@ -14,6 +14,6 @@ Binaries:
 | `scouted` | Scout-based key relaying sim with block honesty / cartel extraction |
 | `tput` | Known s→t chunk throughput under QKD link queues |
 
-Walk tools (`hops`, `exposure`, `tput`) use `-g` / `--graph` (`nsfnet`, `geant`, or edges CSV path; default `geant`).
+Walk tools (`hops`, `exposure`, `tput`) use `-g` / `--graph` (`nsfnet`, `geant`, `hexagon`, or edges CSV path; default `geant`).
 
 Scout simulator details: [`scouted.md`](scouted.md).

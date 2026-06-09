@@ -8,6 +8,10 @@ CSV on disk.
 The synthetic / generated graph lives in ``graphs.generated``; its vertices
 are integers and is built from a hardcoded edge list with the same snapshot
 logic as the old CSV-based loader.
+
+The hexagonal-grid scalability topology lives in ``graphs.hexagon``; small
+hexagons are added in CC spiral order and each insertion also adds any
+previously unseen vertices on the new hexagon boundary.
 """
 from __future__ import annotations
 
