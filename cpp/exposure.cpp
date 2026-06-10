@@ -134,10 +134,14 @@ static bool cartel_is_eligible(
     }
     seen[src] = 1;
     q.push(src);
+    bool connected = false;
     while (!q.empty()) {
         const int u = q.front();
         q.pop();
-        if (u == tgt) return true;
+        if (u == tgt) {
+            connected = true;
+            continue;
+        }
         for (int v : adj[u]) {
             if (!blocked[v] && !seen[v]) {
                 seen[v] = 1;
@@ -145,7 +149,7 @@ static bool cartel_is_eligible(
             }
         }
     }
-    return false;
+    return connected;
 }
 
 static void dump_hit_counts(
