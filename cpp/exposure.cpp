@@ -24,6 +24,7 @@ using namespace std;
 struct Options {
     WalkCliOpts walk;
     int cartel_size = 1;
+    bool dump_hits = false;
     string context;
 };
 
@@ -147,6 +148,42 @@ static bool cartel_is_eligible(
     return false;
 }
 
+static void dump_hit_counts(
+    ostream &out,
+    const Graph &graph,
+    int runs,
+    const HitCounts &hits
+) {
+    const int n = graph.node_count();
+    out << "runs: " << runs << '\n';
+    out << "n: " << n << '\n';
+    out << "nodes:";
+    for (int u = 0; u < n; u++) {
+        out << ' ' << graph.node_name(u);
+    }
+    out << '\n';
+    out << "single:";
+    for (int u = 0; u < n; u++) {
+        out << ' ' << hits.single[u];
+    }
+    out << '\n';
+    out << "pair:";
+    for (int u = 0; u < n; u++) {
+        for (int v = u + 1; v < n; v++) {
+            out << ' ' << hits.pair[u][v];
+        }
+    }
+    out << '\n';
+    out << "triple_count: " << hits.triple.size() << '\n';
+    for (const auto &[key, count] : hits.triple) {
+        const int w = static_cast<int>(key % n);
+        const int rem = static_cast<int>(key / n);
+        const int v = rem % n;
+        const int u = rem / n;
+        out << "triple: " << u << ' ' << v << ' ' << w << ' ' << count << '\n';
+    }
+}
+
 static void merge_hits(HitCounts &dst, const HitCounts &src, int n) {
     for (int u = 0; u < n; u++) {
         dst.single[u] += src.single[u];
@@ -174,14 +211,15 @@ static Options parse_args(int argc, char **argv) {
     WalkFlagOpts walk_flags;
     walk_flags.endpoints_optional = true;
     cli.reg_walk_flags(opts.walk, walk_flags);
-    cli.reg_int("--cartel-size", "-m", opts.cartel_size, true);
+    cli.reg_bool("--dump-hits", {}, opts.dump_hits);
+    cli.reg_int("--cartel-size", "-m", opts.cartel_size, !opts.dump_hits);
     cli.parse();
     resolve_walk_graph(opts.walk);
     validate_walk_endpoints_pair(cli, opts.walk);
     if (opts.walk.src_node.empty()) {
         cli.fail("Source and target nodes are required for exposure simulation");
     }
-    if (opts.cartel_size < 1 || opts.cartel_size > 3) {
+    if (!opts.dump_hits && (opts.cartel_size < 1 || opts.cartel_size > 3)) {
         cli.fail("Cartel size must be 1, 2, or 3 (inclusion-exclusion limit)");
     }
     validate_positive_runs(cli, opts.walk.no_of_runs);
@@ -251,6 +289,12 @@ int main(int argc, char **argv) {
     hits.pair.assign(n, vector<int>(n, 0));
     for (const HitCounts &lh : local_hits) {
         merge_hits(hits, lh, n);
+    }
+
+    if (opts.dump_hits) {
+        cout << opts.context;
+        dump_hit_counts(cout, graph, opts.walk.no_of_runs, hits);
+        return 0;
     }
 
     vector<int> cartel(opts.cartel_size);

@@ -1,0 +1,14 @@
+---
+description: Use the existing randomwalks pyenv environment
+alwaysApply: true
+---
+
+# Python Environment
+
+Use the existing pyenv environment for this project:
+
+```bash
+pyenv activate randomwalks
+```
+
+Do not create a new pyenv environment or install dependencies unless explicitly asked.

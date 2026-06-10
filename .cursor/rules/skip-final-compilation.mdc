@@ -1,0 +1,11 @@
+---
+description: Avoid final LaTeX and C++ compilation checks
+alwaysApply: true
+---
+
+# Final Compilation Checks
+
+When you think the requested work is finished, do not spend time or tokens recompiling LaTeX or C++ just to verify it.
+The user will check whether it compiles.
+
+Only compile LaTeX or C++ when the user explicitly asks for it, or when runtime output is necessary to investigate a specific failure.
