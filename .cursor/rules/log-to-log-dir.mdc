@@ -1,0 +1,28 @@
+---
+description: Write run output and logs to log/ when executing code in Cursor
+alwaysApply: true
+---
+
+# Log Directory for Cursor Runs
+
+When running scripts, builds, experiments, or other commands in Cursor, write logs and captured output to `log/` at the project root.
+
+`log/` is gitignored — do not commit its contents.
+
+## Defaults
+
+- Create `log/` if it does not exist: `mkdir -p log`
+- Use descriptive filenames: command name, script name, or timestamp (e.g. `log/run-efficiency-2026-06-10.txt`)
+- Redirect stdout and stderr there instead of leaving `.log` files in the project root or relying on ephemeral `/tmp` paths
+
+## Examples
+
+```bash
+mkdir -p log
+python efficiency.py > log/efficiency.out 2>&1
+./cpp/build/hops --args > log/hops.out 2>&1
+```
+
+For longer or repeated runs, append or use a timestamped file so prior output is not overwritten unintentionally.
+
+When a tool or script supports a log path flag, point it at `log/` rather than the cwd.
