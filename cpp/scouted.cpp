@@ -508,7 +508,7 @@ void run_simulation(const Options& opts, const Graph& graph){
             new_history.push_back(ngh);
             double arrives_at = e.time + CLASSICAL_DELAY_MS/1000.0;
             bool wait_time_ok = predict_wait_time(e.time, e.receiver, ngh)<=opts.max_wait_time_s;
-            bool ttl_ok = new_history.size() <= opts.ttl+1;
+            bool ttl_ok = new_history.size() <= static_cast<size_t>(opts.ttl + 1);
             if(wait_time_ok&&ttl_ok)
                 pq.push(Event{arrives_at,EventType::ScoutForward,e.origin,e.receiver,ngh,e.token,new_history,-1,0});
             continue;
