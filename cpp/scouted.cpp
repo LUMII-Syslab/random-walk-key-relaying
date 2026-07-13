@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -236,6 +237,8 @@ struct Options{
     bool report_chunk_paths = false;
     bool report_yield = false;
     bool useful_scouts_only = false;
+    string broken_node;
+    double broken_node_start_time_s = 0.0;
     string context;
 };
 
@@ -316,6 +319,9 @@ void run_simulation(const Options& opts, const Graph& graph){
     if (!valid_rw_variant(opts.rw_variant)) {
         throw runtime_error("Invalid --rw-variant (expected R, NB, LRV, or HS): " + opts.rw_variant);
     }
+    const int broken_node = opts.broken_node.empty()
+        ? -1
+        : graph.node_index(opts.broken_node);
 
     for(string src: opts.src_nodes){
         int origin = graph.node_index(src);
@@ -471,6 +477,9 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
         if(e.type == EventType::ScoutForward){
+            if (e.receiver == broken_node && e.time >= opts.broken_node_start_time_s) {
+                continue;
+            }
             const bool prob_ok = (
                 e.receiver != e.origin
                 && consume(
@@ -628,6 +637,23 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
     cli.reg_bool("--report-yield", {}, opts.report_yield);
     cli.reg_bool("--useful-scouts-only", {}, opts.useful_scouts_only);
+    cli.note_usage("--broken-node", {}, "node,time-s", false);
+    cli.reg_context("--broken-node", [&opts]() {
+        if (opts.broken_node.empty()) return string("none");
+        return opts.broken_node + "," + to_string(opts.broken_node_start_time_s);
+    });
+    cli.reg("--broken-node", [&](CliParser &c, int &i, const ParsedArg &p) {
+        const vector<string> parts = split(c.require_value(i, p.flag, p), ",");
+        if (parts.size() != 2 || parts[0].empty() || parts[1].empty()) {
+            c.fail("--broken-node must be in the form node,time-s");
+        }
+        opts.broken_node = parts[0];
+        try {
+            opts.broken_node_start_time_s = stod(parts[1]);
+        } catch (const exception &) {
+            c.fail("--broken-node time-s must be a number");
+        }
+    });
     cli.parse();
 
     if (!have_halt_at_keys) {
@@ -648,6 +674,9 @@ static Options parse_args(int argc, char **argv) {
     }
     if (opts.cartel_size_limit < 0 || opts.cartel_size_limit > 3) {
         cli.fail("--cartel-size-limit must be between 0 and 3");
+    }
+    if (!isfinite(opts.broken_node_start_time_s) || opts.broken_node_start_time_s < 0.0) {
+        cli.fail("--broken-node time-s must be finite and >= 0");
     }
     if (opts.report_chunk_paths && !opts.verbose) {
         cli.fail("--report-chunk-paths requires --verbose");
