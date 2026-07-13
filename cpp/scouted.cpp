@@ -200,6 +200,15 @@ struct LerSubgraph {
     }
 };
 
+struct DiscoveredTopology {
+    vector<double> node_last_seen;
+    map<EdgeKey, double> edge_last_seen;
+    set<EdgeKey> active_edges;
+
+    explicit DiscoveredTopology(int node_count = 0)
+        : node_last_seen(static_cast<size_t>(node_count), -1.0) {}
+};
+
 static void apply_chunk_path_to_coverage(
     vector<boost::dynamic_bitset<>> &covered_chunks_by_node,
     const vector<int> &path,
@@ -239,10 +248,13 @@ struct Options{
     bool useful_scouts_only = false;
     string broken_node;
     double broken_node_start_time_s = 0.0;
+    double conn_window_s = 0.0;
     string context;
 };
 
 enum class EventType {
+    DiscoveryEdgeExpiry,
+    DiscoveryNodeExpiry,
     EmitScout,
     ScoutForward,
     ScoutReturn,
@@ -265,10 +277,33 @@ struct Event{
 
     int target=-1; // scout return
     double wait; // wait before sending
+
+    // discovered-topology expiry events
+    int discovery_owner = -1;
+    int discovery_u = -1;
+    int discovery_v = -1;
+    double discovery_last_seen = -1.0;
 };
 
 bool operator<(const Event& lhs, const Event& rhs){
-    return lhs.time > rhs.time;
+    if (lhs.time != rhs.time) return lhs.time > rhs.time;
+    auto expiry_priority = [](EventType type) {
+        if (type == EventType::DiscoveryEdgeExpiry) return 0;
+        if (type == EventType::DiscoveryNodeExpiry) return 1;
+        return 2;
+    };
+    const int lhs_priority = expiry_priority(lhs.type);
+    const int rhs_priority = expiry_priority(rhs.type);
+    if (lhs_priority != rhs_priority) {
+        return lhs_priority > rhs_priority;
+    }
+    if (lhs.discovery_owner != rhs.discovery_owner) {
+        return lhs.discovery_owner > rhs.discovery_owner;
+    }
+    if (lhs.discovery_u != rhs.discovery_u) {
+        return lhs.discovery_u > rhs.discovery_u;
+    }
+    return lhs.discovery_v > rhs.discovery_v;
 }
 
 bool consume(int keys_in_buff, int watermark, int hop_count, int ttl, double max_consume_prob){
@@ -300,8 +335,20 @@ static shared_ptr<RwToken> make_walk_token(const Options &opts, int src_idx) {
 
 void run_simulation(const Options& opts, const Graph& graph){
     priority_queue<Event> pq;
+    const bool learned_connectivity = opts.conn_window_s > 0.0;
+    vector<DiscoveredTopology> discovered_by_node(
+        static_cast<size_t>(graph.node_count()),
+        DiscoveredTopology(graph.node_count())
+    );
     map<pair<int,int>, int> vconn_cache;
     auto pair_vconn = [&](int src, int tgt) -> int {
+        if (learned_connectivity) {
+            return graph.vertex_connectivity(
+                src,
+                tgt,
+                discovered_by_node[static_cast<size_t>(tgt)].active_edges
+            );
+        }
         const pair<int,int> key{src, tgt};
         auto it = vconn_cache.find(key);
         if (it != vconn_cache.end()) return it->second;
@@ -451,6 +498,105 @@ void run_simulation(const Options& opts, const Graph& graph){
         return max(time_to_gen, 0.0);
     };
 
+    auto connectivity_snapshot = [&](int owner) {
+        vector<int> connectivity(static_cast<size_t>(graph.node_count()), 0);
+        const set<EdgeKey> &edges =
+            discovered_by_node[static_cast<size_t>(owner)].active_edges;
+        for (int target = 0; target < graph.node_count(); target++) {
+            if (target == owner) continue;
+            connectivity[static_cast<size_t>(target)] =
+                graph.vertex_connectivity(owner, target, edges);
+        }
+        return connectivity;
+    };
+
+    auto log_vconn_changes = [&](
+        double time,
+        int owner,
+        const vector<int> &before,
+        const string &action,
+        int item_u,
+        int item_v
+    ) {
+        if (!opts.verbose) return;
+        const vector<int> after = connectivity_snapshot(owner);
+        for (int target = 0; target < graph.node_count(); target++) {
+            if (target == owner) continue;
+            const int old_vconn = before[static_cast<size_t>(target)];
+            const int new_vconn = after[static_cast<size_t>(target)];
+            if (old_vconn == new_vconn) continue;
+            cout << "vconn " << fmt_3dp(time)
+                 << " " << graph.node_name(owner)
+                 << " " << graph.node_name(target)
+                 << " old=" << old_vconn
+                 << " new=" << new_vconn
+                 << " action=" << action;
+            if (item_v == -1) {
+                cout << " node=" << graph.node_name(item_u);
+            } else {
+                cout << " edge=" << graph.node_name(item_u)
+                     << "," << graph.node_name(item_v);
+            }
+            cout << endl;
+        }
+    };
+
+    auto schedule_node_expiry = [&](double time, int owner, int node) {
+        Event expiry{};
+        expiry.time = time + opts.conn_window_s;
+        expiry.type = EventType::DiscoveryNodeExpiry;
+        expiry.discovery_owner = owner;
+        expiry.discovery_u = node;
+        expiry.discovery_last_seen = time;
+        pq.push(expiry);
+    };
+
+    auto schedule_edge_expiry = [&](double time, int owner, const EdgeKey &edge) {
+        Event expiry{};
+        expiry.time = time + opts.conn_window_s;
+        expiry.type = EventType::DiscoveryEdgeExpiry;
+        expiry.discovery_owner = owner;
+        expiry.discovery_u = edge.u;
+        expiry.discovery_v = edge.v;
+        expiry.discovery_last_seen = time;
+        pq.push(expiry);
+    };
+
+    auto learn_path = [&](double time, int owner, const vector<int> &history) {
+        if (!learned_connectivity) return;
+        DiscoveredTopology &view =
+            discovered_by_node[static_cast<size_t>(owner)];
+
+        set<int> path_nodes(history.begin(), history.end());
+        for (int node : path_nodes) {
+            const bool inserted =
+                view.node_last_seen[static_cast<size_t>(node)] < 0.0;
+            vector<int> before;
+            if (inserted && opts.verbose) before = connectivity_snapshot(owner);
+            view.node_last_seen[static_cast<size_t>(node)] = time;
+            schedule_node_expiry(time, owner, node);
+            if (inserted) {
+                log_vconn_changes(time, owner, before, "add", node, -1);
+            }
+        }
+
+        set<EdgeKey> path_edges;
+        for (size_t i = 1; i < history.size(); i++) {
+            path_edges.insert(EdgeKey(history[i - 1], history[i]));
+        }
+        for (const EdgeKey &edge : path_edges) {
+            const bool inserted = view.active_edges.count(edge) == 0;
+            vector<int> before;
+            if (inserted && opts.verbose) before = connectivity_snapshot(owner);
+            view.active_edges.insert(edge);
+            view.edge_last_seen[edge] = time;
+            schedule_edge_expiry(time, owner, edge);
+            if (inserted) {
+                log_vconn_changes(time, owner, before, "add", edge.u, edge.v);
+            }
+        }
+    };
+
     auto next_progress_at = chrono::steady_clock::now() + chrono::seconds(5);
 
     while(pq.size()>0){
@@ -461,6 +607,56 @@ void run_simulation(const Options& opts, const Graph& graph){
         if (now >= next_progress_at) {
             print_progress();
             next_progress_at = now + chrono::seconds(5);
+        }
+
+        if (e.type == EventType::DiscoveryEdgeExpiry) {
+            DiscoveredTopology &view =
+                discovered_by_node[static_cast<size_t>(e.discovery_owner)];
+            const EdgeKey edge(e.discovery_u, e.discovery_v);
+            auto seen = view.edge_last_seen.find(edge);
+            if (
+                seen == view.edge_last_seen.end()
+                || seen->second != e.discovery_last_seen
+            ) {
+                continue;
+            }
+            vector<int> before;
+            if (opts.verbose) {
+                before = connectivity_snapshot(e.discovery_owner);
+            }
+            view.edge_last_seen.erase(seen);
+            view.active_edges.erase(edge);
+            log_vconn_changes(
+                e.time,
+                e.discovery_owner,
+                before,
+                "remove",
+                edge.u,
+                edge.v
+            );
+            continue;
+        }
+
+        if (e.type == EventType::DiscoveryNodeExpiry) {
+            DiscoveredTopology &view =
+                discovered_by_node[static_cast<size_t>(e.discovery_owner)];
+            double &last_seen =
+                view.node_last_seen[static_cast<size_t>(e.discovery_u)];
+            if (last_seen != e.discovery_last_seen) continue;
+            vector<int> before;
+            if (opts.verbose) {
+                before = connectivity_snapshot(e.discovery_owner);
+            }
+            last_seen = -1.0;
+            log_vconn_changes(
+                e.time,
+                e.discovery_owner,
+                before,
+                "remove",
+                e.discovery_u,
+                -1
+            );
+            continue;
         }
 
         if(e.type == EventType::EmitScout){
@@ -480,6 +676,7 @@ void run_simulation(const Options& opts, const Graph& graph){
             if (e.receiver == broken_node && e.time >= opts.broken_node_start_time_s) {
                 continue;
             }
+            learn_path(e.time, e.receiver, e.history);
             const bool prob_ok = (
                 e.receiver != e.origin
                 && consume(
@@ -524,6 +721,7 @@ void run_simulation(const Options& opts, const Graph& graph){
         }
 
         if(e.type == EventType::ScoutReturn){
+            learn_path(e.time, e.receiver, e.history);
             if(e.receiver == e.origin){
                 double chunk_at = e.time+e.wait+(e.history.size()-1)*CLASSICAL_DELAY_MS/1000.0;
                 pq.push(Event{chunk_at, EventType::ChunkReceived, e.origin, e.origin, e.target, nullptr, e.history, e.target, 0});
@@ -637,6 +835,7 @@ static Options parse_args(int argc, char **argv) {
     cli.reg_bool("--report-chunk-paths", {}, opts.report_chunk_paths);
     cli.reg_bool("--report-yield", {}, opts.report_yield);
     cli.reg_bool("--useful-scouts-only", {}, opts.useful_scouts_only);
+    cli.reg_double("--conn-window", {}, opts.conn_window_s);
     cli.note_usage("--broken-node", {}, "node,time-s", false);
     cli.reg_context("--broken-node", [&opts]() {
         if (opts.broken_node.empty()) return string("none");
@@ -674,6 +873,9 @@ static Options parse_args(int argc, char **argv) {
     }
     if (opts.cartel_size_limit < 0 || opts.cartel_size_limit > 3) {
         cli.fail("--cartel-size-limit must be between 0 and 3");
+    }
+    if (!isfinite(opts.conn_window_s) || opts.conn_window_s < 0.0) {
+        cli.fail("--conn-window must be finite and >= 0");
     }
     if (!isfinite(opts.broken_node_start_time_s) || opts.broken_node_start_time_s < 0.0) {
         cli.fail("--broken-node time-s must be finite and >= 0");

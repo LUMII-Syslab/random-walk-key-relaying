@@ -42,7 +42,7 @@ send\_time = now + max\_return\_wait\_s.
 
 ### Blocks and extracted keys
 
-For each ordered pair \((src,tgt)\), received chunks are grouped into windows of size `block_chunks` (`--block-chunks`, default: 32).
+For each ordered pair \((src,tgt)\), received chunks are grouped into windows of size `block_chunks` (`--block-chunks`, default: 64).
 At block close:
 
 - Choose a **worst-case cartel** of size \(m\in\{0,1,2,3\}\) that maximizes how many chunks in the block traverse *any* cartel member (excluding endpoints).
@@ -58,15 +58,23 @@ Cartel size is derived from **local vertex connectivity** \(\kappa(src,tgt)\), c
 
 Intermediate vertices \(x \notin \{s,t\}\) are split into \(x_1 \to x_2\) (capacity 1); each undirected edge \(\{u,v\}\) becomes directed arcs \((u_2,v_1)\) and \((v_2,u_1)\) (capacity 1). Max \(s \to t\) flow equals \(\kappa(s,t)\).
 
+With `--conn-window <seconds>`, each node instead maintains its own learned topology.
+Whenever a forward or returning scout reaches node \(u\), every node and edge in the scout's signed path is added to \(u\)'s view or refreshed.
+Each item expires exactly `conn-window` seconds after its most recent observation; an observation at the exact expiry time occurs after the expiry.
+For a pair \((s,t)\), both useful-scout filtering and block extraction use \(\kappa(s,t)\) in target \(t\)'s current view.
+Setting `--conn-window 0`, which is the default, disables learned topology and retains full-graph connectivity.
+
 #### Parameters (current)
 
 - `--watermark-sz <int>`: **buffer watermark** used only by `consume(...)` (accept/drop dynamics), not the block size.
-- `--block-chunks <int>`: chunks per extraction block/window (default: 16).
+- `--block-chunks <int>`: chunks per extraction block/window (default: 64).
 - `--ttl <int>`: max scout walk length in hops and consume threshold (default: 200).
 - `--scout-emission-rate <float>`: scouts emitted per second per source (default: 100).
+- `--conn-window <float>`: lifetime in seconds of learned nodes and edges (default: 0, disabled).
 
 ### Output
 
 - `keys <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> vconn=<k> cartel_sz=<m>` (printed when a block closes in `--verbose` mode)
+- `vconn <time> <observer> <target> old=<k1> new=<k2> action=<add|remove> node=<node>` or `edge=<u>,<v>` (printed in `--verbose` mode when learned topology changes connectivity)
 - `Halted at <t> seconds` (when `--halt-at-keys` condition is satisfied)
 

@@ -294,7 +294,7 @@ public:
     }
 
     /** Local vertex connectivity kappa(s,t) via split-vertex max flow. */
-    int vertex_connectivity(int s, int t) const {
+    int vertex_connectivity(int s, int t, const set<EdgeKey> &edges) const {
         const int n = node_count();
         if (s < 0 || s >= n || t < 0 || t >= n) {
             throw runtime_error("vertex_connectivity: node index out of range");
@@ -323,13 +323,20 @@ public:
             return (v == s || v == t) ? v : fin[v];
         };
 
-        for (const EdgeKey &ek : edges_) {
+        for (const EdgeKey &ek : edges) {
             const int u = ek.u;
             const int v = ek.v;
+            if (u < 0 || u >= n || v < 0 || v >= n) {
+                throw runtime_error("vertex_connectivity: edge node index out of range");
+            }
             flow.add_edge(out_id(u), in_id(v), 1);
             flow.add_edge(out_id(v), in_id(u), 1);
         }
 
         return flow.max_flow(s, t);
+    }
+
+    int vertex_connectivity(int s, int t) const {
+        return vertex_connectivity(s, t, edges_);
     }
 };
