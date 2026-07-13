@@ -341,20 +341,21 @@ void run_simulation(const Options& opts, const Graph& graph){
         DiscoveredTopology(graph.node_count())
     );
     map<pair<int,int>, int> vconn_cache;
-    auto pair_vconn = [&](int src, int tgt) -> int {
-        if (learned_connectivity) {
-            return graph.vertex_connectivity(
-                src,
-                tgt,
-                discovered_by_node[static_cast<size_t>(tgt)].active_edges
-            );
-        }
+    auto real_pair_vconn = [&](int src, int tgt) -> int {
         const pair<int,int> key{src, tgt};
         auto it = vconn_cache.find(key);
         if (it != vconn_cache.end()) return it->second;
         const int kappa = graph.vertex_connectivity(src, tgt);
         vconn_cache[key] = kappa;
         return kappa;
+    };
+    auto pair_vconn = [&](int src, int tgt) -> int {
+        if (!learned_connectivity) return real_pair_vconn(src, tgt);
+        return graph.vertex_connectivity(
+            src,
+            tgt,
+            discovered_by_node[static_cast<size_t>(tgt)].active_edges
+        );
     };
 
     if (opts.block_chunks <= 0) {
@@ -575,9 +576,9 @@ void run_simulation(const Options& opts, const Graph& graph){
             if (inserted && opts.verbose) before = connectivity_snapshot(owner);
             view.node_last_seen[static_cast<size_t>(node)] = time;
             schedule_node_expiry(time, owner, node);
-            if (inserted) {
-                log_vconn_changes(time, owner, before, "add", node, -1);
-            }
+            // if (inserted) {
+            //     log_vconn_changes(time, owner, before, "add", node, -1);
+            // }
         }
 
         set<EdgeKey> path_edges;
@@ -591,9 +592,9 @@ void run_simulation(const Options& opts, const Graph& graph){
             view.active_edges.insert(edge);
             view.edge_last_seen[edge] = time;
             schedule_edge_expiry(time, owner, edge);
-            if (inserted) {
-                log_vconn_changes(time, owner, before, "add", edge.u, edge.v);
-            }
+            // if (inserted) {
+            //     log_vconn_changes(time, owner, before, "add", edge.u, edge.v);
+            // }
         }
     };
 
@@ -762,12 +763,20 @@ void run_simulation(const Options& opts, const Graph& graph){
                 blk.received = 0;
                 chunks_received[key] = 0;
 
-                const int vconn = pair_vconn(e.origin, e.target);
-                int cartel_sz = min(max(0, vconn - 1), opts.cartel_size_limit);
+                const int discovered_vconn = pair_vconn(e.origin, e.target);
+                const int real_vconn = real_pair_vconn(e.origin, e.target);
+                int cartel_sz = min(
+                    max(0, discovered_vconn - 1),
+                    opts.cartel_size_limit
+                );
 
                 cartel::Result cr = cartel::worst_case_coverage(blk.covered_chunks_by_node, e.origin, e.target, cartel_sz);
                 int honesty = opts.block_chunks - cr.max_seen;
-                if (opts.block_chunks == 32 && cartel_sz == 0 && vconn == 1) {
+                if (
+                    opts.block_chunks == 32
+                    && cartel_sz == 0
+                    && discovered_vconn == 1
+                ) {
                     honesty /= 2;
                 }
 
@@ -786,7 +795,9 @@ void run_simulation(const Options& opts, const Graph& graph){
                     string cartel_str = cartel_names.empty() ? "-" : join(cartel_names, ",");
                     cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" ";
                     cout<<cartel_str<<" "<<cr.max_seen;
-                    cout<<" vconn="<<vconn<<" cartel_sz="<<cartel_sz;
+                    cout<<" real_vconn="<<real_vconn;
+                    cout<<" discovered_vconn="<<discovered_vconn;
+                    cout<<" cartel_sz="<<cartel_sz;
                     cout<<endl;
                 }
                 // check if we can halt
