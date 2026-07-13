@@ -74,7 +74,7 @@ Setting `--conn-window 0`, which is the default, disables learned topology and r
 
 ### Output
 
-- `keys <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> real_vconn=<kr> discovered_vconn=<kd> cartel_sz=<m>` (printed when a block closes in `--verbose` mode; `kd` determines `m`, and equals `kr` when learned topology is disabled)
+- `keys <time> <h> <src> <tgt> <cartel_nodes_or_-> <max_seen> real_vconn=<kr> discovered_vconn=<kd> cartel_sz=<m>` (printed when a block closes in `--verbose` mode; `kd` determines `m`, and equals `kr` when learned topology is disabled)
 - `vconn <time> <observer> <target> old=<k1> new=<k2> action=<add|remove> node=<node>` or `edge=<u>,<v>` (printed in `--verbose` mode when learned topology changes connectivity)
 - `Halted at <t> seconds` (when `--halt-at-keys` condition is satisfied)
 

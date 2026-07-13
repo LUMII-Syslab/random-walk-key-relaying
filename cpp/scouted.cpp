@@ -793,7 +793,8 @@ void run_simulation(const Options& opts, const Graph& graph){
                     vector<string> cartel_names;
                     for (int v : cr.nodes) cartel_names.push_back(graph.node_name(v));
                     string cartel_str = cartel_names.empty() ? "-" : join(cartel_names, ",");
-                    cout<<"keys "<<honesty<<" "<<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" ";
+                    cout<<"keys "<<fmt_3dp(e.time)<<" "<<honesty<<" "
+                        <<graph.node_name(e.origin)<<" "<<graph.node_name(e.target)<<" ";
                     cout<<cartel_str<<" "<<cr.max_seen;
                     cout<<" real_vconn="<<real_vconn;
                     cout<<" discovered_vconn="<<discovered_vconn;
